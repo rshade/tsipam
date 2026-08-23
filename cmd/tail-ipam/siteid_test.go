@@ -19,11 +19,14 @@ import (
 // socket (see internal/loopback), the same path a live invocation takes.
 func runSiteID(t *testing.T, registryDir string, args ...string) (string, string, error) {
 	t.Helper()
-	root := newRootCommand()
+	state := &commandState{}
+	root := newRootCommandWithDependencies(state, commandDependencies{
+		getenv: func(string) string { return "" },
+	})
 	var outBuf, errBuf bytes.Buffer
 	root.SetOut(&outBuf)
 	root.SetErr(&errBuf)
-	root.SetArgs(append([]string{"site-id"}, append(args, "--registry-dir", registryDir)...))
+	root.SetArgs(append([]string{commandSiteID}, append(args, "--registry-dir", registryDir)...))
 	err := root.Execute()
 	return outBuf.String(), errBuf.String(), err
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/tailscale/hujson"
 
 	"github.com/rshade/tailscale-utils/policycore/hujsonedit"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 )
 
 // siteIDsKey is the registry's top-level key for the site-ID map.
@@ -95,11 +96,15 @@ func NormalizeSiteID(id string) (string, error) {
 	return strconv.FormatUint(n, 10), nil
 }
 
-// NormalizeSiteName validates a site name: non-empty after trimming.
+// NormalizeSiteName validates a site name: non-empty after trimming and
+// containing no control characters (C0 control characters or DEL).
 func NormalizeSiteName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", errors.New("site name must not be empty")
+	}
+	if i := strings.IndexFunc(name, func(r rune) bool { return r < 0x20 || r == 0x7f }); i >= 0 {
+		return "", fmt.Errorf("site name %q must not contain control characters", name)
 	}
 	return name, nil
 }
@@ -140,32 +145,32 @@ func NormalizeSiteName(name string) (string, error) {
 func Load(path string) (*Registry, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, identityFreePathError(err)
 	}
 	// The UTF-8 byte-order mark (U+FEFF). hujson.Parse already fails on a
 	// BOM-prefixed document with an "invalid character" error, but that
 	// message gives no indication of the cause; checking for it directly
 	// lets Load tell the operator what is actually wrong instead of
-	// silently stripping it or leaving them to guess.
+	// silently stripping it or leaving them to guess. The path must be
+	// stripped from error output when sanitization is active.
 	if bytes.HasPrefix(raw, []byte{0xEF, 0xBB, 0xBF}) {
-		return nil, fmt.Errorf(
-			"decoding %s: file starts with a UTF-8 byte-order mark; re-save it as UTF-8 without a BOM", path)
+		return nil, errors.New("file starts with a UTF-8 byte-order mark; re-save it as UTF-8 without a BOM")
 	}
 
 	value, err := hujson.Parse(raw)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, fmt.Errorf("decoding registry: %w", err)
 	}
 	value.Standardize()
 
 	object, ok := value.Value.(*hujson.Object)
 	if !ok {
-		return nil, fmt.Errorf("decoding %s: top-level document must be a JSON object", path)
+		return nil, errors.New("decoding registry: top-level document must be a JSON object")
 	}
 
 	idx, err := siteIDsMemberIndex(object)
 	if err != nil {
-		return nil, fmt.Errorf("decoding %s: %w", path, err)
+		return nil, fmt.Errorf("decoding registry: %w", err)
 	}
 
 	var entries map[string]string
@@ -175,17 +180,17 @@ func Load(path string) (*Registry, error) {
 		if entryObject, isObject := member.Value.(*hujson.Object); isObject {
 			present = true
 			if dupErr := duplicateEntryKey(entryObject); dupErr != nil {
-				return nil, fmt.Errorf("decoding %s: %w", path, dupErr)
+				return nil, fmt.Errorf("decoding registry: %w", dupErr)
 			}
 		}
 		if unmarshalErr := json.Unmarshal(member.Pack(), &entries); unmarshalErr != nil {
-			return nil, fmt.Errorf("decoding %s: %q: %w", path, siteIDsKey, unmarshalErr)
+			return nil, fmt.Errorf("decoding registry: %q: %w", siteIDsKey, unmarshalErr)
 		}
 	}
 
 	reg, err := canonicalize(entries)
 	if err != nil {
-		return nil, fmt.Errorf("decoding %s: %w", path, err)
+		return nil, fmt.Errorf("decoding registry: %w", err)
 	}
 	reg.siteIDsPresent = present
 	return reg, nil
@@ -294,30 +299,55 @@ func canonicalize(raw map[string]string) (*Registry, error) {
 // against the same registry file. The lock is a plain lockfile at
 // path+".lock", acquired with O_CREATE|O_EXCL and released by removing it
 // when fn returns.
-func withRegistryLock(path string, fn func() error) error {
+func withRegistryLock(path string, logger diagnostics.Logger, fn func() error) error {
 	lockPath := path + lockSuffix
 	deadline := time.Now().Add(lockAcquireTimeout)
+	diagnostics.Debug(logger, "acquiring registry lock")
+	waiting := false
 	for {
 		lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			if closeErr := lockFile.Close(); closeErr != nil {
 				_ = os.Remove(lockPath)
-				return fmt.Errorf("acquiring lock %s: %w", lockPath, closeErr)
+				return fmt.Errorf("acquiring lock: %w", identityFreePathError(closeErr))
 			}
 			break
 		}
 		if !errors.Is(err, os.ErrExist) {
-			return fmt.Errorf("acquiring lock %s: %w", lockPath, err)
+			return fmt.Errorf("acquiring lock: %w", identityFreePathError(err))
+		}
+		if !waiting {
+			diagnostics.Debug(logger, "waiting for registry lock")
+			waiting = true
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf(
-				"acquiring lock %s: timed out after %s waiting for a concurrent tail-ipam to finish",
-				lockPath, lockAcquireTimeout)
+				"acquiring lock: timed out after %s waiting for a concurrent tail-ipam to finish",
+				lockAcquireTimeout)
 		}
 		time.Sleep(lockRetryInterval)
 	}
-	defer func() { _ = os.Remove(lockPath) }()
+	diagnostics.Debug(logger, "registry lock acquired", "waited", waiting)
+	defer func() {
+		if removeErr := os.Remove(lockPath); removeErr != nil {
+			diagnostics.Warn(logger, "releasing registry lock failed", "error", identityFreePathError(removeErr))
+			return
+		}
+		diagnostics.Debug(logger, "registry lock released")
+	}()
 	return fn()
+}
+
+// identityFreePathError keeps an underlying filesystem reason (for example,
+// permission denied) while dropping a *PathError's registry path. Registry
+// filenames contain the tailnet routing key and must not reappear in verbose
+// output when TAILSCALE_SANITIZE is active.
+func identityFreePathError(err error) error {
+	var pathError *os.PathError
+	if errors.As(err, &pathError) {
+		return pathError.Err
+	}
+	return err
 }
 
 // loadOrCreate loads the registry at path, creating it as an empty "{}\n"
@@ -325,10 +355,11 @@ func withRegistryLock(path string, fn func() error) error {
 // caller that also observed the file as absent cannot silently overwrite the
 // first's create: it re-Loads instead, picking up whatever is now on disk.
 // Callers must run this inside withRegistryLock.
-func loadOrCreate(path string) (*Registry, error) {
+func loadOrCreate(path string, logger diagnostics.Logger) (*Registry, error) {
 	reg, err := Load(path)
 	switch {
 	case err == nil:
+		diagnostics.Debug(logger, "registry loaded", "site_id_count", len(reg.SiteIDs))
 		return reg, nil
 	case !errors.Is(err, os.ErrNotExist):
 		return nil, err
@@ -340,22 +371,27 @@ func loadOrCreate(path string) (*Registry, error) {
 		_, writeErr := f.WriteString("{}\n")
 		closeErr := f.Close()
 		if writeErr != nil {
-			return nil, fmt.Errorf("creating %s: %w", path, writeErr)
+			return nil, fmt.Errorf("creating registry: %w", identityFreePathError(writeErr))
 		}
 		if closeErr != nil {
-			return nil, fmt.Errorf("creating %s: %w", path, closeErr)
+			return nil, fmt.Errorf("creating registry: %w", identityFreePathError(closeErr))
 		}
+		diagnostics.Debug(logger, "registry created", "site_id_count", 0)
 		return &Registry{}, nil
 	case errors.Is(createErr, os.ErrExist):
 		// Another holder created it between our Load and this attempt; pick
 		// up whatever is now on disk rather than treating this as an error.
-		return Load(path)
+		reloaded, loadErr := Load(path)
+		if loadErr == nil {
+			diagnostics.Debug(logger, "registry loaded", "site_id_count", len(reloaded.SiteIDs))
+		}
+		return reloaded, loadErr
 	default:
-		return nil, fmt.Errorf("creating %s: %w", path, createErr)
+		return nil, fmt.Errorf("creating registry: %w", identityFreePathError(createErr))
 	}
 }
 
-// ReserveSiteID reserves id for site in the registry at path, creating the
+// ReserveSiteIDWithLogger reserves id for site in the registry at path, creating the
 // file (as "{}\n") if it does not exist yet. Reserving the same id+site pair
 // again is a no-op — changed reports false, err is nil — so repeating the
 // command is idempotent. Reserving an id already held by a different site
@@ -367,7 +403,11 @@ func loadOrCreate(path string) (*Registry, error) {
 // On success it returns the canonical id and site name actually written
 // (e.g. "007" normalizes to "7"), not the raw arguments, so a caller does not
 // need to re-derive what NormalizeSiteID/NormalizeSiteName already computed.
-func ReserveSiteID(path, id, site string) (string, string, bool, error) {
+// logger receives identity-free I/O diagnostics; nil is quiet.
+func ReserveSiteIDWithLogger(
+	path, id, site string,
+	logger diagnostics.Logger,
+) (string, string, bool, error) {
 	id, err := NormalizeSiteID(id)
 	if err != nil {
 		return "", "", false, err
@@ -378,14 +418,15 @@ func ReserveSiteID(path, id, site string) (string, string, bool, error) {
 	}
 
 	changed := false
-	lockErr := withRegistryLock(path, func() error {
-		reg, loadErr := loadOrCreate(path)
+	lockErr := withRegistryLock(path, logger, func() error {
+		reg, loadErr := loadOrCreate(path, logger)
 		if loadErr != nil {
 			return loadErr
 		}
 
 		if existing, ok := reg.SiteIDs[id]; ok {
 			if existing == site {
+				diagnostics.Debug(logger, "site-ID reservation already present")
 				return nil
 			}
 			return &SiteIDCollisionError{ID: id, Existing: existing, Wanted: site}
@@ -413,6 +454,7 @@ func ReserveSiteID(path, id, site string) (string, string, bool, error) {
 			return fmt.Errorf("reserving site ID %s: %w", id, patchErr)
 		}
 		changed = true
+		diagnostics.Debug(logger, "site-ID reservation written")
 		return nil
 	})
 	if lockErr != nil {
@@ -421,27 +463,33 @@ func ReserveSiteID(path, id, site string) (string, string, bool, error) {
 	return id, site, changed, nil
 }
 
-// ReleaseSiteID removes id from the registry at path. Releasing an id that is
+// ReleaseSiteIDWithLogger removes id from the registry at path. Releasing an id that is
 // not present is a no-op — changed reports false, err is nil — matching
 // tail-acl's RemoveDefinition behavior for an absent name. A missing registry
 // file is an error: release has nothing to remove from and isn't the command
 // that creates a registry. The read-decide-write span runs under the same
-// exclusive file lock as ReserveSiteID.
+// exclusive file lock as ReserveSiteIDWithLogger.
 //
 // On success it returns the canonical id released, not the raw argument.
-func ReleaseSiteID(path, id string) (string, bool, error) {
+// logger receives identity-free I/O diagnostics; nil is quiet.
+func ReleaseSiteIDWithLogger(
+	path, id string,
+	logger diagnostics.Logger,
+) (string, bool, error) {
 	id, err := NormalizeSiteID(id)
 	if err != nil {
 		return "", false, err
 	}
 
 	changed := false
-	lockErr := withRegistryLock(path, func() error {
+	lockErr := withRegistryLock(path, logger, func() error {
 		reg, loadErr := Load(path)
 		if loadErr != nil {
 			return loadErr
 		}
+		diagnostics.Debug(logger, "registry loaded", "site_id_count", len(reg.SiteIDs))
 		if _, ok := reg.SiteIDs[id]; !ok {
+			diagnostics.Debug(logger, "site-ID reservation already absent")
 			return nil
 		}
 		rawKey := reg.rawKeys[id]
@@ -452,6 +500,7 @@ func ReleaseSiteID(path, id string) (string, bool, error) {
 			return fmt.Errorf("releasing site ID %s: %w", id, patchErr)
 		}
 		changed = true
+		diagnostics.Debug(logger, "site-ID reservation removed")
 		return nil
 	})
 	if lockErr != nil {
@@ -460,16 +509,18 @@ func ReleaseSiteID(path, id string) (string, bool, error) {
 	return id, changed, nil
 }
 
-// ListSiteIDs returns the registry's site-ID entries at path, sorted
+// ListSiteIDsWithLogger returns the registry's site-ID entries at path, sorted
 // numerically by ID. A missing file is an error, for the same reason as
-// ReleaseSiteID. The sort is stable with a total-order comparator (numeric
+// ReleaseSiteIDWithLogger. The sort is stable with a total-order comparator (numeric
 // when both IDs parse and differ, otherwise a plain string compare) so output
 // order is deterministic regardless of Go's randomized map iteration.
-func ListSiteIDs(path string) ([]SiteIDEntry, error) {
+// logger receives identity-free I/O diagnostics; nil is quiet.
+func ListSiteIDsWithLogger(path string, logger diagnostics.Logger) ([]SiteIDEntry, error) {
 	reg, err := Load(path)
 	if err != nil {
 		return nil, err
 	}
+	diagnostics.Debug(logger, "registry loaded", "site_id_count", len(reg.SiteIDs))
 	entries := make([]SiteIDEntry, 0, len(reg.SiteIDs))
 	for id, site := range reg.SiteIDs {
 		entries = append(entries, SiteIDEntry{ID: id, Site: site})

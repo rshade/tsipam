@@ -15,23 +15,25 @@ func TestRunServesOneRequestOverTheGeneratedClient(t *testing.T) {
 	t.Parallel()
 	registryDir := t.TempDir()
 
-	err := loopback.Run(context.Background(), registryDir, func(ctx context.Context, client *ipamclient.Client) error {
-		res, callErr := client.ReserveSiteID()(
-			ctx,
-			&ipam.ReserveSiteIDPayload{Tailnet: "acme", ID: "1", Site: "hq-vpc"},
-		)
-		if callErr != nil {
-			return callErr
-		}
-		result, ok := res.(*ipam.ReserveSiteIDResult)
-		if !ok {
-			t.Fatalf("ReserveSiteID result type = %T, want *ipam.ReserveSiteIDResult", res)
-		}
-		if result.ID != "1" || result.Site != "hq-vpc" || !result.Changed {
-			t.Errorf("ReserveSiteID result = %+v, want {ID:1 Site:hq-vpc Changed:true}", result)
-		}
-		return nil
-	})
+	err := loopback.RunWithLogger(
+		context.Background(), registryDir, nil,
+		func(ctx context.Context, client *ipamclient.Client) error {
+			res, callErr := client.ReserveSiteID()(
+				ctx,
+				&ipam.ReserveSiteIDPayload{Tailnet: "acme", ID: "1", Site: "hq-vpc"},
+			)
+			if callErr != nil {
+				return callErr
+			}
+			result, ok := res.(*ipam.ReserveSiteIDResult)
+			if !ok {
+				t.Fatalf("ReserveSiteID result type = %T, want *ipam.ReserveSiteIDResult", res)
+			}
+			if result.ID != "1" || result.Site != "hq-vpc" || !result.Changed {
+				t.Errorf("ReserveSiteID result = %+v, want {ID:1 Site:hq-vpc Changed:true}", result)
+			}
+			return nil
+		})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -52,10 +54,14 @@ func TestRunLeavesNoSocketDirectoryBehind(t *testing.T) {
 	t.Setenv("TMPDIR", tmpDir)
 	registryDir := t.TempDir()
 
-	err := loopback.Run(context.Background(), registryDir, func(ctx context.Context, client *ipamclient.Client) error {
-		_, callErr := client.ReserveSiteID()(ctx, &ipam.ReserveSiteIDPayload{Tailnet: "local", ID: "1", Site: "hq-vpc"})
-		return callErr
-	})
+	err := loopback.RunWithLogger(
+		context.Background(), registryDir, nil,
+		func(ctx context.Context, client *ipamclient.Client) error {
+			payload := &ipam.ReserveSiteIDPayload{Tailnet: "local", ID: "1", Site: "hq-vpc"}
+			_, callErr := client.ReserveSiteID()(ctx, payload)
+			return callErr
+		})
+
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

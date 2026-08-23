@@ -22,7 +22,7 @@ func TestReserveSiteIDCreatesFileWhenMissing(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	_, _, changed, err := registry.ReserveSiteID(path, "1", "hq-vpc")
+	_, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestReserveSiteIDCreatesFileWhenMissing(t *testing.T) {
 		t.Error("changed = false, want true for a fresh reservation")
 	}
 
-	entries, err := registry.ListSiteIDs(path)
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -43,10 +43,10 @@ func TestReserveSiteIDIsIdempotent(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteID(path, "1", "hq-vpc"); err != nil {
+	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
 		t.Fatalf("first ReserveSiteID: %v", err)
 	}
-	_, _, changed, err := registry.ReserveSiteID(path, "1", "hq-vpc")
+	_, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil)
 	if err != nil {
 		t.Fatalf("second ReserveSiteID: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestReserveSiteIDReturnsCanonicalIDAndSite(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	id, site, _, err := registry.ReserveSiteID(path, "007", "  hq-vpc  ")
+	id, site, _, err := registry.ReserveSiteIDWithLogger(path, "007", "  hq-vpc  ", nil)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -72,10 +72,10 @@ func TestReserveSiteIDRefusesCollision(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteID(path, "1", "hq-vpc"); err != nil {
+	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
 		t.Fatalf("first ReserveSiteID: %v", err)
 	}
-	_, _, _, err := registry.ReserveSiteID(path, "1", "branch-office")
+	_, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "branch-office", nil)
 	var collision *registry.SiteIDCollisionError
 	if !errors.As(err, &collision) {
 		t.Fatalf("ReserveSiteID error = %v, want *SiteIDCollisionError", err)
@@ -89,14 +89,14 @@ func TestReserveSiteIDAddsSecondEntryToExistingRegistry(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteID(path, "1", "hq-vpc"); err != nil {
+	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
 		t.Fatalf("first ReserveSiteID: %v", err)
 	}
-	if _, _, _, err := registry.ReserveSiteID(path, "2", "branch-office"); err != nil {
+	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "2", "branch-office", nil); err != nil {
 		t.Fatalf("second ReserveSiteID: %v", err)
 	}
 
-	entries, err := registry.ListSiteIDs(path)
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -118,11 +118,13 @@ func TestReserveSiteIDRejectsInvalidInput(t *testing.T) {
 		{"negative id", "-1", "hq-vpc"},
 		{"out of range id", "65536", "hq-vpc"},
 		{"empty site name", "1", "   "},
+		{"embedded newline in site name", "1", "hq\nvpc"},
+		{"embedded tab in site name", "1", "hq\tvpc"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if _, _, _, err := registry.ReserveSiteID(path, tc.id, tc.site); err == nil {
+			if _, _, _, err := registry.ReserveSiteIDWithLogger(path, tc.id, tc.site, nil); err == nil {
 				t.Errorf("ReserveSiteID(%q, %q) error = nil, want an error", tc.id, tc.site)
 			}
 		})
@@ -166,10 +168,10 @@ func TestReleaseSiteIDRemovesEntry(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteID(path, "1", "hq-vpc"); err != nil {
+	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
-	id, changed, err := registry.ReleaseSiteID(path, "1")
+	id, changed, err := registry.ReleaseSiteIDWithLogger(path, "1", nil)
 	if err != nil {
 		t.Fatalf("ReleaseSiteID: %v", err)
 	}
@@ -180,7 +182,7 @@ func TestReleaseSiteIDRemovesEntry(t *testing.T) {
 		t.Errorf("ReleaseSiteID id = %q, want %q", id, "1")
 	}
 
-	entries, err := registry.ListSiteIDs(path)
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -193,10 +195,10 @@ func TestReleaseSiteIDOnAbsentIDIsNoopNotError(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteID(path, "1", "hq-vpc"); err != nil {
+	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
-	_, changed, err := registry.ReleaseSiteID(path, "2")
+	_, changed, err := registry.ReleaseSiteIDWithLogger(path, "2", nil)
 	if err != nil {
 		t.Fatalf("ReleaseSiteID: %v", err)
 	}
@@ -209,7 +211,7 @@ func TestReleaseSiteIDOnMissingFileIsError(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, err := registry.ReleaseSiteID(path, "1"); err == nil {
+	if _, _, err := registry.ReleaseSiteIDWithLogger(path, "1", nil); err == nil {
 		t.Error("ReleaseSiteID on a missing registry file error = nil, want an error")
 	}
 }
@@ -218,7 +220,7 @@ func TestListSiteIDsOnMissingFileIsError(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, err := registry.ListSiteIDs(path); err == nil {
+	if _, err := registry.ListSiteIDsWithLogger(path, nil); err == nil {
 		t.Error("ListSiteIDs on a missing registry file error = nil, want an error")
 	}
 }
@@ -231,7 +233,7 @@ func TestReserveSiteIDPreservesHandWrittenComment(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, err := registry.ReserveSiteID(path, "2", "branch-office"); err != nil {
+	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "2", "branch-office", nil); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 
@@ -260,7 +262,7 @@ func TestLoadAcceptsUnrelatedTopLevelKeyAndRoundTrips(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	entries, err := registry.ListSiteIDs(path)
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err != nil {
 		t.Fatalf("ListSiteIDs on a registry with an unrelated top-level key: %v", err)
 	}
@@ -268,10 +270,10 @@ func TestLoadAcceptsUnrelatedTopLevelKeyAndRoundTrips(t *testing.T) {
 		t.Errorf("ListSiteIDs = %+v, want [{1 hq-vpc}]", entries)
 	}
 
-	if _, _, _, reserveErr := registry.ReserveSiteID(path, "2", "branch-office"); reserveErr != nil {
+	if _, _, _, reserveErr := registry.ReserveSiteIDWithLogger(path, "2", "branch-office", nil); reserveErr != nil {
 		t.Fatalf("ReserveSiteID: %v", reserveErr)
 	}
-	if _, _, releaseErr := registry.ReleaseSiteID(path, "1"); releaseErr != nil {
+	if _, _, releaseErr := registry.ReleaseSiteIDWithLogger(path, "1", nil); releaseErr != nil {
 		t.Fatalf("ReleaseSiteID: %v", releaseErr)
 	}
 
@@ -292,7 +294,7 @@ func TestLoadRejectsAmbiguousDuplicateSiteIDKeys(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, err := registry.ListSiteIDs(path)
+	_, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err == nil {
 		t.Fatal("ListSiteIDs on a registry with ambiguous duplicate site-ID keys: error = nil, want an error")
 	}
@@ -308,7 +310,7 @@ func TestReserveSiteIDCollidesAgainstUnNormalizedFileKey(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, _, err := registry.ReserveSiteID(path, "1", "branch-office")
+	_, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "branch-office", nil)
 	var collision *registry.SiteIDCollisionError
 	if !errors.As(err, &collision) {
 		t.Fatalf("ReserveSiteID(%q, ...) error = %v, want *SiteIDCollisionError against the un-normalized file key %q",
@@ -326,7 +328,7 @@ func TestReleaseSiteIDRemovesUnNormalizedFileKey(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	id, changed, err := registry.ReleaseSiteID(path, "1")
+	id, changed, err := registry.ReleaseSiteIDWithLogger(path, "1", nil)
 	if err != nil {
 		t.Fatalf("ReleaseSiteID: %v", err)
 	}
@@ -334,7 +336,7 @@ func TestReleaseSiteIDRemovesUnNormalizedFileKey(t *testing.T) {
 		t.Errorf("ReleaseSiteID(%q) = (id=%q, changed=%v), want (1, true)", "1", id, changed)
 	}
 
-	entries, err := registry.ListSiteIDs(path)
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -364,7 +366,7 @@ func TestReserveSiteIDConcurrentDistinctIDsLosesNoReservation(t *testing.T) {
 			defer wg.Done()
 			id := strconv.Itoa(i + 1)
 			site := fmt.Sprintf("site-%d", i+1)
-			_, _, _, err := registry.ReserveSiteID(path, id, site)
+			_, _, _, err := registry.ReserveSiteIDWithLogger(path, id, site, nil)
 			errs[i] = err
 		}(i)
 	}
@@ -376,7 +378,7 @@ func TestReserveSiteIDConcurrentDistinctIDsLosesNoReservation(t *testing.T) {
 		}
 	}
 
-	entries, err := registry.ListSiteIDs(path)
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -456,7 +458,7 @@ func TestLoadRejectsInvalidRegistryShapes(t *testing.T) {
 				t.Fatalf("seeding fixture: %v", err)
 			}
 
-			_, err := registry.ListSiteIDs(path)
+			_, err := registry.ListSiteIDsWithLogger(path, nil)
 			if err == nil {
 				t.Fatalf("ListSiteIDs(%q) error = nil, want an error", tc.content)
 			}
@@ -480,7 +482,7 @@ func TestReserveSiteIDIntoExistingEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, changed, err := registry.ReserveSiteID(path, "1", "hq-vpc")
+	_, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -488,7 +490,7 @@ func TestReserveSiteIDIntoExistingEmptyBlock(t *testing.T) {
 		t.Error("changed = false, want true for a fresh reservation")
 	}
 
-	entries, err := registry.ListSiteIDs(path)
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -510,7 +512,7 @@ func TestReserveSiteIDPreservesCommentInEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, err := registry.ReserveSiteID(path, "1", "hq-vpc"); err != nil {
+	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 
@@ -536,7 +538,7 @@ func TestReserveSiteIDIntoNullBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, changed, err := registry.ReserveSiteID(path, "1", "hq-vpc")
+	_, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -544,7 +546,7 @@ func TestReserveSiteIDIntoNullBlock(t *testing.T) {
 		t.Error("changed = false, want true for a fresh reservation")
 	}
 
-	entries, err := registry.ListSiteIDs(path)
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}

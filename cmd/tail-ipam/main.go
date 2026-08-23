@@ -1,38 +1,55 @@
 // Command tail-ipam manages a declarative registry of Tailscale address
-// space — 4via6 site IDs so far, with subnet CIDR pools and per-service /32
-// allocations as separately scoped future work — and will plan/check that
+// space -- 4via6 site IDs so far, with subnet CIDR pools and per-service /32
+// allocations as separately scoped future work -- and will plan/check that
 // registry against live control-plane state.
 //
 // "site-id reserve/release/list" edit and read the local registry file
 // (comment-preserving HuJSON, see internal/registry); "devices list" is a
 // read-only proof that the tscli-backed client construction works. Neither
-// cross-checks the registry against live state yet — that's the "plan"/
+// cross-checks the registry against live state yet -- that's the "plan"/
 // "check" surface, still future work. See ../../README.md and
 // ../../../ROADMAP.md ("Future Vision" -> tail-ipam) for the design this will
 // grow into.
 //
-// Output contract (AX conventions, see ../../../AGENTS.md): the command
-// result will be written to stdout — human text by default, or a versioned
-// JSON envelope with -format json — while logs and errors go to stderr.
+// Output contract (AX conventions, see ../../../AGENTS.md): command results
+// are written to stdout as human text by default or a versioned envelope with
+// -format json; structured logs and final errors are written to stderr.
 package main
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"regexp"
+	"runtime/debug"
+	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	goa "goa.design/goa/v3/pkg"
 
+	"github.com/rshade/tailscale-utils/policycore/cliflags"
+	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=vX.Y.Z".
 var version = "dev"
 
-const toolName = "tail-ipam"
+const (
+	toolName            = "tail-ipam"
+	outputSchemaVersion = "1"
+	toolSchemaVersion   = "1"
+	formatHuman         = "human"
+	formatJSON          = "json"
+	shortRevisionLength = 12
+)
 
 // Exit codes, matching the AX scheme documented in ../../../AGENTS.md:
 // 0 success, 1 a check/operation was refused (e.g. a site-ID collision),
@@ -43,23 +60,217 @@ const (
 	exitUsage   = 2
 )
 
+type commandState struct {
+	format             string
+	verbose            bool
+	showSchema         bool
+	sanitizeLevel      string
+	sanitizeResolution sanitize.Resolution
+	logger             diagnostics.Logger
+	getenv             func(string) string
+	sanitizer          *sanitize.Sanitizer
+}
+
+func (s *commandState) outputSanitizer(tailnet string) (*sanitize.Sanitizer, error) {
+	if s.sanitizer != nil {
+		return s.sanitizer, nil
+	}
+	sanitizer, err := sanitize.New(sanitize.Options{
+		Level: s.sanitizeResolution.Level, Tool: toolName, Tailnet: tailnet,
+		KeyHex: s.getenv(sanitize.KeyEnv),
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Pre-register the tailnet itself so an error's free-text sweep (see
+	// sanitizeErrorIfNeeded) can already redact it even if the command fails
+	// before registerOutputIdentities (output.go's success-path registration)
+	// ever runs. Kind matches registerOutputIdentities's "tailnet" so both
+	// paths resolve to the same placeholder for the same value.
+	registerSweepValue(sanitizer, "tailnet", tailnet)
+	s.sanitizer = sanitizer
+	return sanitizer, nil
+}
+
+// minSweepValueLength is the shortest value Step 1's identity inventory (see
+// registerKnownIdentityInventory) registers for Sanitizer.Text's free-text
+// error sweep. A tailnet name or path fragment shorter than this risks
+// matching an unrelated short substring elsewhere in an error message; the
+// exact-field substitution in output.go is a direct assignment, not a text
+// search, so it is unaffected by this guard.
+const minSweepValueLength = 3
+
+// registerSweepValue registers value with sanitizer for Sanitizer.Text's
+// free-text sweep, skipping anything shorter than minSweepValueLength.
+func registerSweepValue(sanitizer *sanitize.Sanitizer, kind, value string) {
+	if len(value) < minSweepValueLength {
+		return
+	}
+	sanitizer.Value(kind, value)
+}
+
+// registerKnownIdentityInventory registers the identity values this CLI
+// itself already knows from its own inputs -- the resolved tailnet, the
+// registry directory, the full computed registry file path, and that path's
+// bare filename -- so sanitizeErrorIfNeeded's free-text sweep can redact them
+// from an error's text wherever they appear verbatim. This closes registry
+// path leaks that originate deep in policycore/hujsonedit's own error
+// strings (which this tool does not control the wording of) without any
+// quote-parsing: Sanitizer.Text finds and replaces a known value byte-for-byte
+// regardless of where in the error text it surfaces.
+//
+// executed is the *cobra.Command runCLI actually ran, as returned by
+// ExecuteContextC. A command with no "registry-dir" flag (for example
+// "devices list") has nothing to add here.
+func registerKnownIdentityInventory(executed *cobra.Command, state *commandState) {
+	if state.sanitizer == nil || executed == nil {
+		return
+	}
+	registryDirFlag := executed.Flags().Lookup("registry-dir")
+	if registryDirFlag == nil {
+		return
+	}
+	registryDir := registryDirFlag.Value.String()
+	tailnetFlagValue := ""
+	if flag := executed.Flags().Lookup("tailnet"); flag != nil {
+		tailnetFlagValue = flag.Value.String()
+	}
+	tailnet := resolveTailnetWithEnv(tailnetFlagValue, state.getenv)
+
+	registerSweepValue(state.sanitizer, "tailnet", tailnet)
+	registerSweepValue(state.sanitizer, "path", registryDir)
+	filename := tailnet + ".ipam.hujson"
+	registerSweepValue(state.sanitizer, "path", filepath.Join(registryDir, filename))
+	registerSweepValue(state.sanitizer, "path", filename)
+}
+
+type commandDependencies struct {
+	getenv      func(string) string
+	listDevices devicesListFunc
+}
+
 func main() { os.Exit(realMain()) }
 
 func realMain() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	root := newRootCommand()
-	root.SetArgs(os.Args[1:])
-	root.SetOut(os.Stdout)
-	root.SetErr(os.Stderr)
-	if err := root.ExecuteContext(ctx); err != nil {
+	return runCLI(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr, nil)
+}
+
+func runCLI(
+	ctx context.Context,
+	args []string,
+	getenv func(string) string,
+	stdout, stderr io.Writer,
+	listDevices devicesListFunc,
+) int {
+	if getenv == nil {
+		getenv = func(string) string { return "" }
+	}
+	if listDevices == nil {
+		listDevices = func(ctx context.Context, logger diagnostics.Logger) ([]deviceRecord, error) {
+			return collectDevices(ctx, getenv, logger)
+		}
+	}
+	state := &commandState{}
+	root := newRootCommandWithDependencies(state, commandDependencies{getenv: getenv, listDevices: listDevices})
+	root.SetArgs(cliflags.Normalize(root, args))
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	executed, err := root.ExecuteContextC(ctx)
+	if err != nil {
 		// SilenceErrors on every command hands printing to the caller so
 		// cobra never writes to stdout on failure; this is that print.
-		fmt.Fprintf(os.Stderr, "%s: %v\n", toolName, err)
+		registerKnownIdentityInventory(executed, state)
+		_, _ = fmt.Fprintf(stderr, "%s: %v\n", toolName, sanitizeErrorIfNeeded(err, state.sanitizer))
 		return exitCodeFor(err)
 	}
 	return exitOK
+}
+
+// collisionErrorPattern is anchored to SiteIDCollisionError.Error()'s exact
+// format string (registry.go: "site ID %s is already reserved for %q, not
+// %q") so the two site names it embeds can be redacted by byte position
+// rather than by searching the error text for their (possibly %q-escaped)
+// bytes. A text search is unsafe here: [strconv.Unquote] recovers the true,
+// unescaped value from a %q segment, but that unescaped value is not
+// guaranteed to appear as a literal substring of the still-escaped error
+// text whenever the value contains a quote, a backslash, a control
+// character, or invalid UTF-8 -- exactly the values %q exists to escape.
+// Capture groups: 1 = the site ID (never sanitized, see resolved decision
+// D2 -- IDs are not identity), 2 = the %q-quoted existing site including its
+// surrounding quotes, 3 = the %q-quoted wanted site, ditto.
+var collisionErrorPattern = regexp.MustCompile(
+	`^site ID (\S+) is already reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
+)
+
+// unprintableSitePlaceholder replaces a matched quoted segment that
+// [strconv.Unquote] cannot decode: failing closed with a fixed, non-identity
+// placeholder rather than falling through to the raw (still possibly
+// identity-bearing) escaped bytes.
+const unprintableSitePlaceholder = `"<unprintable>"`
+
+// sanitizeErrorIfNeeded returns a sanitized rendering of err's text when
+// sanitization is active, or err unchanged otherwise.
+//
+// A genuine site-ID collision (see collisionErrorPattern) is redacted by
+// splicing its two known quoted-segment byte ranges out of the *original*
+// text and back in as "<placeholder>", using the segments' regex-matched
+// offsets -- never a value-based search-and-replace, so escaping cannot
+// desync the replacement from what's actually on the page (see the doc
+// comment above). This is the only error shape whose exact wording this tool
+// controls (registry.go) and can therefore redact.
+//
+// Any other error text is swept only against the identity inventory this
+// tool already knows about from its own inputs (see
+// registerKnownIdentityInventory and output.go's registerOutputIdentities) --
+// it is not scanned for arbitrary quoted segments. A goa error-wrapper's JSON
+// body, a cobra usage error, or a registry decode error naming one of its own
+// field/key spellings is deliberately left otherwise intact: those quoted
+// segments are not known identity, and rewriting them indiscriminately
+// (Round 1/2's approach) corrupts unrelated, non-identity error text instead
+// of protecting anything.
+func sanitizeErrorIfNeeded(err error, sanitizer *sanitize.Sanitizer) error {
+	if sanitizer == nil || sanitizer.Level() == sanitize.Off {
+		return err
+	}
+	text := err.Error()
+	if match := collisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
+		return errors.New(spliceCollisionSiteNames(text, match, sanitizer))
+	}
+	return errors.New(sanitizer.Text(text))
+}
+
+// spliceCollisionSiteNames rebuilds text with its two collisionErrorPattern
+// quoted-segment byte ranges (match[4:6] and match[6:8], the submatch offsets
+// for capture groups 2 and 3) replaced by their sanitized renderings. Every
+// other byte of text, including the literal "is already reserved for "/", not
+// "" template words and the untouched ID, is copied through unchanged.
+func spliceCollisionSiteNames(text string, match []int, sanitizer *sanitize.Sanitizer) string {
+	existingStart, existingEnd := match[4], match[5]
+	wantedStart, wantedEnd := match[6], match[7]
+	var out strings.Builder
+	out.Grow(len(text))
+	out.WriteString(text[:existingStart])
+	out.WriteString(sanitizedQuotedSegment(text[existingStart:existingEnd], sanitizer))
+	out.WriteString(text[existingEnd:wantedStart])
+	out.WriteString(sanitizedQuotedSegment(text[wantedStart:wantedEnd], sanitizer))
+	out.WriteString(text[wantedEnd:])
+	return out.String()
+}
+
+// sanitizedQuotedSegment unquotes a %q-quoted segment (surrounding quotes
+// included), registers the recovered value with sanitizer under the "site"
+// kind, and returns the placeholder re-quoted so the surrounding message
+// grammar is preserved (resolved decision D1). A segment [strconv.Unquote]
+// cannot decode fails closed to unprintableSitePlaceholder.
+func sanitizedQuotedSegment(quoted string, sanitizer *sanitize.Sanitizer) string {
+	value, err := strconv.Unquote(quoted)
+	if err != nil {
+		return unprintableSitePlaceholder
+	}
+	return `"` + sanitizer.Value("site", value) + `"`
 }
 
 // collisionErrorName must match design.Error("collision", ...) in
@@ -72,13 +283,12 @@ const collisionErrorName = "collision"
 // not a usage problem, so it gets its own code rather than being
 // indistinguishable from a bad flag or an unreadable registry file.
 //
-// site-id commands now run through the loopback goa HTTP client (see
+// site-id commands run through the loopback goa HTTP client (see
 // internal/loopback), so a collision normally arrives as a *goa.ServiceError
 // decoded from the 409 response, not the original *registry.SiteIDCollisionError
-// — that concrete Go type does not cross the wire. Both checks stay: the
+// -- that concrete Go type does not cross the wire. Both checks stay: the
 // goa.ServiceError case is what actually fires today, and the registry error
-// case is cheap insurance against a future caller that invokes the registry
-// package directly, in-process, without going through the service layer.
+// case covers an in-process caller.
 func exitCodeFor(err error) int {
 	var svcErr *goa.ServiceError
 	if errors.As(err, &svcErr) && svcErr.Name == collisionErrorName {
@@ -91,22 +301,126 @@ func exitCodeFor(err error) int {
 	return exitUsage
 }
 
-// newRootCommand builds the root command. plan/check against live state
-// still needs its own design pass — see ROADMAP.md.
-func newRootCommand() *cobra.Command {
+func newRootCommandWithDependencies(state *commandState, deps commandDependencies) *cobra.Command {
+	if deps.getenv == nil {
+		deps.getenv = func(string) string { return "" }
+	}
+	state.format = formatHuman
+	state.sanitizeLevel = string(sanitize.Off)
+	state.getenv = deps.getenv
 	root := &cobra.Command{
-		Use:   toolName,
-		Short: "Allocate and plan Tailscale address space.",
+		Use:     toolName,
+		Short:   "Allocate and plan Tailscale address space.",
+		Version: buildVersion(),
 		Long: "Allocate and plan Tailscale address space.\n\n" +
-			"Exit codes: 0 success, 1 a check or operation was refused " +
-			"(e.g. a site-ID collision), 2 usage error or the tool/registry " +
-			"could not be read at all.",
-		Version:       version,
+			"Results go to stdout as human text by default or a versioned JSON envelope.\n" +
+			"Structured operational diagnostics go to stderr. Registry commands use a\n" +
+			"comment-preserving HuJSON file selected by --registry-dir and --tailnet.\n\n" +
+			"Exit codes:\n" +
+			"  0  success\n" +
+			"  1  a valid operation was refused (for example, a site-ID collision)\n" +
+			"  2  invalid invocation, collection failure, or unreadable registry",
+		Example: "  tail-ipam site-id reserve 1 hq-vpc\n" +
+			"  tail-ipam site-id list -format json\n" +
+			"  tail-ipam devices list -verbose\n" +
+			"  tail-ipam -schema",
+		Args:          cobra.NoArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if state.showSchema {
+				return printSchema(cmd.OutOrStdout(), cmd.Root())
+			}
+			return errors.New("a command is required; run \"tail-ipam --help\" for usage")
+		},
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
-	root.AddCommand(newDevicesCommand())
-	root.AddCommand(newSiteIDCommand())
+
+	flags := root.PersistentFlags()
+	flags.StringVar(&state.format, "format", formatHuman, "output format: human|json")
+	flags.StringVar(&state.sanitizeLevel, "sanitize", string(sanitize.Off),
+		"output sanitization level: off|identity|strict (a non-off TAILSCALE_SANITIZE value overrides this flag)")
+	flags.BoolVar(&state.verbose, "verbose", false, "log operational details to stderr")
+	// Registered explicitly so the usage string is stable in -schema rather
+	// than Cobra's generated "version for tail-ipam" wording.
+	root.Flags().Bool("version", false, "print version and exit")
+	root.Flags().BoolVar(&state.showSchema, "schema", false,
+		"print the machine-readable tool schema (JSON) and exit")
+
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		state.logger = newLogger(cmd.ErrOrStderr(), state.verbose)
+		if state.format != formatHuman && state.format != formatJSON {
+			return fmt.Errorf("unknown -format %q; want human or json", state.format)
+		}
+		resolution, err := sanitize.Resolve(
+			deps.getenv(sanitize.LevelEnv), state.sanitizeLevel,
+			root.PersistentFlags().Changed("sanitize"),
+		)
+		if err != nil {
+			return err
+		}
+		// -schema reports static tool-catalog data unaffected by -format or
+		// -sanitize; validate them above so a typo isn't silently accepted,
+		// but skip the sanitizer state/notice below since -schema never
+		// produces sanitized output.
+		if state.showSchema {
+			return nil
+		}
+		state.sanitizeResolution = resolution
+		if notice := resolution.Notice(toolName); notice != "" {
+			if _, err = fmt.Fprintln(cmd.ErrOrStderr(), notice); err != nil {
+				return err
+			}
+		} else if resolution.Level != sanitize.Off {
+			// Flag-driven sanitization (env var not set or off)
+			if _, err = fmt.Fprintf(cmd.ErrOrStderr(),
+				"%s: sanitize %s is active; output is sanitized\n", toolName, resolution.Level); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	root.AddCommand(newDevicesCommand(state, deps.listDevices))
+	root.AddCommand(newSiteIDCommand(state))
+	root.InitDefaultHelpFlag()
 	return root
+}
+
+func newLogger(writer io.Writer, verbose bool) *slog.Logger {
+	level := slog.LevelWarn
+	if verbose {
+		level = slog.LevelDebug
+	}
+	return slog.New(slog.NewTextHandler(writer, &slog.HandlerOptions{Level: level}))
+}
+
+// buildVersion combines the ldflags version with the embedded VCS revision so
+// --version reports exact provenance for an auditable binary.
+func buildVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		return buildVersionWithSettings(version, info.Settings)
+	}
+	return buildVersionWithSettings(version, nil)
+}
+
+func buildVersionWithSettings(value string, settings []debug.BuildSetting) string {
+	var revision, dirty string
+	for _, setting := range settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			if setting.Value == "true" {
+				dirty = "+dirty"
+			}
+		}
+	}
+	if len(revision) > shortRevisionLength {
+		revision = revision[:shortRevisionLength]
+	}
+	if revision != "" {
+		value = fmt.Sprintf("%s (%s%s)", value, revision, dirty)
+	}
+	return toolName + " " + value
 }

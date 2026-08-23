@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
 
@@ -18,6 +19,8 @@ import (
 type Service struct {
 	// RegistryDir is the directory holding "<tailnet>.ipam.hujson" files.
 	RegistryDir string
+	// Logger receives identity-free I/O diagnostics. nil is quiet.
+	Logger diagnostics.Logger
 }
 
 var _ ipam.Service = (*Service)(nil)
@@ -30,7 +33,7 @@ func (s *Service) registryPath(tailnet string) string {
 //
 //nolint:revive // must match the generated ipam.Service interface's exact method name (ListSiteIds, not ListSiteIDs).
 func (s *Service) ListSiteIds(_ context.Context, p *ipam.ListSiteIdsPayload) ([]*ipam.SiteIDReservation, error) {
-	entries, err := registry.ListSiteIDs(s.registryPath(p.Tailnet))
+	entries, err := registry.ListSiteIDsWithLogger(s.registryPath(p.Tailnet), s.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +46,9 @@ func (s *Service) ListSiteIds(_ context.Context, p *ipam.ListSiteIdsPayload) ([]
 
 // ReserveSiteID implements ipam.Service.
 func (s *Service) ReserveSiteID(_ context.Context, p *ipam.ReserveSiteIDPayload) (*ipam.ReserveSiteIDResult, error) {
-	id, site, changed, err := registry.ReserveSiteID(s.registryPath(p.Tailnet), p.ID, p.Site)
+	id, site, changed, err := registry.ReserveSiteIDWithLogger(
+		s.registryPath(p.Tailnet), p.ID, p.Site, s.Logger,
+	)
 	if err != nil {
 		var collision *registry.SiteIDCollisionError
 		if errors.As(err, &collision) {
@@ -56,7 +61,7 @@ func (s *Service) ReserveSiteID(_ context.Context, p *ipam.ReserveSiteIDPayload)
 
 // ReleaseSiteID implements ipam.Service.
 func (s *Service) ReleaseSiteID(_ context.Context, p *ipam.ReleaseSiteIDPayload) (*ipam.ReleaseSiteIDResult, error) {
-	id, changed, err := registry.ReleaseSiteID(s.registryPath(p.Tailnet), p.ID)
+	id, changed, err := registry.ReleaseSiteIDWithLogger(s.registryPath(p.Tailnet), p.ID, s.Logger)
 	if err != nil {
 		return nil, err
 	}

@@ -13,6 +13,7 @@ package loopback
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,6 +26,7 @@ import (
 	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
 	ipamserver "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/server"
 	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/ipamsvc"
 )
 
@@ -43,17 +45,28 @@ const (
 	shutdownTimeout   = 5 * time.Second
 )
 
-// Run starts an ephemeral server backed by a registry directory of
+// RunWithLogger starts an ephemeral server backed by a registry directory of
 // "<tailnet>.ipam.hujson" files, binds it to a fresh Unix socket, builds the
 // matching generated HTTP client pointed at that socket, calls fn with it,
 // then shuts the server down and removes the socket — in that order, before
-// returning fn's error (if any).
-func Run(ctx context.Context, registryDir string, fn func(context.Context, *ipamclient.Client) error) error {
+// returning fn's error (if any). logger receives identity-free structured
+// lifecycle diagnostics; nil is quiet.
+func RunWithLogger(
+	ctx context.Context,
+	registryDir string,
+	logger diagnostics.Logger,
+	fn func(context.Context, *ipamclient.Client) error,
+) error {
+	diagnostics.Debug(logger, "starting loopback registry transport")
 	socketDir, err := os.MkdirTemp("", "tail-ipam-*")
 	if err != nil {
 		return fmt.Errorf("creating socket directory: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(socketDir) }()
+	defer func() {
+		if removeErr := os.RemoveAll(socketDir); removeErr != nil {
+			diagnostics.Warn(logger, "removing loopback socket directory failed", "error", removeErr)
+		}
+	}()
 	socketPath := filepath.Join(socketDir, socketFileName)
 
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "unix", socketPath)
@@ -61,7 +74,7 @@ func Run(ctx context.Context, registryDir string, fn func(context.Context, *ipam
 		return fmt.Errorf("listening on %s: %w", socketPath, err)
 	}
 
-	svc := &ipamsvc.Service{RegistryDir: registryDir}
+	svc := &ipamsvc.Service{RegistryDir: registryDir, Logger: logger}
 	endpoints := ipam.NewEndpoints(svc)
 	mux := goahttp.NewMuxer()
 	httpSrv := ipamserver.New(endpoints, mux, goahttp.RequestDecoder, goahttp.ResponseEncoder, nil, nil)
@@ -73,8 +86,13 @@ func Run(ctx context.Context, registryDir string, fn func(context.Context, *ipam
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
-		_ = srv.Shutdown(shutdownCtx)
-		<-serveErrCh
+		if shutdownErr := srv.Shutdown(shutdownCtx); shutdownErr != nil {
+			diagnostics.Warn(logger, "shutting down loopback transport failed", "error", shutdownErr)
+		}
+		if serveErr := <-serveErrCh; serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			diagnostics.Warn(logger, "loopback transport stopped unexpectedly", "error", serveErr)
+		}
+		diagnostics.Debug(logger, "loopback registry transport stopped")
 	}()
 
 	dialer := net.Dialer{}
@@ -88,5 +106,6 @@ func Run(ctx context.Context, registryDir string, fn func(context.Context, *ipam
 	client := ipamclient.NewClient("http", "tail-ipam.local", httpClient,
 		goahttp.RequestEncoder, goahttp.ResponseDecoder, false)
 
+	diagnostics.Debug(logger, "loopback registry transport ready")
 	return fn(ctx, client)
 }
