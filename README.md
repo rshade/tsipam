@@ -198,3 +198,14 @@ go build -o tail-ipam ./cmd/tail-ipam
 ```
 
 `make build` at the monorepo root builds all tool binaries into `bin/`.
+
+Releases are not discovery-based: this module is registered in
+`release-please-config.json`, `.release-please-manifest.json`, and the release
+workflow's tag outputs, and ships its own [`.goreleaser.yaml`](./.goreleaser.yaml).
+Merging its release-please PR cuts the `tail-ipam/vX.Y.Z` tag and attaches the
+archives; registration alone does not cut the initial release.
+
+## License
+
+Apache-2.0; see this module's [LICENSE](./LICENSE) and [`NOTICE`](./NOTICE) — the
+latter carries the full third-party dependency inventory for the release binaries.
