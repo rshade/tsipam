@@ -12,9 +12,10 @@ import (
 const cobraCompletionCommand = "completion"
 
 type schemaFlag struct {
-	Name    string `json:"name"`
-	Usage   string `json:"usage"`
-	Default string `json:"default"`
+	Name     string `json:"name"`
+	Usage    string `json:"usage"`
+	Default  string `json:"default"`
+	Required bool   `json:"required,omitempty"`
 }
 
 type schemaCommand struct {
@@ -35,8 +36,9 @@ func flagSchemaFor(flags *pflag.FlagSet) []schemaFlag {
 		if flag.Name == "help" {
 			return
 		}
+		_, required := flag.Annotations[cobra.BashCompOneRequiredFlag]
 		catalog = append(catalog, schemaFlag{
-			Name: flag.Name, Usage: flag.Usage, Default: flag.DefValue,
+			Name: flag.Name, Usage: flag.Usage, Default: flag.DefValue, Required: required,
 		})
 	})
 	return catalog
@@ -85,13 +87,15 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 			"a non-off environment value overrides --sanitize. Device names, addresses, and routes; " +
 			"tailnet routing keys; and site names are replaced. strict is accepted for cross-tool " +
 			"flag compatibility and is currently equivalent to identity for tail-ipam. " +
+			"calc split output (subnets and parent CIDR) is not sanitized because it contains no tailnet-derived data. " +
 			"Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; " +
 			"without it placeholders are artifact-scoped.",
 		Flags:    flagSchemaFor(root.Flags()),
 		Commands: commandSchema(root),
 		ExitCodes: []exitCodeSchema{
 			{Code: exitOK, Description: "success"},
-			{Code: exitFailure, Description: "a valid operation was refused, such as a site-ID collision"},
+			{Code: exitFailure, Description: "a valid operation was refused, such as a site-ID collision " +
+				"or a calc split producing too many subnets to materialize"},
 			{Code: exitUsage, Description: "invalid invocation, collection failure, or unreadable registry"},
 		},
 	}

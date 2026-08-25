@@ -97,6 +97,38 @@ tail-ipam site-id list --registry-dir /etc/tail-ipam --tailnet production
 Human output is tab-separated (site ID, site name). `-format json` emits the
 same entries in the versioned envelope.
 
+#### `calc split`
+
+Stateless IPv4 CIDR splitting: divides a parent CIDR into equal-sized child
+subnets. No registry, network I/O, or Tailscale API credentials required.
+
+```bash
+tail-ipam calc split 10.0.0.0/16 --prefix 24
+tail-ipam calc split 10.0.0.0/8 --prefix 32
+```
+
+The first command produces 256 subnets of size `/24`. The second requests
+16,777,216 subnets of size `/32`, which exceeds the in-memory materialization
+limit (65,536); instead of hanging, it refuses the request (exit code 1, like
+a site-ID collision) with the exact count and a suggested narrower parent or
+shorter target, on stderr:
+
+```bash
+tail-ipam calc split 10.0.0.0/8 --prefix 32
+# stderr: tail-ipam: splitting 10.0.0.0/8 into /32 blocks would produce
+# 16777216 subnets; too many to list (max 65536); use a shorter target or
+# narrower parent: ipcalc: split would produce too many children to
+# materialize
+# exit code: 1
+```
+
+This refusal carries no structured envelope, in either format — `-format
+json` changes how a successful split is rendered, not how a refusal is
+reported. Human output for a successful split is one CIDR per line; `-format
+json` emits all subnets in the versioned envelope.
+
+IPv6 support (reserved for a follow-up issue) is rejected with a clear error.
+
 ### Registry format
 
 The registry is a comment-preserving HuJSON file named
@@ -172,13 +204,15 @@ on stderr, so stdout remains parse-clean under `-format json`.
 `TAILSCALE_SANITIZE=identity` or `strict` replaces device names, addresses,
 routes, tailnet routing keys, and site names after the real operation has
 completed. A non-`off` environment value overrides `--sanitize` and is
-announced on stderr. Placeholders are scoped to the artifact's routing/storage
-key (the `--tailnet` alias for `site-id` commands, or the live tailnet from
-`TAILSCALE_TAILNET` for `devices` commands), so passing an explicit `--tailnet`
-alias to a `site-id` command intentionally creates a separate pseudonym domain
-from `devices list` output for the same real tailnet. Set `TAILSCALE_SANITIZE_KEY`
-to exactly 64 hexadecimal characters for stable tailnet-scoped placeholders;
-without it placeholders are artifact-scoped.
+announced on stderr. `calc split` output is not sanitized because it contains
+no tailnet-derived data. Placeholders for other commands are scoped to the
+artifact's routing/storage key (the `--tailnet` alias for `site-id` commands,
+or the live tailnet from `TAILSCALE_TAILNET` for `devices` commands), so
+passing an explicit `--tailnet` alias to a `site-id` command intentionally
+creates a separate pseudonym domain from `devices list` output for the same
+real tailnet. Set `TAILSCALE_SANITIZE_KEY` to exactly 64 hexadecimal
+characters for stable tailnet-scoped placeholders; without it placeholders are
+artifact-scoped.
 
 ### Not yet implemented
 

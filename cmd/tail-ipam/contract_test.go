@@ -136,6 +136,7 @@ func assertSchemaCatalog(t *testing.T, document struct {
 	wantCommands := []string{
 		commandDevices, commandDevicesList, commandSiteID,
 		commandSiteIDList, commandSiteIDRelease, commandSiteIDReserve,
+		commandCalc, commandCalcSplit,
 	}
 	for _, want := range wantCommands {
 		if !slices.ContainsFunc(document.Commands, func(command schemaCommand) bool { return command.Name == want }) {
@@ -365,7 +366,7 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 
 	if missing := sanitize.UnhandledFields[outputEnvelope](
 		"SchemaVersion", "Tool", "Sanitization", "Command", "Status", "Message", "Tailnet",
-		"Changed", "ID", "Site", "SiteIDs", "Devices",
+		"Changed", "ID", "Site", "SiteIDs", "Devices", "Subnets",
 	); len(missing) != 0 {
 		t.Errorf("outputEnvelope fields without an explicit sanitization decision: %v", missing)
 	}

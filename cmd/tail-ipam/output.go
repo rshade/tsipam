@@ -12,11 +12,13 @@ import (
 const (
 	commandDevices       = "devices"
 	commandSiteID        = "site-id"
+	commandCalc          = "calc"
 	commandList          = "list"
 	commandDevicesList   = commandDevices + " " + commandList
 	commandSiteIDList    = commandSiteID + " " + commandList
 	commandSiteIDReserve = commandSiteID + " reserve"
 	commandSiteIDRelease = commandSiteID + " release"
+	commandCalcSplit     = commandCalc + " split"
 	statusOK             = "ok"
 	statusNoChanges      = "no_changes"
 )
@@ -56,6 +58,7 @@ type outputEnvelope struct {
 	Site          string             `json:"site,omitempty"`
 	SiteIDs       *[]siteIDOutput    `json:"site_ids,omitempty"`
 	Devices       *[]deviceRecord    `json:"devices,omitempty"`
+	Subnets       *[]string          `json:"subnets,omitempty"`
 }
 
 func newOutput(command, status, message, tailnet string) *outputEnvelope {
@@ -87,6 +90,14 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 		for _, device := range *result.Devices {
 			if _, err := fmt.Fprintf(writer, "%s\t%v\troutes=%v\n",
 				device.Name, device.Addresses, device.AdvertisedRoutes); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if result.Subnets != nil {
+		for _, subnet := range *result.Subnets {
+			if _, err := fmt.Fprintln(writer, subnet); err != nil {
 				return err
 			}
 		}
@@ -131,6 +142,10 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		}
 		result.Devices = &devices
 	}
+	// Subnets is computed from a CLI-supplied CIDR, not fetched from the
+	// tailnet, so unlike every other field above there is no identity to
+	// sweep here — copy it through unredacted.
+	result.Subnets = input.Subnets
 	return result
 }
 

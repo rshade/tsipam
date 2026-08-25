@@ -34,6 +34,7 @@ import (
 	goa "goa.design/goa/v3/pkg"
 
 	"github.com/rshade/tailscale-utils/policycore/cliflags"
+	"github.com/rshade/tailscale-utils/policycore/ipcalc"
 	"github.com/rshade/tailscale-utils/policycore/sanitize"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
@@ -52,7 +53,8 @@ const (
 )
 
 // Exit codes, matching the AX scheme documented in ../../../AGENTS.md:
-// 0 success, 1 a check/operation was refused (e.g. a site-ID collision),
+// 0 success, 1 a check/operation was refused (e.g. a site-ID collision or a
+// calc split that would produce too many subnets to materialize),
 // 2 usage error or the tool/registry could not be read at all.
 const (
 	exitOK      = 0
@@ -279,9 +281,10 @@ func sanitizedQuotedSegment(quoted string, sanitizer *sanitize.Sanitizer) string
 const collisionErrorName = "collision"
 
 // exitCodeFor maps a command error to this tool's exit-code scheme (see
-// newRootCommand's Long text): a site-ID collision is a decidable refusal,
-// not a usage problem, so it gets its own code rather than being
-// indistinguishable from a bad flag or an unreadable registry file.
+// newRootCommand's Long text): a site-ID collision and a calc-split refusal
+// are both decidable refusals of a well-formed request, not usage problems,
+// so they get their own code rather than being indistinguishable from a bad
+// flag or an unreadable registry file.
 //
 // site-id commands run through the loopback goa HTTP client (see
 // internal/loopback), so a collision normally arrives as a *goa.ServiceError
@@ -296,6 +299,9 @@ func exitCodeFor(err error) int {
 	}
 	var collision *registry.SiteIDCollisionError
 	if errors.As(err, &collision) {
+		return exitFailure
+	}
+	if errors.Is(err, ipcalc.ErrTooManyChildren) {
 		return exitFailure
 	}
 	return exitUsage
@@ -318,7 +324,8 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 			"comment-preserving HuJSON file selected by --registry-dir and --tailnet.\n\n" +
 			"Exit codes:\n" +
 			"  0  success\n" +
-			"  1  a valid operation was refused (for example, a site-ID collision)\n" +
+			"  1  a valid operation was refused (for example, a site-ID collision or\n" +
+			"     a calc split producing too many subnets to materialize)\n" +
 			"  2  invalid invocation, collection failure, or unreadable registry",
 		Example: "  tail-ipam site-id reserve 1 hq-vpc\n" +
 			"  tail-ipam site-id list -format json\n" +
@@ -383,6 +390,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 
 	root.AddCommand(newDevicesCommand(state, deps.listDevices))
 	root.AddCommand(newSiteIDCommand(state))
+	root.AddCommand(newCalcCommand(state))
 	root.InitDefaultHelpFlag()
 	return root
 }
