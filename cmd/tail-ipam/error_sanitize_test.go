@@ -445,3 +445,164 @@ func TestHelperTriggerRegistryWriteFailure(t *testing.T) {
 	fmt.Fprintln(os.Stdout, err.Error())
 	os.Exit(1)
 }
+
+// TestSubnetPoolOverlapSanitizesRegistryReadCIDRsAndSites covers Issue 1:
+// when a hand-edited registry has overlapping subnet pools, running a command
+// like "subnet list" or "subnet reserve" that reads the registry surfaces
+// the raw CIDR and site names in an error (from
+// internal/registry/subnetpool.go's canonicalizeSubnetPools). Before this fix,
+// registerKnownIdentityInventory did not extract values from the registry
+// file, so sanitizeErrorIfNeeded's free-text sweep could not redact values
+// deep in policycore/hujsonedit's error strings. This test seeds a registry
+// with overlapping subnet pools using distinctive site names ("secret-hq-site"
+// and "secret-branch-site"), runs a command that triggers the overlap error,
+// and asserts neither raw site name nor CIDR appears under sanitization.
+func TestSubnetPoolOverlapSanitizesRegistryReadCIDRsAndSites(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, localTailnet+".ipam.hujson")
+	content := "{\n\t\"subnetPools\": {\n" +
+		"\t\t\"10.0.0.0/16\": \"secret-hq-site\",\n" +
+		"\t\t\"10.0.1.0/24\": \"secret-branch-site\",\n" +
+		"\t},\n}\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandSubnet, commandList, "--registry-dir", dir, "--sanitize", "identity",
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+
+	if code == exitOK {
+		t.Fatalf("overlap error exit = %d, want non-zero; stderr: %s", code, stderr.String())
+	}
+	stderrText := stderr.String()
+	for _, secret := range []string{"secret-hq-site", "secret-branch-site", "10.0.0.0/16", "10.0.1.0/24"} {
+		if strings.Contains(stderrText, secret) {
+			t.Errorf("sanitized overlap stderr leaks %q: %s", secret, stderrText)
+		}
+	}
+}
+
+// TestSubnetReserveInvalidCIDRSanitizesCliArg covers Issue 4: a CLI-supplied
+// CIDR like "10.20.30.45/24" (host bits set) goes through the generated Goa
+// HTTP validation and produces an error. Before this fix, registerSweepValue
+// in newSubnetLeafCommand's RunE did not register the CIDR argument, so
+// sanitizeErrorIfNeeded's free-text sweep could not redact it even though the
+// operator provided it as input. This test reserves an invalid CIDR with
+// --sanitize identity and asserts the raw CIDR does not leak.
+func TestSubnetReserveInvalidCIDRSanitizesCliArg(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandSubnet, "reserve", "10.20.30.45/24", "test-site",
+		"--registry-dir", dir, "--sanitize", "identity",
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+
+	if code == exitOK {
+		t.Fatalf("invalid CIDR exit = %d, want non-zero; stderr: %s", code, stderr.String())
+	}
+	stderrText := stderr.String()
+	if strings.Contains(stderrText, "10.20.30.45/24") {
+		t.Errorf("sanitized invalid CIDR stderr leaks the raw CIDR: %s", stderrText)
+	}
+}
+
+// TestSubnetPoolCollisionWithFramingWordsSanitizesAllSegments covers Issue 2:
+// the subnet-pool collision message has CIDRs and site names at known byte
+// positions, and those must all be redacted by positional splice instead of
+// value-based sweep. A site name like "overlaps" or "for" (template words
+// from subnetPoolCollisionErrorPattern) would corrupt the message if swept
+// value-first, breaking the message frame. This test runs a collision scenario
+// where the existing or wanted site name equals a message template word,
+// reserves a second overlapping pool with --sanitize identity, and asserts
+// the quoted site-name collision segments are redacted (replaced by
+// placeholders) so the collision message can be parsed correctly.
+func TestSubnetPoolCollisionWithFramingWordsSanitizesAllSegments(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		existingSite string
+		wantedSite   string
+		existingCIDR string
+		wantedCIDR   string
+		reserveFirst bool
+	}{
+		{
+			name:         "wanted site is 'for'",
+			existingSite: "hq-vpc",
+			wantedSite:   "for",
+			existingCIDR: "10.0.0.0/16",
+			wantedCIDR:   "10.0.1.0/24",
+			reserveFirst: true,
+		},
+		{
+			name:         "wanted site is 'not'",
+			existingSite: "hq-vpc",
+			wantedSite:   "not",
+			existingCIDR: "10.0.0.0/16",
+			wantedCIDR:   "10.0.1.0/24",
+			reserveFirst: true,
+		},
+		{
+			name:         "wanted site is 'overlaps'",
+			existingSite: "hq-vpc",
+			wantedSite:   "overlaps",
+			existingCIDR: "10.0.0.0/16",
+			wantedCIDR:   "10.0.1.0/24",
+			reserveFirst: true,
+		},
+		{
+			name:         "existing site is 'for'",
+			existingSite: "for",
+			wantedSite:   "wanted-site",
+			existingCIDR: "10.0.0.0/16",
+			wantedCIDR:   "10.0.1.0/24",
+			reserveFirst: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			testSubnetPoolCollision(t, tc.existingSite, tc.wantedSite, tc.existingCIDR, tc.wantedCIDR)
+		})
+	}
+}
+
+func testSubnetPoolCollision(t *testing.T, existingSite, wantedSite, existingCIDR, wantedCIDR string) {
+	t.Helper()
+	dir := t.TempDir()
+	if _, _, err := runSubnet(t, dir, "reserve", existingCIDR, existingSite); err != nil {
+		t.Fatalf("seed reserve: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandSubnet, "reserve", wantedCIDR, wantedSite,
+		"--registry-dir", dir, "--sanitize", "identity",
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+
+	if code != exitFailure {
+		t.Fatalf("collision exit = %d, want %d; stderr: %s", code, exitFailure, stderr.String())
+	}
+	stderrText := stderr.String()
+
+	if !strings.Contains(stderrText, "overlaps") || !strings.Contains(stderrText, "reserved for") {
+		t.Errorf("stderr = %q, want the collision message frame intact", stderrText)
+	}
+
+	if strings.Contains(stderrText, existingCIDR) {
+		t.Errorf("sanitized collision stderr leaks %q: %s", existingCIDR, stderrText)
+	}
+	if strings.Contains(stderrText, wantedCIDR) {
+		t.Errorf("sanitized collision stderr leaks %q: %s", wantedCIDR, stderrText)
+	}
+
+	assertNoQuotedLeak(t, stderrText, existingSite)
+	assertNoQuotedLeak(t, stderrText, wantedSite)
+}

@@ -67,3 +67,49 @@ func (s *Service) ReleaseSiteID(_ context.Context, p *ipam.ReleaseSiteIDPayload)
 	}
 	return &ipam.ReleaseSiteIDResult{ID: id, Changed: changed}, nil
 }
+
+// ListSubnetPools implements ipam.Service.
+func (s *Service) ListSubnetPools(
+	_ context.Context,
+	p *ipam.ListSubnetPoolsPayload,
+) ([]*ipam.SubnetPoolReservation, error) {
+	entries, err := registry.ListSubnetPoolsWithLogger(s.registryPath(p.Tailnet), s.Logger)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*ipam.SubnetPoolReservation, len(entries))
+	for i, entry := range entries {
+		out[i] = &ipam.SubnetPoolReservation{CIDR: entry.CIDR, Site: entry.Site}
+	}
+	return out, nil
+}
+
+// ReserveSubnetPool implements ipam.Service.
+func (s *Service) ReserveSubnetPool(
+	_ context.Context,
+	p *ipam.ReserveSubnetPoolPayload,
+) (*ipam.ReserveSubnetPoolResult, error) {
+	cidr, site, changed, err := registry.ReserveSubnetPoolWithLogger(
+		s.registryPath(p.Tailnet), p.CIDR, p.Site, s.Logger,
+	)
+	if err != nil {
+		var collision *registry.SubnetPoolCollisionError
+		if errors.As(err, &collision) {
+			return nil, ipam.MakeCollision(collision)
+		}
+		return nil, err
+	}
+	return &ipam.ReserveSubnetPoolResult{CIDR: cidr, Site: site, Changed: changed}, nil
+}
+
+// ReleaseSubnetPool implements ipam.Service.
+func (s *Service) ReleaseSubnetPool(
+	_ context.Context,
+	p *ipam.ReleaseSubnetPoolPayload,
+) (*ipam.ReleaseSubnetPoolResult, error) {
+	cidr, changed, err := registry.ReleaseSubnetPoolWithLogger(s.registryPath(p.Tailnet), p.CIDR, s.Logger)
+	if err != nil {
+		return nil, err
+	}
+	return &ipam.ReleaseSubnetPoolResult{CIDR: cidr, Changed: changed}, nil
+}

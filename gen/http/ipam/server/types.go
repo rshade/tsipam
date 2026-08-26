@@ -21,6 +21,15 @@ type ReserveSiteIDRequestBody struct {
 	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
 }
 
+// ReserveSubnetPoolRequestBody is the type of the "ipam" service
+// "reserve_subnet_pool" endpoint HTTP request body.
+type ReserveSubnetPoolRequestBody struct {
+	// Canonical IPv4 or IPv6 CIDR prefix to reserve.
+	CIDR *string `form:"cidr,omitempty" json:"cidr,omitempty" xml:"cidr,omitempty"`
+	// Site name to reserve it for.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+}
+
 // ListSiteIdsResponseBody is the type of the "ipam" service "list_site_ids"
 // endpoint HTTP response body.
 type ListSiteIdsResponseBody []*SiteIDReservationResponse
@@ -45,9 +54,51 @@ type ReleaseSiteIDResponseBody struct {
 	Changed bool `form:"changed" json:"changed" xml:"changed"`
 }
 
+// ListSubnetPoolsResponseBody is the type of the "ipam" service
+// "list_subnet_pools" endpoint HTTP response body.
+type ListSubnetPoolsResponseBody []*SubnetPoolReservationResponse
+
+// ReserveSubnetPoolResponseBody is the type of the "ipam" service
+// "reserve_subnet_pool" endpoint HTTP response body.
+type ReserveSubnetPoolResponseBody struct {
+	// Canonical subnet CIDR actually written.
+	CIDR string `form:"cidr" json:"cidr" xml:"cidr"`
+	// Canonical site name actually written.
+	Site string `form:"site" json:"site" xml:"site"`
+	// False when the exact CIDR and site were already reserved.
+	Changed bool `form:"changed" json:"changed" xml:"changed"`
+}
+
+// ReleaseSubnetPoolResponseBody is the type of the "ipam" service
+// "release_subnet_pool" endpoint HTTP response body.
+type ReleaseSubnetPoolResponseBody struct {
+	// Canonical subnet CIDR released.
+	CIDR string `form:"cidr" json:"cidr" xml:"cidr"`
+	// False when cidr was not reserved.
+	Changed bool `form:"changed" json:"changed" xml:"changed"`
+}
+
 // ReserveSiteIDCollisionResponseBody is the type of the "ipam" service
 // "reserve_site_id" endpoint HTTP response body for the "collision" error.
 type ReserveSiteIDCollisionResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// ReserveSubnetPoolCollisionResponseBody is the type of the "ipam" service
+// "reserve_subnet_pool" endpoint HTTP response body for the "collision" error.
+type ReserveSubnetPoolCollisionResponseBody struct {
 	// Name is the name of this class of errors.
 	Name string `form:"name" json:"name" xml:"name"`
 	// ID is a unique identifier for this particular occurrence of the problem.
@@ -68,6 +119,15 @@ type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
 	ID string `form:"id" json:"id" xml:"id"`
 	// Site name reserved for this ID.
+	Site string `form:"site" json:"site" xml:"site"`
+}
+
+// SubnetPoolReservationResponse is used to define fields on response body
+// types.
+type SubnetPoolReservationResponse struct {
+	// Canonical IPv4 or IPv6 CIDR prefix.
+	CIDR string `form:"cidr" json:"cidr" xml:"cidr"`
+	// Site name reserved for this subnet pool.
 	Site string `form:"site" json:"site" xml:"site"`
 }
 
@@ -106,10 +166,59 @@ func NewReleaseSiteIDResponseBody(res *ipam.ReleaseSiteIDResult) *ReleaseSiteIDR
 	return body
 }
 
+// NewListSubnetPoolsResponseBody builds the HTTP response body from the result
+// of the "list_subnet_pools" endpoint of the "ipam" service.
+func NewListSubnetPoolsResponseBody(res []*ipam.SubnetPoolReservation) ListSubnetPoolsResponseBody {
+	body := make([]*SubnetPoolReservationResponse, len(res))
+	for i, val := range res {
+		if val == nil {
+			body[i] = nil
+			continue
+		}
+		body[i] = marshalIpamSubnetPoolReservationToSubnetPoolReservationResponse(val)
+	}
+	return body
+}
+
+// NewReserveSubnetPoolResponseBody builds the HTTP response body from the
+// result of the "reserve_subnet_pool" endpoint of the "ipam" service.
+func NewReserveSubnetPoolResponseBody(res *ipam.ReserveSubnetPoolResult) *ReserveSubnetPoolResponseBody {
+	body := &ReserveSubnetPoolResponseBody{
+		CIDR:    res.CIDR,
+		Site:    res.Site,
+		Changed: res.Changed,
+	}
+	return body
+}
+
+// NewReleaseSubnetPoolResponseBody builds the HTTP response body from the
+// result of the "release_subnet_pool" endpoint of the "ipam" service.
+func NewReleaseSubnetPoolResponseBody(res *ipam.ReleaseSubnetPoolResult) *ReleaseSubnetPoolResponseBody {
+	body := &ReleaseSubnetPoolResponseBody{
+		CIDR:    res.CIDR,
+		Changed: res.Changed,
+	}
+	return body
+}
+
 // NewReserveSiteIDCollisionResponseBody builds the HTTP response body from the
 // result of the "reserve_site_id" endpoint of the "ipam" service.
 func NewReserveSiteIDCollisionResponseBody(res *goa.ServiceError) *ReserveSiteIDCollisionResponseBody {
 	body := &ReserveSiteIDCollisionResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewReserveSubnetPoolCollisionResponseBody builds the HTTP response body from
+// the result of the "reserve_subnet_pool" endpoint of the "ipam" service.
+func NewReserveSubnetPoolCollisionResponseBody(res *goa.ServiceError) *ReserveSubnetPoolCollisionResponseBody {
+	body := &ReserveSubnetPoolCollisionResponseBody{
 		Name:      res.Name,
 		ID:        res.ID,
 		Message:   res.Message,
@@ -150,11 +259,54 @@ func NewReleaseSiteIDPayload(tailnet string, id string) *ipam.ReleaseSiteIDPaylo
 	return v
 }
 
+// NewListSubnetPoolsPayload builds a ipam service list_subnet_pools endpoint
+// payload.
+func NewListSubnetPoolsPayload(tailnet string) *ipam.ListSubnetPoolsPayload {
+	v := &ipam.ListSubnetPoolsPayload{}
+	v.Tailnet = tailnet
+
+	return v
+}
+
+// NewReserveSubnetPoolPayload builds a ipam service reserve_subnet_pool
+// endpoint payload.
+func NewReserveSubnetPoolPayload(body *ReserveSubnetPoolRequestBody, tailnet string) *ipam.ReserveSubnetPoolPayload {
+	v := &ipam.ReserveSubnetPoolPayload{
+		CIDR: *body.CIDR,
+		Site: *body.Site,
+	}
+	v.Tailnet = tailnet
+
+	return v
+}
+
+// NewReleaseSubnetPoolPayload builds a ipam service release_subnet_pool
+// endpoint payload.
+func NewReleaseSubnetPoolPayload(tailnet string, cidr string) *ipam.ReleaseSubnetPoolPayload {
+	v := &ipam.ReleaseSubnetPoolPayload{}
+	v.Tailnet = tailnet
+	v.CIDR = cidr
+
+	return v
+}
+
 // ValidateReserveSiteIDRequestBody runs the validations defined on
 // reserve_site_id_request_body
 func ValidateReserveSiteIDRequestBody(body *ReserveSiteIDRequestBody) (err error) {
 	if body.ID == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	return
+}
+
+// ValidateReserveSubnetPoolRequestBody runs the validations defined on
+// reserve_subnet_pool_request_body
+func ValidateReserveSubnetPoolRequestBody(body *ReserveSubnetPoolRequestBody) (err error) {
+	if body.CIDR == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
 	}
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))

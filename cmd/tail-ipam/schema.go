@@ -85,7 +85,7 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 			"comment-preserving registry and read-only control-plane inventory.",
 		Sanitization: "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; " +
 			"a non-off environment value overrides --sanitize. Device names, addresses, and routes; " +
-			"tailnet routing keys; and site names are replaced. strict is accepted for cross-tool " +
+			"tailnet routing keys; site names; and reserved subnet CIDRs are replaced. strict is accepted for cross-tool " +
 			"flag compatibility and is currently equivalent to identity for tail-ipam. " +
 			"calc split output (subnets and parent CIDR) is not sanitized because it contains no tailnet-derived data. " +
 			"Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; " +
@@ -94,7 +94,7 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 		Commands: commandSchema(root),
 		ExitCodes: []exitCodeSchema{
 			{Code: exitOK, Description: "success"},
-			{Code: exitFailure, Description: "a valid operation was refused, such as a site-ID collision " +
+			{Code: exitFailure, Description: "a valid operation was refused, such as a registry collision " +
 				"or a calc split producing too many subnets to materialize"},
 			{Code: exitUsage, Description: "invalid invocation, collection failure, or unreadable registry"},
 		},

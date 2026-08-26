@@ -1,0 +1,155 @@
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/spf13/cobra"
+
+	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
+	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/loopback"
+)
+
+const subnetReserveArgs = 2
+
+// newSubnetCommand groups subnet-CIDR registry commands. Like site-id, every
+// operation traverses the generated Goa HTTP client and loopback server.
+func newSubnetCommand(state *commandState) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   commandSubnet,
+		Short: "Manage subnet CIDR pool reservations.",
+	}
+	cmd.AddCommand(newSubnetReserveCommand(state))
+	cmd.AddCommand(newSubnetReleaseCommand(state))
+	cmd.AddCommand(newSubnetListCommand(state))
+	return cmd
+}
+
+func newSubnetReserveCommand(state *commandState) *cobra.Command {
+	return newSubnetLeafCommand(
+		state, "reserve <cidr> <site-name>", "Reserve a subnet CIDR pool for a site.",
+		cobra.ExactArgs(subnetReserveArgs), 0,
+		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
+			res, err := client.ReserveSubnetPool()(ctx, &ipam.ReserveSubnetPoolPayload{
+				Tailnet: tailnet, CIDR: args[0], Site: args[1],
+			})
+			if err != nil {
+				return nil, err
+			}
+			result, ok := res.(*ipam.ReserveSubnetPoolResult)
+			if !ok {
+				return nil, fmt.Errorf("unexpected reserve_subnet_pool result type %T", res)
+			}
+			status := changedStatus(result.Changed)
+			message := fmt.Sprintf("reserved subnet CIDR %s for %q", result.CIDR, result.Site)
+			if !result.Changed {
+				message = fmt.Sprintf("subnet CIDR %s already reserved for %q", result.CIDR, result.Site)
+			}
+			output := newOutput(commandSubnetReserve, status, message, tailnet)
+			output.Changed = &result.Changed
+			output.CIDR = result.CIDR
+			output.Site = result.Site
+			return output, nil
+		},
+	)
+}
+
+func newSubnetReleaseCommand(state *commandState) *cobra.Command {
+	return newSubnetLeafCommand(
+		state, "release <cidr>", "Release a reserved subnet CIDR pool.", cobra.ExactArgs(1), 0,
+		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
+			res, err := client.ReleaseSubnetPool()(ctx, &ipam.ReleaseSubnetPoolPayload{
+				Tailnet: tailnet, CIDR: args[0],
+			})
+			if err != nil {
+				return nil, err
+			}
+			result, ok := res.(*ipam.ReleaseSubnetPoolResult)
+			if !ok {
+				return nil, fmt.Errorf("unexpected release_subnet_pool result type %T", res)
+			}
+			status := changedStatus(result.Changed)
+			message := fmt.Sprintf("released subnet CIDR %s", result.CIDR)
+			if !result.Changed {
+				message = fmt.Sprintf("subnet CIDR %s was not reserved", result.CIDR)
+			}
+			output := newOutput(commandSubnetRelease, status, message, tailnet)
+			output.Changed = &result.Changed
+			output.CIDR = result.CIDR
+			return output, nil
+		},
+	)
+}
+
+func newSubnetListCommand(state *commandState) *cobra.Command {
+	return newSubnetLeafCommand(
+		state, commandList, "List reserved subnet CIDR pools.", cobra.NoArgs, -1,
+		func(ctx context.Context, client *ipamclient.Client, _ []string, tailnet string) (*outputEnvelope, error) {
+			res, err := client.ListSubnetPools()(ctx, &ipam.ListSubnetPoolsPayload{Tailnet: tailnet})
+			if err != nil {
+				return nil, err
+			}
+			entries, ok := res.([]*ipam.SubnetPoolReservation)
+			if !ok {
+				return nil, fmt.Errorf("unexpected list_subnet_pools result type %T", res)
+			}
+			outputEntries := make([]subnetPoolOutput, len(entries))
+			for index, entry := range entries {
+				outputEntries[index] = subnetPoolOutput{CIDR: entry.CIDR, Site: entry.Site}
+			}
+			output := newOutput(
+				commandSubnetList, statusOK,
+				fmt.Sprintf("listed %d subnet-pool reservation(s)", len(entries)), tailnet,
+			)
+			output.SubnetPools = &outputEntries
+			return output, nil
+		},
+	)
+}
+
+type subnetLeafCall func(
+	context.Context,
+	*ipamclient.Client,
+	[]string,
+	string,
+) (*outputEnvelope, error)
+
+func newSubnetLeafCommand(
+	state *commandState,
+	use, short string,
+	argsValidator cobra.PositionalArgs,
+	cidrArgIndex int,
+	call subnetLeafCall,
+) *cobra.Command {
+	var registryDir, tailnetFlag string
+	cmd := &cobra.Command{
+		Use:           use,
+		Short:         short,
+		Args:          argsValidator,
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
+			outputSanitizer, err := state.outputSanitizer(tailnet)
+			if err != nil {
+				return err
+			}
+			if cidrArgIndex >= 0 && cidrArgIndex < len(args) {
+				registerSweepValue(outputSanitizer, "cidr", args[cidrArgIndex])
+			}
+			return loopback.RunWithLogger(
+				cmd.Context(), registryDir, state.logger,
+				func(ctx context.Context, client *ipamclient.Client) error {
+					output, callErr := call(ctx, client, args, tailnet)
+					if callErr != nil {
+						return callErr
+					}
+					return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
+				},
+			)
+		},
+	}
+	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	return cmd
+}

@@ -156,11 +156,168 @@ func DecodeReleaseSiteIDRequest(mux goahttp.Muxer, decoder func(*http.Request) g
 	}
 }
 
+// EncodeListSubnetPoolsResponse returns an encoder for responses returned by
+// the ipam list_subnet_pools endpoint.
+func EncodeListSubnetPoolsResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.([]*ipam.SubnetPoolReservation)
+		enc := encoder(ctx, w)
+		body := NewListSubnetPoolsResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeListSubnetPoolsRequest returns a decoder for requests sent to the ipam
+// list_subnet_pools endpoint.
+func DecodeListSubnetPoolsRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ListSubnetPoolsPayload, error) {
+	return func(r *http.Request) (*ipam.ListSubnetPoolsPayload, error) {
+		var payload *ipam.ListSubnetPoolsPayload
+		var (
+			tailnet string
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		payload = NewListSubnetPoolsPayload(tailnet)
+
+		return payload, nil
+	}
+}
+
+// EncodeReserveSubnetPoolResponse returns an encoder for responses returned by
+// the ipam reserve_subnet_pool endpoint.
+func EncodeReserveSubnetPoolResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.ReserveSubnetPoolResult)
+		enc := encoder(ctx, w)
+		body := NewReserveSubnetPoolResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeReserveSubnetPoolRequest returns a decoder for requests sent to the
+// ipam reserve_subnet_pool endpoint.
+func DecodeReserveSubnetPoolRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ReserveSubnetPoolPayload, error) {
+	return func(r *http.Request) (*ipam.ReserveSubnetPoolPayload, error) {
+		var payload *ipam.ReserveSubnetPoolPayload
+		var (
+			body ReserveSubnetPoolRequestBody
+			err  error
+		)
+		err = decoder(r).Decode(&body)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return payload, goa.MissingPayloadError()
+			}
+			var gerr *goa.ServiceError
+			if errors.As(err, &gerr) {
+				return payload, gerr
+			}
+			return payload, goa.DecodePayloadError(err.Error())
+		}
+		err = ValidateReserveSubnetPoolRequestBody(&body)
+		if err != nil {
+			return payload, err
+		}
+
+		var (
+			tailnet string
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		payload = NewReserveSubnetPoolPayload(&body, tailnet)
+
+		return payload, nil
+	}
+}
+
+// EncodeReserveSubnetPoolError returns an encoder for errors returned by the
+// reserve_subnet_pool ipam endpoint.
+func EncodeReserveSubnetPoolError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "collision":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReserveSubnetPoolCollisionResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusConflict)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
+// EncodeReleaseSubnetPoolResponse returns an encoder for responses returned by
+// the ipam release_subnet_pool endpoint.
+func EncodeReleaseSubnetPoolResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.ReleaseSubnetPoolResult)
+		enc := encoder(ctx, w)
+		body := NewReleaseSubnetPoolResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeReleaseSubnetPoolRequest returns a decoder for requests sent to the
+// ipam release_subnet_pool endpoint.
+func DecodeReleaseSubnetPoolRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ReleaseSubnetPoolPayload, error) {
+	return func(r *http.Request) (*ipam.ReleaseSubnetPoolPayload, error) {
+		var payload *ipam.ReleaseSubnetPoolPayload
+		var (
+			tailnet string
+			cidr    string
+			err     error
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		cidr = r.URL.Query().Get("cidr")
+		if cidr == "" {
+			err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "query string"))
+		}
+		if err != nil {
+			return payload, err
+		}
+		payload = NewReleaseSubnetPoolPayload(tailnet, cidr)
+
+		return payload, nil
+	}
+}
+
 // marshalIpamSiteIDReservationToSiteIDReservationResponse builds a value of
 // type *SiteIDReservationResponse from a value of type *ipam.SiteIDReservation.
 func marshalIpamSiteIDReservationToSiteIDReservationResponse(v *ipam.SiteIDReservation) *SiteIDReservationResponse {
 	res := &SiteIDReservationResponse{
 		ID:   v.ID,
+		Site: v.Site,
+	}
+
+	return res
+}
+
+// marshalIpamSubnetPoolReservationToSubnetPoolReservationResponse builds a
+// value of type *SubnetPoolReservationResponse from a value of type
+// *ipam.SubnetPoolReservation.
+func marshalIpamSubnetPoolReservationToSubnetPoolReservationResponse(v *ipam.SubnetPoolReservation) *SubnetPoolReservationResponse {
+	res := &SubnetPoolReservationResponse{
+		CIDR: v.CIDR,
 		Site: v.Site,
 	}
 

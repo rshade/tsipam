@@ -1,13 +1,14 @@
 // Command tail-ipam manages a declarative registry of Tailscale address
-// space -- 4via6 site IDs so far, with subnet CIDR pools and per-service /32
+// space -- 4via6 site IDs and subnet CIDR pools so far, with per-service /32
 // allocations as separately scoped future work -- and will plan/check that
 // registry against live control-plane state.
 //
-// "site-id reserve/release/list" edit and read the local registry file
-// (comment-preserving HuJSON, see internal/registry); "devices list" is a
-// read-only proof that the tscli-backed client construction works. Neither
-// cross-checks the registry against live state yet -- that's the "plan"/
-// "check" surface, still future work. See ../../README.md and
+// "site-id reserve/release/list" and "subnet reserve/release/list" edit and
+// read the local registry file (comment-preserving HuJSON, see
+// internal/registry); "devices list" is a read-only proof that the
+// tscli-backed client construction works. Neither cross-checks the registry
+// against live state yet -- that's the "plan"/"check" surface, still future
+// work. See ../../README.md and
 // ../../../ROADMAP.md ("Future Vision" -> tail-ipam) for the design this will
 // grow into.
 //
@@ -27,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -53,8 +55,8 @@ const (
 )
 
 // Exit codes, matching the AX scheme documented in ../../../AGENTS.md:
-// 0 success, 1 a check/operation was refused (e.g. a site-ID collision or a
-// calc split that would produce too many subnets to materialize),
+// 0 success, 1 a check/operation was refused (e.g. a site-ID/subnet-pool
+// collision or a calc split that would produce too many subnets to materialize),
 // 2 usage error or the tool/registry could not be read at all.
 const (
 	exitOK      = 0
@@ -142,8 +144,18 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 	registerSweepValue(state.sanitizer, "tailnet", tailnet)
 	registerSweepValue(state.sanitizer, "path", registryDir)
 	filename := tailnet + ".ipam.hujson"
-	registerSweepValue(state.sanitizer, "path", filepath.Join(registryDir, filename))
+	registryPath := filepath.Join(registryDir, filename)
+	registerSweepValue(state.sanitizer, "path", registryPath)
 	registerSweepValue(state.sanitizer, "path", filename)
+
+	siteIDs, subnetPools := registry.RawEntries(registryPath)
+	for _, site := range siteIDs {
+		registerSweepValue(state.sanitizer, "site", site)
+	}
+	for cidr, site := range subnetPools {
+		registerSweepValue(state.sanitizer, "cidr", cidr)
+		registerSweepValue(state.sanitizer, "site", site)
+	}
 }
 
 type commandDependencies struct {
@@ -207,22 +219,73 @@ var collisionErrorPattern = regexp.MustCompile(
 	`^site ID (\S+) is already reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
 )
 
+// subnetPoolCollisionErrorPattern is the matching format-drift guard for
+// SubnetPoolCollisionError.Error(). Capture groups: 1 = requested CIDR,
+// 2 = overlapping existing CIDR, 3 = existing site, 4 = wanted site.
+var subnetPoolCollisionErrorPattern = regexp.MustCompile(
+	`^subnet CIDR (\S+) overlaps (\S+) reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
+)
+
+const (
+	siteIDCollisionExistingSiteGroup  = 2
+	siteIDCollisionWantedSiteGroup    = 3
+	subnetCollisionRequestedCIDRGroup = 1
+	subnetCollisionExistingCIDRGroup  = 2
+	subnetCollisionExistingSiteGroup  = 3
+	subnetCollisionWantedSiteGroup    = 4
+)
+
 // unprintableSitePlaceholder replaces a matched quoted segment that
 // [strconv.Unquote] cannot decode: failing closed with a fixed, non-identity
 // placeholder rather than falling through to the raw (still possibly
 // identity-bearing) escaped bytes.
 const unprintableSitePlaceholder = `"<unprintable>"`
 
+// collisionSegment names one submatch group within a collision error's
+// regex match to redact by byte-offset splice: group is the regex capture
+// group number (1-based, matching FindStringSubmatchIndex's numbering --
+// group N's byte range is match[2N:2N+2]), and quoted reports whether the
+// segment is a [strconv.Unquote]-able %q-quoted Go string literal (site
+// names) or a bare token printed with %s (CIDRs). kind is the sanitizer.Value
+// kind to register it under -- consulted only when quoted is false, since a
+// quoted segment is always a site name and sanitizedQuotedSegment hardcodes
+// that kind itself.
+type collisionSegment struct {
+	group  int
+	kind   string
+	quoted bool
+}
+
+const (
+	kindSite = "site"
+	kindCIDR = "cidr"
+)
+
+//nolint:gochecknoglobals // collision segment specs are data-driven and factored out for sharing with spliceCollisionSegments
+var siteIDCollisionSegments = []collisionSegment{
+	{group: siteIDCollisionExistingSiteGroup, kind: kindSite, quoted: true},
+	{group: siteIDCollisionWantedSiteGroup, kind: kindSite, quoted: true},
+}
+
+//nolint:gochecknoglobals // collision segment specs are data-driven and factored out for sharing with spliceCollisionSegments
+var subnetCollisionSegments = []collisionSegment{
+	{group: subnetCollisionRequestedCIDRGroup, kind: kindCIDR, quoted: false},
+	{group: subnetCollisionExistingCIDRGroup, kind: kindCIDR, quoted: false},
+	{group: subnetCollisionExistingSiteGroup, kind: kindSite, quoted: true},
+	{group: subnetCollisionWantedSiteGroup, kind: kindSite, quoted: true},
+}
+
 // sanitizeErrorIfNeeded returns a sanitized rendering of err's text when
 // sanitization is active, or err unchanged otherwise.
 //
-// A genuine site-ID collision (see collisionErrorPattern) is redacted by
-// splicing its two known quoted-segment byte ranges out of the *original*
-// text and back in as "<placeholder>", using the segments' regex-matched
-// offsets -- never a value-based search-and-replace, so escaping cannot
-// desync the replacement from what's actually on the page (see the doc
-// comment above). This is the only error shape whose exact wording this tool
-// controls (registry.go) and can therefore redact.
+// A genuine site-ID or subnet-pool collision is redacted by splicing its
+// known byte ranges out of the *original* text and back in as their
+// sanitized renderings, using the segments' regex-matched offsets -- never a
+// value-based search-and-replace, so escaping cannot desync the replacement
+// from what's actually on the page. Every other byte of the collision
+// message frame is copied through unchanged, so template words and message
+// structure survive intact even when a site name or CIDR happens to collide
+// with them.
 //
 // Any other error text is swept only against the identity inventory this
 // tool already knows about from its own inputs (see
@@ -239,26 +302,52 @@ func sanitizeErrorIfNeeded(err error, sanitizer *sanitize.Sanitizer) error {
 	}
 	text := err.Error()
 	if match := collisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
-		return errors.New(spliceCollisionSiteNames(text, match, sanitizer))
+		return errors.New(spliceCollisionSegments(text, match, siteIDCollisionSegments, sanitizer))
+	}
+	if match := subnetPoolCollisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
+		return errors.New(spliceCollisionSegments(text, match, subnetCollisionSegments, sanitizer))
 	}
 	return errors.New(sanitizer.Text(text))
 }
 
-// spliceCollisionSiteNames rebuilds text with its two collisionErrorPattern
-// quoted-segment byte ranges (match[4:6] and match[6:8], the submatch offsets
-// for capture groups 2 and 3) replaced by their sanitized renderings. Every
-// other byte of text, including the literal "is already reserved for "/", not
-// "" template words and the untouched ID, is copied through unchanged.
-func spliceCollisionSiteNames(text string, match []int, sanitizer *sanitize.Sanitizer) string {
-	existingStart, existingEnd := match[4], match[5]
-	wantedStart, wantedEnd := match[6], match[7]
+// spliceCollisionSegments rebuilds text with each segment's byte range
+// replaced by its sanitized rendering. Every other byte of text -- including
+// the message's own template words -- is copied through unchanged. This
+// never falls back to a value-based sweep over the whole string: each
+// identity value is registered and substituted only at its own known byte
+// offset, so escaping cannot desync the replacement, and a site name or CIDR
+// that happens to collide with a template word elsewhere in the message is
+// never touched.
+//
+// segments is sorted by ascending text position before walking it: both
+// current callers already pass it in that order (group number happens to
+// equal text order for every collision shape so far), but sorting here
+// removes that as a caller precondition rather than relying on every future
+// segments literal to get it right by hand.
+func spliceCollisionSegments(
+	text string,
+	match []int,
+	segments []collisionSegment,
+	sanitizer *sanitize.Sanitizer,
+) string {
+	sorted := make([]collisionSegment, len(segments))
+	copy(sorted, segments)
+	sort.Slice(sorted, func(i, j int) bool { return match[sorted[i].group*2] < match[sorted[j].group*2] })
+
 	var out strings.Builder
 	out.Grow(len(text))
-	out.WriteString(text[:existingStart])
-	out.WriteString(sanitizedQuotedSegment(text[existingStart:existingEnd], sanitizer))
-	out.WriteString(text[existingEnd:wantedStart])
-	out.WriteString(sanitizedQuotedSegment(text[wantedStart:wantedEnd], sanitizer))
-	out.WriteString(text[wantedEnd:])
+	cursor := 0
+	for _, seg := range sorted {
+		start, end := match[seg.group*2], match[seg.group*2+1]
+		out.WriteString(text[cursor:start])
+		if seg.quoted {
+			out.WriteString(sanitizedQuotedSegment(text[start:end], sanitizer))
+		} else {
+			out.WriteString(sanitizer.Value(seg.kind, text[start:end]))
+		}
+		cursor = end
+	}
+	out.WriteString(text[cursor:])
 	return out.String()
 }
 
@@ -286,12 +375,11 @@ const collisionErrorName = "collision"
 // so they get their own code rather than being indistinguishable from a bad
 // flag or an unreadable registry file.
 //
-// site-id commands run through the loopback goa HTTP client (see
+// Registry commands run through the loopback goa HTTP client (see
 // internal/loopback), so a collision normally arrives as a *goa.ServiceError
-// decoded from the 409 response, not the original *registry.SiteIDCollisionError
-// -- that concrete Go type does not cross the wire. Both checks stay: the
-// goa.ServiceError case is what actually fires today, and the registry error
-// case covers an in-process caller.
+// decoded from the 409 response, not the original registry collision type --
+// that concrete Go type does not cross the wire. Both domain checks stay for
+// in-process callers.
 func exitCodeFor(err error) int {
 	var svcErr *goa.ServiceError
 	if errors.As(err, &svcErr) && svcErr.Name == collisionErrorName {
@@ -299,6 +387,10 @@ func exitCodeFor(err error) int {
 	}
 	var collision *registry.SiteIDCollisionError
 	if errors.As(err, &collision) {
+		return exitFailure
+	}
+	var subnetCollision *registry.SubnetPoolCollisionError
+	if errors.As(err, &subnetCollision) {
 		return exitFailure
 	}
 	if errors.Is(err, ipcalc.ErrTooManyChildren) {
@@ -324,10 +416,11 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 			"comment-preserving HuJSON file selected by --registry-dir and --tailnet.\n\n" +
 			"Exit codes:\n" +
 			"  0  success\n" +
-			"  1  a valid operation was refused (for example, a site-ID collision or\n" +
+			"  1  a valid operation was refused (for example, a registry collision or\n" +
 			"     a calc split producing too many subnets to materialize)\n" +
 			"  2  invalid invocation, collection failure, or unreadable registry",
 		Example: "  tail-ipam site-id reserve 1 hq-vpc\n" +
+			"  tail-ipam subnet reserve 10.0.0.0/24 hq-vpc\n" +
 			"  tail-ipam site-id list -format json\n" +
 			"  tail-ipam devices list -verbose\n" +
 			"  tail-ipam -schema",
@@ -390,6 +483,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 
 	root.AddCommand(newDevicesCommand(state, deps.listDevices))
 	root.AddCommand(newSiteIDCommand(state))
+	root.AddCommand(newSubnetCommand(state))
 	root.AddCommand(newCalcCommand(state))
 	root.InitDefaultHelpFlag()
 	return root

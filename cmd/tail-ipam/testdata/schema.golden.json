@@ -3,7 +3,7 @@
   "version": "tail-ipam dev",
   "schema_version": "1",
   "description": "Allocate and plan Tailscale address space through a local, comment-preserving registry and read-only control-plane inventory.",
-  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; tailnet routing keys; and site names are replaced. strict is accepted for cross-tool flag compatibility and is currently equivalent to identity for tail-ipam. calc split output (subnets and parent CIDR) is not sanitized because it contains no tailnet-derived data. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
+  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; tailnet routing keys; site names; and reserved subnet CIDRs are replaced. strict is accepted for cross-tool flag compatibility and is currently equivalent to identity for tail-ipam. calc split output (subnets and parent CIDR) is not sanitized because it contains no tailnet-derived data. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
   "flags": [
     {
       "name": "format",
@@ -115,6 +115,62 @@
           "default": ""
         }
       ]
+    },
+    {
+      "name": "subnet",
+      "summary": "Manage subnet CIDR pool reservations.",
+      "usage": "subnet"
+    },
+    {
+      "name": "subnet list",
+      "summary": "List reserved subnet CIDR pools.",
+      "usage": "subnet list",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "subnet release",
+      "summary": "Release a reserved subnet CIDR pool.",
+      "usage": "subnet release \u003ccidr\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "subnet reserve",
+      "summary": "Reserve a subnet CIDR pool for a site.",
+      "usage": "subnet reserve \u003ccidr\u003e \u003csite-name\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
     }
   ],
   "exit_codes": [
@@ -124,7 +180,7 @@
     },
     {
       "code": 1,
-      "description": "a valid operation was refused, such as a site-ID collision or a calc split producing too many subnets to materialize"
+      "description": "a valid operation was refused, such as a registry collision or a calc split producing too many subnets to materialize"
     },
     {
       "code": 2,

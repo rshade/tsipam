@@ -136,6 +136,7 @@ func assertSchemaCatalog(t *testing.T, document struct {
 	wantCommands := []string{
 		commandDevices, commandDevicesList, commandSiteID,
 		commandSiteIDList, commandSiteIDRelease, commandSiteIDReserve,
+		commandSubnet, commandSubnetList, commandSubnetRelease, commandSubnetReserve,
 		commandCalc, commandCalcSplit,
 	}
 	for _, want := range wantCommands {
@@ -144,7 +145,8 @@ func assertSchemaCatalog(t *testing.T, document struct {
 		}
 	}
 	for _, command := range document.Commands {
-		if !strings.HasPrefix(command.Name, commandSiteID+" ") {
+		if !strings.HasPrefix(command.Name, commandSiteID+" ") &&
+			!strings.HasPrefix(command.Name, commandSubnet+" ") {
 			continue
 		}
 		for _, want := range []string{"registry-dir", "tailnet"} {
@@ -366,12 +368,15 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 
 	if missing := sanitize.UnhandledFields[outputEnvelope](
 		"SchemaVersion", "Tool", "Sanitization", "Command", "Status", "Message", "Tailnet",
-		"Changed", "ID", "Site", "SiteIDs", "Devices", "Subnets",
+		"Changed", "ID", "CIDR", "Site", "SiteIDs", "SubnetPools", "Devices", "Subnets",
 	); len(missing) != 0 {
 		t.Errorf("outputEnvelope fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[siteIDOutput]("ID", "Site"); len(missing) != 0 {
 		t.Errorf("siteIDOutput fields without an explicit sanitization decision: %v", missing)
+	}
+	if missing := sanitize.UnhandledFields[subnetPoolOutput]("CIDR", "Site"); len(missing) != 0 {
+		t.Errorf("subnetPoolOutput fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[deviceRecord](
 		"Name", "Addresses", "AdvertisedRoutes",

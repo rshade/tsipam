@@ -18,6 +18,10 @@ const (
 	commandSiteIDList    = commandSiteID + " " + commandList
 	commandSiteIDReserve = commandSiteID + " reserve"
 	commandSiteIDRelease = commandSiteID + " release"
+	commandSubnet        = "subnet"
+	commandSubnetList    = commandSubnet + " " + commandList
+	commandSubnetReserve = commandSubnet + " reserve"
+	commandSubnetRelease = commandSubnet + " release"
 	commandCalcSplit     = commandCalc + " split"
 	statusOK             = "ok"
 	statusNoChanges      = "no_changes"
@@ -35,6 +39,11 @@ type siteIDOutput struct {
 	Site string `json:"site"`
 }
 
+type subnetPoolOutput struct {
+	CIDR string `json:"cidr"`
+	Site string `json:"site"`
+}
+
 type deviceRecord struct {
 	Name             string   `json:"name"`
 	Addresses        []string `json:"addresses"`
@@ -46,19 +55,21 @@ type deviceRecord struct {
 // empty collection" ([]) from "this payload does not apply to the command"
 // (field omitted).
 type outputEnvelope struct {
-	SchemaVersion string             `json:"schema_version"`
-	Tool          string             `json:"tool"`
-	Sanitization  *sanitize.Metadata `json:"sanitization,omitempty"`
-	Command       string             `json:"command"`
-	Status        string             `json:"status"`
-	Message       string             `json:"message"`
-	Tailnet       string             `json:"tailnet,omitempty"`
-	Changed       *bool              `json:"changed,omitempty"`
-	ID            string             `json:"id,omitempty"`
-	Site          string             `json:"site,omitempty"`
-	SiteIDs       *[]siteIDOutput    `json:"site_ids,omitempty"`
-	Devices       *[]deviceRecord    `json:"devices,omitempty"`
-	Subnets       *[]string          `json:"subnets,omitempty"`
+	SchemaVersion string              `json:"schema_version"`
+	Tool          string              `json:"tool"`
+	Sanitization  *sanitize.Metadata  `json:"sanitization,omitempty"`
+	Command       string              `json:"command"`
+	Status        string              `json:"status"`
+	Message       string              `json:"message"`
+	Tailnet       string              `json:"tailnet,omitempty"`
+	Changed       *bool               `json:"changed,omitempty"`
+	ID            string              `json:"id,omitempty"`
+	CIDR          string              `json:"cidr,omitempty"`
+	Site          string              `json:"site,omitempty"`
+	SiteIDs       *[]siteIDOutput     `json:"site_ids,omitempty"`
+	SubnetPools   *[]subnetPoolOutput `json:"subnet_pools,omitempty"`
+	Devices       *[]deviceRecord     `json:"devices,omitempty"`
+	Subnets       *[]string           `json:"subnets,omitempty"`
 }
 
 func newOutput(command, status, message, tailnet string) *outputEnvelope {
@@ -79,32 +90,56 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 		return encoder.Encode(result)
 	}
 	if result.SiteIDs != nil {
-		for _, entry := range *result.SiteIDs {
-			if _, err := fmt.Fprintf(writer, "%s\t%s\n", entry.ID, entry.Site); err != nil {
-				return err
-			}
-		}
-		return nil
+		return renderSiteIDs(writer, *result.SiteIDs)
+	}
+	if result.SubnetPools != nil {
+		return renderSubnetPools(writer, *result.SubnetPools)
 	}
 	if result.Devices != nil {
-		for _, device := range *result.Devices {
-			if _, err := fmt.Fprintf(writer, "%s\t%v\troutes=%v\n",
-				device.Name, device.Addresses, device.AdvertisedRoutes); err != nil {
-				return err
-			}
-		}
-		return nil
+		return renderDevices(writer, *result.Devices)
 	}
 	if result.Subnets != nil {
-		for _, subnet := range *result.Subnets {
-			if _, err := fmt.Fprintln(writer, subnet); err != nil {
-				return err
-			}
-		}
-		return nil
+		return renderSubnets(writer, *result.Subnets)
 	}
 	_, err := fmt.Fprintln(writer, result.Message)
 	return err
+}
+
+func renderSiteIDs(writer io.Writer, entries []siteIDOutput) error {
+	for _, entry := range entries {
+		if _, err := fmt.Fprintf(writer, "%s\t%s\n", entry.ID, entry.Site); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func renderSubnetPools(writer io.Writer, entries []subnetPoolOutput) error {
+	for _, entry := range entries {
+		if _, err := fmt.Fprintf(writer, "%s\t%s\n", entry.CIDR, entry.Site); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func renderDevices(writer io.Writer, devices []deviceRecord) error {
+	for _, device := range devices {
+		if _, err := fmt.Fprintf(writer, "%s\t%v\troutes=%v\n",
+			device.Name, device.Addresses, device.AdvertisedRoutes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func renderSubnets(writer io.Writer, subnets []string) error {
+	for _, subnet := range subnets {
+		if _, err := fmt.Fprintln(writer, subnet); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // sanitizeOutput rebuilds the known envelope from zero at the output boundary.
@@ -122,6 +157,7 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		Tailnet:       output.Value("tailnet", input.Tailnet),
 		Changed:       input.Changed,
 		ID:            input.ID,
+		CIDR:          output.Value("cidr", input.CIDR),
 		Site:          output.Value("site", input.Site),
 	}
 	if input.SiteIDs != nil {
@@ -130,6 +166,16 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 			entries[index] = siteIDOutput{ID: entry.ID, Site: output.Value("site", entry.Site)}
 		}
 		result.SiteIDs = &entries
+	}
+	if input.SubnetPools != nil {
+		entries := make([]subnetPoolOutput, len(*input.SubnetPools))
+		for index, entry := range *input.SubnetPools {
+			entries[index] = subnetPoolOutput{
+				CIDR: output.Value("cidr", entry.CIDR),
+				Site: output.Value("site", entry.Site),
+			}
+		}
+		result.SubnetPools = &entries
 	}
 	if input.Devices != nil {
 		devices := make([]deviceRecord, len(*input.Devices))
@@ -151,9 +197,16 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 
 func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer) {
 	output.Value("tailnet", input.Tailnet)
+	output.Value("cidr", input.CIDR)
 	output.Value("site", input.Site)
 	if input.SiteIDs != nil {
 		for _, entry := range *input.SiteIDs {
+			output.Value("site", entry.Site)
+		}
+	}
+	if input.SubnetPools != nil {
+		for _, entry := range *input.SubnetPools {
+			output.Value("cidr", entry.CIDR)
 			output.Value("site", entry.Site)
 		}
 	}

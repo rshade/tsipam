@@ -554,3 +554,143 @@ func TestReserveSiteIDIntoNullBlock(t *testing.T) {
 		t.Errorf("ListSiteIDs = %+v, want [{1 hq-vpc}]", entries)
 	}
 }
+
+// TestRawEntriesExtractsUnvalidatedValuesFromFile tests that RawEntries
+// can extract raw key/value pairs even from files that would fail Load
+// validation, so a caller can pre-register them with a sanitizer.
+func TestRawEntriesExtractsUnvalidatedValuesFromFile(t *testing.T) {
+	t.Parallel()
+	path := regPath(t)
+	content := `{"siteIDs":{"1":"hq-vpc"},"subnetPools":{"10.0.0.0/16":"secret-hq","10.0.1.0/24":"secret-branch"}}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	siteIDs, subnetPools := registry.RawEntries(path)
+	if len(siteIDs) != 1 || siteIDs["1"] != "hq-vpc" {
+		t.Errorf("RawEntries siteIDs = %+v, want {1:hq-vpc}", siteIDs)
+	}
+	if len(subnetPools) != 2 || subnetPools["10.0.0.0/16"] != "secret-hq" ||
+		subnetPools["10.0.1.0/24"] != "secret-branch" {
+		t.Errorf("RawEntries subnetPools = %+v, want both entries verbatim", subnetPools)
+	}
+}
+
+// TestRawEntriesReturnsNilOnReadFailureOrMalformedHuJSON tests that
+// RawEntries gracefully returns nil maps on any failure, never panics.
+func TestRawEntriesReturnsNilOnReadFailureOrMalformedHuJSON(t *testing.T) {
+	t.Parallel()
+
+	// Missing file
+	siteIDs, subnetPools := registry.RawEntries("/nonexistent/path/to/file.hujson")
+	if siteIDs != nil || subnetPools != nil {
+		t.Errorf("RawEntries on missing file = (%v, %v), want (nil, nil)", siteIDs, subnetPools)
+	}
+
+	// Malformed HuJSON
+	path := regPath(t)
+	if err := os.WriteFile(path, []byte(`{invalid json}`), 0o644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+	siteIDs, subnetPools = registry.RawEntries(path)
+	if siteIDs != nil || subnetPools != nil {
+		t.Errorf("RawEntries on malformed HuJSON = (%v, %v), want (nil, nil)", siteIDs, subnetPools)
+	}
+}
+
+// TestLoadScopesSiteIDErrorsAndAllowsSubnetPoolOperations tests that a
+// malformed subnetPools block does not prevent site-ID commands from working.
+func TestLoadScopesSiteIDErrorsAndAllowsSubnetPoolOperations(t *testing.T) {
+	t.Parallel()
+	path := regPath(t)
+	// Overlapping subnetPools (invalid) with valid siteIDs
+	content := `{"siteIDs":{"1":"hq-vpc"},"subnetPools":{"10.0.0.0/16":"hq","10.0.1.0/24":"branch"}}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	// All site-ID operations should work despite the subnetPools error
+	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	if err != nil {
+		t.Fatalf("ListSiteIDs should succeed with valid siteIDs: %v", err)
+	}
+	if len(entries) != 1 || entries[0].ID != "1" {
+		t.Errorf("ListSiteIDs = %+v, want one entry for site ID 1", entries)
+	}
+
+	id, site, changed, err := registry.ReserveSiteIDWithLogger(path, "2", "branch-office", nil)
+	if err != nil {
+		t.Fatalf("ReserveSiteID should succeed despite subnetPools error: %v", err)
+	}
+	if id != "2" || site != "branch-office" || !changed {
+		t.Errorf("ReserveSiteID = (%q, %q, %v), want (2, branch-office, true)", id, site, changed)
+	}
+
+	_, changed, err = registry.ReleaseSiteIDWithLogger(path, "1", nil)
+	if err != nil {
+		t.Fatalf("ReleaseSiteID should succeed despite subnetPools error: %v", err)
+	}
+	if !changed {
+		t.Error("ReleaseSiteID changed = false, want true")
+	}
+}
+
+// TestLoadScopesSubnetPoolErrorsAndAllowsSiteIDOperations tests that a
+// malformed siteIDs block does not prevent subnet-pool commands from working.
+func TestLoadScopesSubnetPoolErrorsAndAllowsSiteIDOperations(t *testing.T) {
+	t.Parallel()
+	path := regPath(t)
+	// Duplicate siteIDs (invalid) with valid subnetPools
+	content := `{"siteIDs":{"1":"a","1":"b"},"subnetPools":{"10.0.0.0/16":"hq-vpc"}}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	// Subnet pool operations should work despite the siteIDs error
+	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	if err != nil {
+		t.Fatalf("ListSubnetPools should succeed with valid subnetPools: %v", err)
+	}
+	if len(entries) != 1 || entries[0].CIDR != "10.0.0.0/16" {
+		t.Errorf("ListSubnetPools = %+v, want one entry for 10.0.0.0/16", entries)
+	}
+
+	cidr, site, changed, err := registry.ReserveSubnetPoolWithLogger(path, "192.168.0.0/16", "branch-office", nil)
+	if err != nil {
+		t.Fatalf("ReserveSubnetPool should succeed despite siteIDs error: %v", err)
+	}
+	if cidr != "192.168.0.0/16" || site != "branch-office" || !changed {
+		t.Errorf("ReserveSubnetPool = (%q, %q, %v), want (192.168.0.0/16, branch-office, true)", cidr, site, changed)
+	}
+}
+
+// TestReleaseSubnetPoolCanRepairOverlapError tests the specific case from
+// issue 2: that ReleaseSubnetPoolWithLogger can remove an overlapping entry
+// even when the overlap error would previously block all operations.
+func TestReleaseSubnetPoolCanRepairOverlapError(t *testing.T) {
+	t.Parallel()
+	path := regPath(t)
+	// Overlapping pools owned by different sites (invalid)
+	content := `{"subnetPools":{"10.0.0.0/16":"hq","10.0.1.0/24":"branch"}}`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	// Release should succeed and repair the overlap
+	cidr, changed, err := registry.ReleaseSubnetPoolWithLogger(path, "10.0.1.0/24", nil)
+	if err != nil {
+		t.Fatalf("ReleaseSubnetPool should succeed to repair overlap: %v", err)
+	}
+	if cidr != "10.0.1.0/24" || !changed {
+		t.Errorf("ReleaseSubnetPool = (%q, %v), want (10.0.1.0/24, true)", cidr, changed)
+	}
+
+	// Now ListSubnetPools should succeed (overlap is gone)
+	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	if err != nil {
+		t.Fatalf("ListSubnetPools after repair: %v", err)
+	}
+	if len(entries) != 1 || entries[0].CIDR != "10.0.0.0/16" {
+		t.Errorf("ListSubnetPools after repair = %+v, want only the hq entry", entries)
+	}
+}

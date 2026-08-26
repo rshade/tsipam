@@ -255,11 +255,272 @@ func DecodeReleaseSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, r
 	}
 }
 
+// BuildListSubnetPoolsRequest instantiates a HTTP request object with method
+// and path set to call the "ipam" service "list_subnet_pools" endpoint
+func (c *Client) BuildListSubnetPoolsRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ListSubnetPoolsPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "list_subnet_pools", "*ipam.ListSubnetPoolsPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListSubnetPoolsIpamPath(tailnet)}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "list_subnet_pools", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// DecodeListSubnetPoolsResponse returns a decoder for responses returned by
+// the ipam list_subnet_pools endpoint. restoreBody controls whether the
+// response body should be restored after having been read.
+func DecodeListSubnetPoolsResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body []*SubnetPoolReservationResponse
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_subnet_pools", err)
+			}
+			for _, e := range body {
+				if e != nil {
+					if err2 := ValidateSubnetPoolReservationResponse(e); err2 != nil {
+						err = goa.MergeErrors(err, err2)
+					}
+				}
+			}
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "list_subnet_pools", err)
+			}
+			res := NewListSubnetPoolsSubnetPoolReservationOK(body)
+			return res, nil
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "list_subnet_pools", resp.StatusCode, string(body))
+		}
+	}
+}
+
+// BuildReserveSubnetPoolRequest instantiates a HTTP request object with method
+// and path set to call the "ipam" service "reserve_subnet_pool" endpoint
+func (c *Client) BuildReserveSubnetPoolRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ReserveSubnetPoolPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "reserve_subnet_pool", "*ipam.ReserveSubnetPoolPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveSubnetPoolIpamPath(tailnet)}
+	req, err := http.NewRequest("POST", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "reserve_subnet_pool", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeReserveSubnetPoolRequest returns an encoder for requests sent to the
+// ipam reserve_subnet_pool server.
+func EncodeReserveSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ReserveSubnetPoolPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "reserve_subnet_pool", "*ipam.ReserveSubnetPoolPayload", v)
+		}
+		body := NewReserveSubnetPoolRequestBody(p)
+		if err := encoder(req).Encode(&body); err != nil {
+			return goahttp.ErrEncodingError("ipam", "reserve_subnet_pool", err)
+		}
+		return nil
+	}
+}
+
+// DecodeReserveSubnetPoolResponse returns a decoder for responses returned by
+// the ipam reserve_subnet_pool endpoint. restoreBody controls whether the
+// response body should be restored after having been read.
+// DecodeReserveSubnetPoolResponse may return the following errors:
+//   - "collision" (type *goa.ServiceError): http.StatusConflict
+//   - error: internal error
+func DecodeReserveSubnetPoolResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body ReserveSubnetPoolResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_subnet_pool", err)
+			}
+			err = ValidateReserveSubnetPoolResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_subnet_pool", err)
+			}
+			res := NewReserveSubnetPoolResultOK(&body)
+			return res, nil
+		case http.StatusConflict:
+			var (
+				body ReserveSubnetPoolCollisionResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_subnet_pool", err)
+			}
+			err = ValidateReserveSubnetPoolCollisionResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_subnet_pool", err)
+			}
+			return nil, NewReserveSubnetPoolCollision(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "reserve_subnet_pool", resp.StatusCode, string(body))
+		}
+	}
+}
+
+// BuildReleaseSubnetPoolRequest instantiates a HTTP request object with method
+// and path set to call the "ipam" service "release_subnet_pool" endpoint
+func (c *Client) BuildReleaseSubnetPoolRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ReleaseSubnetPoolPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "release_subnet_pool", "*ipam.ReleaseSubnetPoolPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseSubnetPoolIpamPath(tailnet)}
+	req, err := http.NewRequest("DELETE", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "release_subnet_pool", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeReleaseSubnetPoolRequest returns an encoder for requests sent to the
+// ipam release_subnet_pool server.
+func EncodeReleaseSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ReleaseSubnetPoolPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "release_subnet_pool", "*ipam.ReleaseSubnetPoolPayload", v)
+		}
+		values := req.URL.Query()
+		values.Add("cidr", p.CIDR)
+		req.URL.RawQuery = values.Encode()
+		return nil
+	}
+}
+
+// DecodeReleaseSubnetPoolResponse returns a decoder for responses returned by
+// the ipam release_subnet_pool endpoint. restoreBody controls whether the
+// response body should be restored after having been read.
+func DecodeReleaseSubnetPoolResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body ReleaseSubnetPoolResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_subnet_pool", err)
+			}
+			err = ValidateReleaseSubnetPoolResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "release_subnet_pool", err)
+			}
+			res := NewReleaseSubnetPoolResultOK(&body)
+			return res, nil
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "release_subnet_pool", resp.StatusCode, string(body))
+		}
+	}
+}
+
 // unmarshalSiteIDReservationResponseToIpamSiteIDReservation builds a value of
 // type *ipam.SiteIDReservation from a value of type *SiteIDReservationResponse.
 func unmarshalSiteIDReservationResponseToIpamSiteIDReservation(v *SiteIDReservationResponse) *ipam.SiteIDReservation {
 	res := &ipam.SiteIDReservation{
 		ID:   *v.ID,
+		Site: *v.Site,
+	}
+
+	return res
+}
+
+// unmarshalSubnetPoolReservationResponseToIpamSubnetPoolReservation builds a
+// value of type *ipam.SubnetPoolReservation from a value of type
+// *SubnetPoolReservationResponse.
+func unmarshalSubnetPoolReservationResponseToIpamSubnetPoolReservation(v *SubnetPoolReservationResponse) *ipam.SubnetPoolReservation {
+	res := &ipam.SubnetPoolReservation{
+		CIDR: *v.CIDR,
 		Site: *v.Site,
 	}
 

@@ -15,17 +15,23 @@ import (
 
 // Client is the "ipam" service client.
 type Client struct {
-	ListSiteIdsEndpoint   goa.Endpoint
-	ReserveSiteIDEndpoint goa.Endpoint
-	ReleaseSiteIDEndpoint goa.Endpoint
+	ListSiteIdsEndpoint       goa.Endpoint
+	ReserveSiteIDEndpoint     goa.Endpoint
+	ReleaseSiteIDEndpoint     goa.Endpoint
+	ListSubnetPoolsEndpoint   goa.Endpoint
+	ReserveSubnetPoolEndpoint goa.Endpoint
+	ReleaseSubnetPoolEndpoint goa.Endpoint
 }
 
 // NewClient initializes a "ipam" service client given the endpoints.
-func NewClient(listSiteIds, reserveSiteID, releaseSiteID goa.Endpoint) *Client {
+func NewClient(listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool goa.Endpoint) *Client {
 	return &Client{
-		ListSiteIdsEndpoint:   listSiteIds,
-		ReserveSiteIDEndpoint: reserveSiteID,
-		ReleaseSiteIDEndpoint: releaseSiteID,
+		ListSiteIdsEndpoint:       listSiteIds,
+		ReserveSiteIDEndpoint:     reserveSiteID,
+		ReleaseSiteIDEndpoint:     releaseSiteID,
+		ListSubnetPoolsEndpoint:   listSubnetPools,
+		ReserveSubnetPoolEndpoint: reserveSubnetPool,
+		ReleaseSubnetPoolEndpoint: releaseSubnetPool,
 	}
 }
 
@@ -60,4 +66,39 @@ func (c *Client) ReleaseSiteID(ctx context.Context, p *ReleaseSiteIDPayload) (re
 		return
 	}
 	return ires.(*ReleaseSiteIDResult), nil
+}
+
+// ListSubnetPools calls the "list_subnet_pools" endpoint of the "ipam" service.
+func (c *Client) ListSubnetPools(ctx context.Context, p *ListSubnetPoolsPayload) (res []*SubnetPoolReservation, err error) {
+	var ires any
+	ires, err = c.ListSubnetPoolsEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.([]*SubnetPoolReservation), nil
+}
+
+// ReserveSubnetPool calls the "reserve_subnet_pool" endpoint of the "ipam"
+// service.
+// ReserveSubnetPool may return the following errors:
+//   - "collision" (type *goa.ServiceError): cidr overlaps a subnet pool reserved for a different site.
+//   - error: internal error
+func (c *Client) ReserveSubnetPool(ctx context.Context, p *ReserveSubnetPoolPayload) (res *ReserveSubnetPoolResult, err error) {
+	var ires any
+	ires, err = c.ReserveSubnetPoolEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*ReserveSubnetPoolResult), nil
+}
+
+// ReleaseSubnetPool calls the "release_subnet_pool" endpoint of the "ipam"
+// service.
+func (c *Client) ReleaseSubnetPool(ctx context.Context, p *ReleaseSubnetPoolPayload) (res *ReleaseSubnetPoolResult, err error) {
+	var ires any
+	ires, err = c.ReleaseSubnetPoolEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*ReleaseSubnetPoolResult), nil
 }

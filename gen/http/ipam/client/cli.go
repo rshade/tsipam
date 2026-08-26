@@ -68,3 +68,58 @@ func BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnet string, ipamReleaseSiteI
 
 	return v, nil
 }
+
+// BuildListSubnetPoolsPayload builds the payload for the ipam
+// list_subnet_pools endpoint from CLI flags.
+func BuildListSubnetPoolsPayload(ipamListSubnetPoolsTailnet string) (*ipam.ListSubnetPoolsPayload, error) {
+	var tailnet string
+	{
+		tailnet = ipamListSubnetPoolsTailnet
+	}
+	v := &ipam.ListSubnetPoolsPayload{}
+	v.Tailnet = tailnet
+
+	return v, nil
+}
+
+// BuildReserveSubnetPoolPayload builds the payload for the ipam
+// reserve_subnet_pool endpoint from CLI flags.
+func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody string, ipamReserveSubnetPoolTailnet string) (*ipam.ReserveSubnetPoolPayload, error) {
+	var err error
+	var body ReserveSubnetPoolRequestBody
+	{
+		err = json.Unmarshal([]byte(ipamReserveSubnetPoolBody), &body)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"cidr\": \"Iste voluptatem modi aut id illum rerum.\",\n      \"site\": \"Occaecati assumenda quia.\"\n   }'")
+		}
+	}
+	var tailnet string
+	{
+		tailnet = ipamReserveSubnetPoolTailnet
+	}
+	v := &ipam.ReserveSubnetPoolPayload{
+		CIDR: body.CIDR,
+		Site: body.Site,
+	}
+	v.Tailnet = tailnet
+
+	return v, nil
+}
+
+// BuildReleaseSubnetPoolPayload builds the payload for the ipam
+// release_subnet_pool endpoint from CLI flags.
+func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet string, ipamReleaseSubnetPoolCidr string) (*ipam.ReleaseSubnetPoolPayload, error) {
+	var tailnet string
+	{
+		tailnet = ipamReleaseSubnetPoolTailnet
+	}
+	var cidr string
+	{
+		cidr = ipamReleaseSubnetPoolCidr
+	}
+	v := &ipam.ReleaseSubnetPoolPayload{}
+	v.Tailnet = tailnet
+	v.CIDR = cidr
+
+	return v, nil
+}

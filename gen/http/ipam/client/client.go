@@ -29,6 +29,18 @@ type Client struct {
 	// release_site_id endpoint.
 	ReleaseSiteIDDoer goahttp.Doer
 
+	// ListSubnetPools Doer is the HTTP client used to make requests to the
+	// list_subnet_pools endpoint.
+	ListSubnetPoolsDoer goahttp.Doer
+
+	// ReserveSubnetPool Doer is the HTTP client used to make requests to the
+	// reserve_subnet_pool endpoint.
+	ReserveSubnetPoolDoer goahttp.Doer
+
+	// ReleaseSubnetPool Doer is the HTTP client used to make requests to the
+	// release_subnet_pool endpoint.
+	ReleaseSubnetPoolDoer goahttp.Doer
+
 	// RestoreResponseBody controls whether the response bodies are reset after
 	// decoding so they can be read again.
 	RestoreResponseBody bool
@@ -49,14 +61,17 @@ func NewClient(
 	restoreBody bool,
 ) *Client {
 	return &Client{
-		ListSiteIdsDoer:     doer,
-		ReserveSiteIDDoer:   doer,
-		ReleaseSiteIDDoer:   doer,
-		RestoreResponseBody: restoreBody,
-		scheme:              scheme,
-		host:                host,
-		decoder:             dec,
-		encoder:             enc,
+		ListSiteIdsDoer:       doer,
+		ReserveSiteIDDoer:     doer,
+		ReleaseSiteIDDoer:     doer,
+		ListSubnetPoolsDoer:   doer,
+		ReserveSubnetPoolDoer: doer,
+		ReleaseSubnetPoolDoer: doer,
+		RestoreResponseBody:   restoreBody,
+		scheme:                scheme,
+		host:                  host,
+		decoder:               dec,
+		encoder:               enc,
 	}
 }
 
@@ -117,6 +132,73 @@ func (c *Client) ReleaseSiteID() goa.Endpoint {
 		resp, err := c.ReleaseSiteIDDoer.Do(req)
 		if err != nil {
 			return nil, goahttp.ErrRequestError("ipam", "release_site_id", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ListSubnetPools returns an endpoint that makes HTTP requests to the ipam
+// service list_subnet_pools server.
+func (c *Client) ListSubnetPools() goa.Endpoint {
+	var (
+		decodeResponse = DecodeListSubnetPoolsResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildListSubnetPoolsRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ListSubnetPoolsDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "list_subnet_pools", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ReserveSubnetPool returns an endpoint that makes HTTP requests to the ipam
+// service reserve_subnet_pool server.
+func (c *Client) ReserveSubnetPool() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeReserveSubnetPoolRequest(c.encoder)
+		decodeResponse = DecodeReserveSubnetPoolResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildReserveSubnetPoolRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ReserveSubnetPoolDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "reserve_subnet_pool", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ReleaseSubnetPool returns an endpoint that makes HTTP requests to the ipam
+// service release_subnet_pool server.
+func (c *Client) ReleaseSubnetPool() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeReleaseSubnetPoolRequest(c.encoder)
+		decodeResponse = DecodeReleaseSubnetPoolResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildReleaseSubnetPoolRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ReleaseSubnetPoolDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "release_subnet_pool", err)
 		}
 		return decodeResponse(resp)
 	}

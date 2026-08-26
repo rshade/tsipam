@@ -15,9 +15,19 @@ var SiteIDReservation = Type("SiteIDReservation", func() {
 	Required("id", "site")
 })
 
+//nolint:gochecknoglobals // goa's DSL requires a package-level var per declared type/service/API; this is design source, not application state.
+var SubnetPoolReservation = Type("SubnetPoolReservation", func() {
+	Description("A subnet CIDR pool reserved for a site.")
+	Attribute("cidr", String, "Canonical IPv4 or IPv6 CIDR prefix.", func() {
+		Meta("struct:field:name", "CIDR")
+	})
+	Attribute("site", String, "Site name reserved for this subnet pool.")
+	Required("cidr", "site")
+})
+
 var _ = API("tail-ipam", func() {
 	Title("tail-ipam address-space registry API")
-	Description("Plans and allocates Tailscale address space, starting with 4via6 site IDs. " +
+	Description("Plans and allocates Tailscale address space through 4via6 site IDs and subnet CIDR pools. " +
 		"Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own " +
 		"control-plane API convention.")
 })
@@ -75,6 +85,71 @@ var _ = Service("ipam", func() {
 		})
 		HTTP(func() {
 			DELETE("/tailnet/{tailnet}/ipam/site-ids/{id}")
+			Response(StatusOK)
+		})
+	})
+
+	Method("list_subnet_pools", func() {
+		Payload(func() {
+			Attribute("tailnet", String,
+				"Routing/storage key for the registry. May be a synthetic alias, not "+
+					"necessarily the live Tailscale tailnet name.")
+			Required("tailnet")
+		})
+		Result(ArrayOf(SubnetPoolReservation))
+		HTTP(func() {
+			GET("/tailnet/{tailnet}/ipam/subnet-pools")
+			Response(StatusOK)
+		})
+	})
+
+	Method("reserve_subnet_pool", func() {
+		Payload(func() {
+			Attribute("tailnet", String, "Routing/storage key for the registry.")
+			Attribute("cidr", String, "Canonical IPv4 or IPv6 CIDR prefix to reserve.", func() {
+				Meta("struct:field:name", "CIDR")
+			})
+			Attribute("site", String, "Site name to reserve it for.")
+			Required("tailnet", "cidr", "site")
+		})
+		Result(func() {
+			Attribute("cidr", String, "Canonical subnet CIDR actually written.", func() {
+				Meta("struct:field:name", "CIDR")
+			})
+			Attribute("site", String, "Canonical site name actually written.")
+			Attribute("changed", Boolean, "False when the exact CIDR and site were already reserved.")
+			Required("cidr", "site", "changed")
+		})
+		Error("collision", func() {
+			Description("cidr overlaps a subnet pool reserved for a different site.")
+		})
+		HTTP(func() {
+			POST("/tailnet/{tailnet}/ipam/subnet-pools")
+			Response(StatusOK)
+			Response("collision", StatusConflict)
+		})
+	})
+
+	Method("release_subnet_pool", func() {
+		Payload(func() {
+			Attribute("tailnet", String, "Routing/storage key for the registry.")
+			Attribute("cidr", String, "Canonical IPv4 or IPv6 CIDR prefix to release.", func() {
+				Meta("struct:field:name", "CIDR")
+			})
+			Required("tailnet", "cidr")
+		})
+		Result(func() {
+			Attribute("cidr", String, "Canonical subnet CIDR released.", func() {
+				Meta("struct:field:name", "CIDR")
+			})
+			Attribute("changed", Boolean, "False when cidr was not reserved.")
+			Required("cidr", "changed")
+		})
+		HTTP(func() {
+			// cidr is a query parameter, not a path segment: a CIDR contains "/"
+			// and would split across path segments if it were one.
+			DELETE("/tailnet/{tailnet}/ipam/subnet-pools")
+			Param("cidr")
 			Response(StatusOK)
 		})
 	})

@@ -27,8 +27,8 @@ address space before it is ever advertised.
 
 ### Shipped
 
-Four working commands manage the local address-space registry and inspect the
-live tailnet:
+Working commands manage the local address-space registry, perform stateless
+CIDR arithmetic, and inspect the live tailnet:
 
 #### `devices list`
 
@@ -97,6 +97,44 @@ tail-ipam site-id list --registry-dir /etc/tail-ipam --tailnet production
 Human output is tab-separated (site ID, site name). `-format json` emits the
 same entries in the versioned envelope.
 
+#### `subnet reserve <cidr> <site-name>`
+
+Reserves a canonical IPv4 or IPv6 subnet CIDR pool for a site. Refuses an
+exact duplicate or any containing/contained overlap already reserved for a
+different site. Adjacent pools do not conflict, and overlaps owned by the same
+site are permitted. Repeating the exact CIDR and site is an idempotent no-op.
+This checks retained reservations whether or not they are advertised live; it
+does not query the Tailscale control plane.
+
+```bash
+tail-ipam subnet reserve 10.20.0.0/16 hq-vpc
+tail-ipam subnet reserve 2001:db8:20::/48 branch-office
+```
+
+CIDRs must already be in `net/netip`'s canonical form. For example,
+`10.20.0.1/16` is rejected with a suggestion to use `10.20.0.0/16`, rather
+than silently reserving a different network from the one written.
+
+#### `subnet release <cidr>`
+
+Releases an exact subnet-pool reservation. Errors if the registry file does
+not exist; releasing a valid canonical CIDR that is not reserved is a no-op.
+
+```bash
+tail-ipam subnet release 10.20.0.0/16
+```
+
+#### `subnet list`
+
+Lists all subnet-pool reservations sorted by network address. Human output is
+tab-separated (CIDR, site name); `-format json` emits `subnet_pools` in the
+versioned envelope.
+
+```bash
+tail-ipam subnet list
+tail-ipam subnet list --registry-dir /etc/tail-ipam --tailnet production
+```
+
 #### `calc split`
 
 Stateless IPv4 CIDR splitting: divides a parent CIDR into equal-sized child
@@ -144,6 +182,12 @@ straightforward:
     "1": "hq-vpc",
     "2": "branch-office",
   },
+
+  // Subnet CIDR pool reservations
+  "subnetPools": {
+    "10.20.0.0/16": "hq-vpc",
+    "2001:db8:20::/48": "branch-office",
+  },
 }
 ```
 
@@ -161,6 +205,13 @@ deliberate, documented difference from `tailscale debug via`'s hex/octal-aware
 site-ID parsing: a leading-zero key such as `"017"` is always read as decimal
 17 here, never as octal. The registry file is created on first `reserve` if
 absent; `release` and `list` error if the file does not exist.
+
+Subnet-pool keys must be canonical CIDR prefixes. Registry load validates the
+whole `subnetPools` map and refuses malformed or non-canonical keys, duplicate
+members, empty site names, and overlaps owned by different sites. CIDR overlap
+semantics come from the shared `policycore/addrspace` primitive used by the
+repository's policy and audit tools rather than from a registry-specific
+comparison.
 
 A comment attached directly to a released entry (i.e. immediately above it)
 is removed along with that entry — this is standard `hujson` behavior, not a
@@ -186,11 +237,11 @@ top-level contract as the repository's other action-oriented CLI output:
 }
 ```
 
-`site-id list` carries `site_ids`, `devices list` carries `devices`, and
-reserve/release results carry the applicable `changed`, `id`, and `site`
-fields. Empty list results remain JSON arrays. Treat field names and meanings
-as a compatibility surface; `schema_version` changes before a breaking
-contract change.
+`site-id list` carries `site_ids`, `subnet list` carries `subnet_pools`, and
+`devices list` carries `devices`. Reserve/release results carry the applicable
+`changed`, `id`, `cidr`, and `site` fields. Empty list results remain JSON
+arrays. Treat field names and meanings as a compatibility surface;
+`schema_version` changes before a breaking contract change.
 
 Run `tail-ipam -schema` for the authoritative machine-readable command, flag,
 and exit-code catalog. Run `tail-ipam --help` for examples and the human-facing
@@ -202,17 +253,17 @@ transport, registry loading/creation, and lock acquisition. Diagnostics stay
 on stderr, so stdout remains parse-clean under `-format json`.
 
 `TAILSCALE_SANITIZE=identity` or `strict` replaces device names, addresses,
-routes, tailnet routing keys, and site names after the real operation has
-completed. A non-`off` environment value overrides `--sanitize` and is
-announced on stderr. `calc split` output is not sanitized because it contains
-no tailnet-derived data. Placeholders for other commands are scoped to the
-artifact's routing/storage key (the `--tailnet` alias for `site-id` commands,
-or the live tailnet from `TAILSCALE_TAILNET` for `devices` commands), so
-passing an explicit `--tailnet` alias to a `site-id` command intentionally
-creates a separate pseudonym domain from `devices list` output for the same
-real tailnet. Set `TAILSCALE_SANITIZE_KEY` to exactly 64 hexadecimal
-characters for stable tailnet-scoped placeholders; without it placeholders are
-artifact-scoped.
+routes, tailnet routing keys, site names, and reserved subnet CIDRs after the
+real operation has completed. A non-`off` environment value overrides
+`--sanitize` and is announced on stderr. `calc split` output is not sanitized
+because it contains no tailnet-derived data. Placeholders for other commands
+are scoped to the artifact's routing/storage key (the `--tailnet` alias for
+registry commands, or the live tailnet from `TAILSCALE_TAILNET` for `devices`
+commands), so passing an explicit `--tailnet` alias to a registry command
+intentionally creates a separate pseudonym domain from `devices list` output
+for the same real tailnet. Set `TAILSCALE_SANITIZE_KEY` to exactly 64
+hexadecimal characters for stable tailnet-scoped placeholders; without it
+placeholders are artifact-scoped.
 
 ### Not yet implemented
 
@@ -221,7 +272,6 @@ The following commands and features are planned future work per
 
 - `allocate` and `plan` commands for address-space planning against live state
 - `check` command for validating the registry against live tailnet usage
-- Subnet CIDR pool allocation (beyond site IDs)
 - Per-service `/32` reservations for Tailscale Services
 - On-prem CIDR planning (address space not yet advertised as live routes)
 

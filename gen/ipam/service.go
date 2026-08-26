@@ -22,6 +22,12 @@ type Service interface {
 	ReserveSiteID(context.Context, *ReserveSiteIDPayload) (res *ReserveSiteIDResult, err error)
 	// ReleaseSiteID implements release_site_id.
 	ReleaseSiteID(context.Context, *ReleaseSiteIDPayload) (res *ReleaseSiteIDResult, err error)
+	// ListSubnetPools implements list_subnet_pools.
+	ListSubnetPools(context.Context, *ListSubnetPoolsPayload) (res []*SubnetPoolReservation, err error)
+	// ReserveSubnetPool implements reserve_subnet_pool.
+	ReserveSubnetPool(context.Context, *ReserveSubnetPoolPayload) (res *ReserveSubnetPoolResult, err error)
+	// ReleaseSubnetPool implements release_subnet_pool.
+	ReleaseSubnetPool(context.Context, *ReleaseSubnetPoolPayload) (res *ReleaseSubnetPoolResult, err error)
 }
 
 // APIName is the name of the API as defined in the design.
@@ -38,11 +44,19 @@ const ServiceName = "ipam"
 // MethodNames lists the service method names as defined in the design. These
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
-var MethodNames = [3]string{"list_site_ids", "reserve_site_id", "release_site_id"}
+var MethodNames = [6]string{"list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool"}
 
 // ListSiteIdsPayload is the payload type of the ipam service list_site_ids
 // method.
 type ListSiteIdsPayload struct {
+	// Routing/storage key for the registry. May be a synthetic alias, not
+	// necessarily the live Tailscale tailnet name.
+	Tailnet string
+}
+
+// ListSubnetPoolsPayload is the payload type of the ipam service
+// list_subnet_pools method.
+type ListSubnetPoolsPayload struct {
 	// Routing/storage key for the registry. May be a synthetic alias, not
 	// necessarily the live Tailscale tailnet name.
 	Tailnet string
@@ -63,6 +77,24 @@ type ReleaseSiteIDResult struct {
 	// Canonical site ID released.
 	ID string
 	// False when id was not reserved.
+	Changed bool
+}
+
+// ReleaseSubnetPoolPayload is the payload type of the ipam service
+// release_subnet_pool method.
+type ReleaseSubnetPoolPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Canonical IPv4 or IPv6 CIDR prefix to release.
+	CIDR string
+}
+
+// ReleaseSubnetPoolResult is the result type of the ipam service
+// release_subnet_pool method.
+type ReleaseSubnetPoolResult struct {
+	// Canonical subnet CIDR released.
+	CIDR string
+	// False when cidr was not reserved.
 	Changed bool
 }
 
@@ -88,11 +120,41 @@ type ReserveSiteIDResult struct {
 	Changed bool
 }
 
+// ReserveSubnetPoolPayload is the payload type of the ipam service
+// reserve_subnet_pool method.
+type ReserveSubnetPoolPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Canonical IPv4 or IPv6 CIDR prefix to reserve.
+	CIDR string
+	// Site name to reserve it for.
+	Site string
+}
+
+// ReserveSubnetPoolResult is the result type of the ipam service
+// reserve_subnet_pool method.
+type ReserveSubnetPoolResult struct {
+	// Canonical subnet CIDR actually written.
+	CIDR string
+	// Canonical site name actually written.
+	Site string
+	// False when the exact CIDR and site were already reserved.
+	Changed bool
+}
+
 // A reserved 4via6 site ID.
 type SiteIDReservation struct {
 	// Canonical site ID: a decimal integer, 0-65535.
 	ID string
 	// Site name reserved for this ID.
+	Site string
+}
+
+// A subnet CIDR pool reserved for a site.
+type SubnetPoolReservation struct {
+	// Canonical IPv4 or IPv6 CIDR prefix.
+	CIDR string
+	// Site name reserved for this subnet pool.
 	Site string
 }
 

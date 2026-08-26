@@ -23,7 +23,7 @@ import (
 //	command (subcommand1|subcommand2|...)
 func UsageCommands() []string {
 	return []string{
-		"ipam (list-site-ids|reserve-site-id|release-site-id)",
+		"ipam (list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool)",
 	}
 }
 
@@ -55,11 +55,25 @@ func ParseEndpoint(
 		ipamReleaseSiteIDFlags       = flag.NewFlagSet("release-site-id", flag.ExitOnError)
 		ipamReleaseSiteIDTailnetFlag = ipamReleaseSiteIDFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
 		ipamReleaseSiteIDIDFlag      = ipamReleaseSiteIDFlags.String("id", "REQUIRED", "4via6 site ID to release.")
+
+		ipamListSubnetPoolsFlags       = flag.NewFlagSet("list-subnet-pools", flag.ExitOnError)
+		ipamListSubnetPoolsTailnetFlag = ipamListSubnetPoolsFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.")
+
+		ipamReserveSubnetPoolFlags       = flag.NewFlagSet("reserve-subnet-pool", flag.ExitOnError)
+		ipamReserveSubnetPoolBodyFlag    = ipamReserveSubnetPoolFlags.String("body", "REQUIRED", "")
+		ipamReserveSubnetPoolTailnetFlag = ipamReserveSubnetPoolFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
+
+		ipamReleaseSubnetPoolFlags       = flag.NewFlagSet("release-subnet-pool", flag.ExitOnError)
+		ipamReleaseSubnetPoolTailnetFlag = ipamReleaseSubnetPoolFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
+		ipamReleaseSubnetPoolCidrFlag    = ipamReleaseSubnetPoolFlags.String("cidr", "REQUIRED", "")
 	)
 	ipamFlags.Usage = ipamUsage
 	ipamListSiteIdsFlags.Usage = ipamListSiteIdsUsage
 	ipamReserveSiteIDFlags.Usage = ipamReserveSiteIDUsage
 	ipamReleaseSiteIDFlags.Usage = ipamReleaseSiteIDUsage
+	ipamListSubnetPoolsFlags.Usage = ipamListSubnetPoolsUsage
+	ipamReserveSubnetPoolFlags.Usage = ipamReserveSubnetPoolUsage
+	ipamReleaseSubnetPoolFlags.Usage = ipamReleaseSubnetPoolUsage
 
 	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
 		return nil, nil, err
@@ -104,6 +118,15 @@ func ParseEndpoint(
 			case "release-site-id":
 				epf = ipamReleaseSiteIDFlags
 
+			case "list-subnet-pools":
+				epf = ipamListSubnetPoolsFlags
+
+			case "reserve-subnet-pool":
+				epf = ipamReserveSubnetPoolFlags
+
+			case "release-subnet-pool":
+				epf = ipamReleaseSubnetPoolFlags
+
 			}
 
 		}
@@ -138,6 +161,15 @@ func ParseEndpoint(
 			case "release-site-id":
 				endpoint = c.ReleaseSiteID()
 				data, err = ipamc.BuildReleaseSiteIDPayload(*ipamReleaseSiteIDTailnetFlag, *ipamReleaseSiteIDIDFlag)
+			case "list-subnet-pools":
+				endpoint = c.ListSubnetPools()
+				data, err = ipamc.BuildListSubnetPoolsPayload(*ipamListSubnetPoolsTailnetFlag)
+			case "reserve-subnet-pool":
+				endpoint = c.ReserveSubnetPool()
+				data, err = ipamc.BuildReserveSubnetPoolPayload(*ipamReserveSubnetPoolBodyFlag, *ipamReserveSubnetPoolTailnetFlag)
+			case "release-subnet-pool":
+				endpoint = c.ReleaseSubnetPool()
+				data, err = ipamc.BuildReleaseSubnetPoolPayload(*ipamReleaseSubnetPoolTailnetFlag, *ipamReleaseSubnetPoolCidrFlag)
 			}
 		}
 	}
@@ -156,6 +188,9 @@ func ipamUsage() {
 	fmt.Fprintln(os.Stderr, `    list-site-ids: ListSiteIds implements list_site_ids.`)
 	fmt.Fprintln(os.Stderr, `    reserve-site-id: ReserveSiteID implements reserve_site_id.`)
 	fmt.Fprintln(os.Stderr, `    release-site-id: ReleaseSiteID implements release_site_id.`)
+	fmt.Fprintln(os.Stderr, `    list-subnet-pools: ListSubnetPools implements list_subnet_pools.`)
+	fmt.Fprintln(os.Stderr, `    reserve-subnet-pool: ReserveSubnetPool implements reserve_subnet_pool.`)
+	fmt.Fprintln(os.Stderr, `    release-subnet-pool: ReleaseSubnetPool implements release_subnet_pool.`)
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Additional help:")
 	fmt.Fprintf(os.Stderr, "    %s ipam COMMAND --help\n", os.Args[0])
@@ -216,4 +251,62 @@ func ipamReleaseSiteIDUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-site-id --tailnet \"Repellat eius voluptatibus qui.\" --id \"Quo asperiores sit sit.\"")
+}
+
+func ipamListSubnetPoolsUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam list-subnet-pools", os.Args[0])
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ListSubnetPools implements list_subnet_pools.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam list-subnet-pools --tailnet \"Enim dolores voluptates aut necessitatibus.\"")
+}
+
+func ipamReserveSubnetPoolUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam reserve-subnet-pool", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ReserveSubnetPool implements reserve_subnet_pool.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-subnet-pool --body '{\n      \"cidr\": \"Iste voluptatem modi aut id illum rerum.\",\n      \"site\": \"Occaecati assumenda quia.\"\n   }' --tailnet \"Explicabo dolor est voluptate dolores nesciunt.\"")
+}
+
+func ipamReleaseSubnetPoolUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam release-subnet-pool", os.Args[0])
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprint(os.Stderr, " -cidr STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ReleaseSubnetPool implements release_subnet_pool.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+	fmt.Fprintln(os.Stderr, `    -cidr STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-subnet-pool --tailnet \"Sint consequatur consequuntur.\" --cidr \"Dolores repellendus tempora hic adipisci sapiente cumque.\"")
 }
