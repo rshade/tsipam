@@ -10,7 +10,13 @@ import (
 	"github.com/rshade/tailscale-utils/policycore/ipcalc"
 )
 
-var errIPv6Unsupported = errors.New("IPv6 is not yet supported for 'calc split'; use an IPv4 CIDR")
+// wrapSplitError wraps a split error with context about 4-in-6 normalization if applicable.
+func wrapSplitError(cidrArg string, prefix netip.Prefix, normalizedFrom4In6 bool, err error) error {
+	if !normalizedFrom4In6 {
+		return err
+	}
+	return fmt.Errorf("%s is an IPv4-mapped prefix, split as %s: %w", cidrArg, prefix, err)
+}
 
 func newCalcCommand(state *commandState) *cobra.Command {
 	cmd := &cobra.Command{
@@ -43,22 +49,19 @@ func newCalcSplitCommand(state *commandState) *cobra.Command {
 				return fmt.Errorf("invalid CIDR %q: %w", cidrArg, err)
 			}
 
+			var normalizedFrom4In6 bool
 			if prefix.Addr().Is4In6() {
 				normalized, ok := ipcalc.Unmap4In6(prefix)
-				if !ok {
-					return errIPv6Unsupported
+				if ok {
+					normalizedFrom4In6 = true
+					prefix = normalized
 				}
-				prefix = normalized
-			}
-
-			if !prefix.Addr().Is4() {
-				return errIPv6Unsupported
 			}
 
 			children, count, err := ipcalc.Split(prefix, prefixFlag)
 
 			if errors.Is(err, ipcalc.ErrTooManyChildren) {
-				return fmt.Errorf(
+				err = fmt.Errorf(
 					"splitting %s into /%d blocks would produce %s subnets; too many to list (max %d); "+
 						"use a shorter target or narrower parent: %w",
 					cidrArg, prefixFlag, count.String(), ipcalc.MaxMaterializedChildren, err,
@@ -66,7 +69,7 @@ func newCalcSplitCommand(state *commandState) *cobra.Command {
 			}
 
 			if err != nil {
-				return err
+				return wrapSplitError(cidrArg, prefix, normalizedFrom4In6, err)
 			}
 
 			subnets := make([]string, len(children))

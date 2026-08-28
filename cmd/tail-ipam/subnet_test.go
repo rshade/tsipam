@@ -225,7 +225,7 @@ func TestSubnetCollisionSanitizesCIDRsAndSites(t *testing.T) {
 	}
 }
 
-func TestSubnetCollisionErrorFormatMatchesAnchoredSanitizerPattern(t *testing.T) {
+func TestSubnetOverlapCollisionErrorFormatMatchesAnchoredSanitizerPattern(t *testing.T) {
 	t.Parallel()
 	err := (&registry.SubnetPoolCollisionError{
 		CIDR:         "10.0.1.0/24",
@@ -238,6 +238,26 @@ func TestSubnetCollisionErrorFormatMatchesAnchoredSanitizerPattern(t *testing.T)
 		t.Fatalf("subnetPoolCollisionErrorPattern does not match %q", err)
 	}
 	want := []string{"10.0.1.0/24", "10.0.0.0/16", `"hq-vpc"`, `"branch-office"`}
+	for index, value := range want {
+		if match[index+1] != value {
+			t.Errorf("capture %d = %q, want %q", index+1, match[index+1], value)
+		}
+	}
+}
+
+func TestSubnetExactCollisionErrorFormatMatchesAnchoredSanitizerPattern(t *testing.T) {
+	t.Parallel()
+	err := (&registry.SubnetPoolCollisionError{
+		CIDR:         "10.0.0.0/16",
+		ExistingCIDR: "10.0.0.0/16",
+		ExistingSite: "hq-vpc",
+		WantedSite:   "branch-office",
+	}).Error()
+	match := subnetPoolExactCollisionErrorPattern.FindStringSubmatch(err)
+	if match == nil {
+		t.Fatalf("subnetPoolExactCollisionErrorPattern does not match %q", err)
+	}
+	want := []string{"10.0.0.0/16", `"hq-vpc"`, `"branch-office"`}
 	for index, value := range want {
 		if match[index+1] != value {
 			t.Errorf("capture %d = %q, want %q", index+1, match[index+1], value)

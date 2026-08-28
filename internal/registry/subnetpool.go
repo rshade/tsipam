@@ -19,8 +19,8 @@ type SubnetPoolEntry struct {
 	Site string
 }
 
-// SubnetPoolCollisionError reports that a requested CIDR overlaps a pool
-// reserved for a different site.
+// SubnetPoolCollisionError reports that a requested CIDR is already reserved
+// for a different site or overlaps a pool reserved for a different site.
 type SubnetPoolCollisionError struct {
 	CIDR         string
 	ExistingCIDR string
@@ -29,6 +29,12 @@ type SubnetPoolCollisionError struct {
 }
 
 func (e *SubnetPoolCollisionError) Error() string {
+	if e.CIDR == e.ExistingCIDR {
+		return fmt.Sprintf(
+			"subnet CIDR %s is already reserved for %q, not %q",
+			e.CIDR, e.ExistingSite, e.WantedSite,
+		)
+	}
 	return fmt.Sprintf(
 		"subnet CIDR %s overlaps %s reserved for %q, not %q",
 		e.CIDR, e.ExistingCIDR, e.ExistingSite, e.WantedSite,

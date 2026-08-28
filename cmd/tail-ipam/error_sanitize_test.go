@@ -697,3 +697,74 @@ func TestReserveAgainMessageSanitizesEscapedSiteName(t *testing.T) {
 		assertReserveMessageSanitized(t, dir, []string{commandSubnet, "reserve", "10.0.0.0/24", site}, site)
 	})
 }
+
+// TestSubnetPoolExactCollisionSanitizesAdversarialSiteNames exercises the
+// exact-key collision shape separately from the overlap shape above. The
+// quote/backslash case proves the sanitizer uses regex-located byte ranges
+// instead of searching the still-escaped message for unescaped values. The
+// framing-word case proves it replaces only the captured site-name segments,
+// not every matching value in the message frame.
+func TestSubnetPoolExactCollisionSanitizesAdversarialSiteNames(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		existingSite string
+		wantedSite   string
+	}{
+		{
+			name:         "quoted and escaped site names",
+			existingSite: `secret"quote-existing`,
+			wantedSite:   `wanted\backslash`,
+		},
+		{
+			name:         "site names collide with framing words",
+			existingSite: "reserved",
+			wantedSite:   "for",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			testSubnetPoolExactCollision(t, tc.existingSite, tc.wantedSite)
+		})
+	}
+}
+
+func testSubnetPoolExactCollision(t *testing.T, existingSite, wantedSite string) {
+	t.Helper()
+	const cidr = "10.0.0.0/16"
+	dir := t.TempDir()
+	if _, _, err := runSubnet(t, dir, "reserve", cidr, existingSite); err != nil {
+		t.Fatalf("seed reserve: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandSubnet, "reserve", cidr, wantedSite,
+		"--registry-dir", dir, "--sanitize", "identity",
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code != exitFailure {
+		t.Fatalf("collision exit = %d, want %d; stderr: %s", code, exitFailure, stderr.String())
+	}
+	stderrText := stderr.String()
+
+	if !strings.Contains(stderrText, "is already reserved for") || !strings.Contains(stderrText, ", not ") {
+		t.Errorf("stderr = %q, want the exact-key collision message frame intact", stderrText)
+	}
+	if strings.Contains(stderrText, cidr) {
+		t.Errorf("sanitized exact-key collision stderr leaks %q: %s", cidr, stderrText)
+	}
+	assertNoQuotedLeak(t, stderrText, existingSite)
+	assertNoQuotedLeak(t, stderrText, wantedSite)
+
+	existingPlaceholder := `"` + placeholderFor(t, existingSite) + `"`
+	if !strings.Contains(stderrText, existingPlaceholder) {
+		t.Errorf("stderr = %q, want existing-site placeholder %q", stderrText, existingPlaceholder)
+	}
+	wantedPlaceholder := `"` + placeholderFor(t, wantedSite) + `"`
+	if !strings.Contains(stderrText, wantedPlaceholder) {
+		t.Errorf("stderr = %q, want wanted-site placeholder %q", stderrText, wantedPlaceholder)
+	}
+}

@@ -90,19 +90,39 @@ func TestCalcSplitTooMany(t *testing.T) {
 	}
 }
 
-func TestCalcSplitIPv6Rejected(t *testing.T) {
+func TestCalcSplitIPv6HumanOutput(t *testing.T) {
 	t.Parallel()
 
-	// Test IPv6 rejection.
-	out, errOut, err := runCalcSplit(t, "fd7a:115c:a1e0::/48", "--prefix", "64")
-	if err == nil {
-		t.Fatalf("runCalcSplit() error = nil, want error")
+	out, errOut, err := runCalcSplit(t, "fd7a:115c:a1e0::/127", "--prefix", "128")
+	if err != nil {
+		t.Fatalf("runCalcSplit() error = %v", err)
+	}
+	if errOut != "" {
+		t.Errorf("stderr = %q, want empty", errOut)
 	}
 
-	// Error should contain IPv6 message (could be in stdout or stderr)
-	combined := out + errOut + err.Error()
-	if !strings.Contains(combined, "IPv6") {
-		t.Errorf("output = %q/%q, error = %q, want to contain %q", out, errOut, err, "IPv6")
+	want := "fd7a:115c:a1e0::/128\nfd7a:115c:a1e0::1/128\n"
+	if out != want {
+		t.Errorf("stdout = %q, want %q", out, want)
+	}
+}
+
+func TestCalcSplitIPv6TooMany(t *testing.T) {
+	t.Parallel()
+
+	code, out, errOut := runCalcSplitCLI(t, "2001:db8::/32", "--prefix", "64")
+
+	if code != exitFailure {
+		t.Errorf("exit code = %d, want %d (exitFailure)", code, exitFailure)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty on refusal", out)
+	}
+	if !strings.Contains(errOut, "too many to list") {
+		t.Errorf("stderr = %q, want to contain %q", errOut, "too many to list")
+	}
+	if !strings.Contains(errOut, "4294967296") {
+		t.Errorf("stderr = %q, want to contain %q", errOut, "4294967296")
 	}
 }
 
@@ -127,26 +147,20 @@ func TestCalcSplitNormalized4in6(t *testing.T) {
 	}
 }
 
-func TestCalcSplitTooShort4in6Rejected(t *testing.T) {
+func TestCalcSplitTooShort4in6FallsBackToIPv6(t *testing.T) {
 	t.Parallel()
 
-	// Test that a 4-in-6 address with Bits() < 96 (too few to represent valid IPv4 prefix)
-	// is rejected with the same error message as plain IPv6.
-	out, errOut, err := runCalcSplit(t, "::ffff:10.0.0.0/95", "--prefix", "100")
-	if err == nil {
-		t.Fatalf("runCalcSplit() error = nil, want error for too-short 4-in-6")
+	// A prefix shorter than /96 cannot be normalized to IPv4 because it
+	// contains non-mapped IPv6 addresses. Treat the whole prefix as IPv6.
+	out, errOut, err := runCalcSplit(t, "::ffff:10.0.0.0/95", "--prefix", "95")
+	if err != nil {
+		t.Fatalf("runCalcSplit() error = %v", err)
 	}
-
-	combined := out + errOut + err.Error()
-	if !strings.Contains(combined, "IPv6") {
-		t.Errorf("too-short 4-in-6 output = %q/%q, error = %q, want to contain %q",
-			out, errOut, err, "IPv6")
+	if errOut != "" {
+		t.Errorf("stderr = %q, want empty", errOut)
 	}
-
-	// Verify it's the same error message as plain IPv6 rejection
-	expectedMsg := "IPv6 is not yet supported for 'calc split'; use an IPv4 CIDR"
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("error message = %q, want %q", err.Error(), expectedMsg)
+	if out != "::fffe:0:0/95\n" {
+		t.Errorf("stdout = %q, want %q", out, "::fffe:0:0/95\n")
 	}
 }
 
@@ -259,5 +273,33 @@ func TestCalcSplitNotSanitizedUnderIdentity(t *testing.T) {
 				t.Errorf("output missing first subnet 10.0.0.0/26: %s", output)
 			}
 		})
+	}
+}
+
+func TestCalcSplit4In6ErrorWrapping(t *testing.T) {
+	t.Parallel()
+
+	// A 4-in-6 prefix (::ffff:0.0.0.0/96 normalizes to 0.0.0.0/0)
+	// split into /32 would produce 2^32 subnets, exceeding the materialization limit.
+	// Error should mention both the original 4-in-6 form and normalized IPv4 form.
+	code, out, errOut := runCalcSplitCLI(t, "::ffff:0.0.0.0/96", "--prefix", "32")
+
+	if code != exitFailure {
+		t.Errorf("exit code = %d, want %d (exitFailure)", code, exitFailure)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty on error", out)
+	}
+	if !strings.Contains(errOut, "::ffff:0.0.0.0/96") {
+		t.Errorf("stderr missing original 4-in-6 CIDR: %q", errOut)
+	}
+	if !strings.Contains(errOut, "0.0.0.0/0") {
+		t.Errorf("stderr missing normalized IPv4 form: %q", errOut)
+	}
+	if !strings.Contains(errOut, "is an IPv4-mapped prefix") {
+		t.Errorf("stderr missing normalization note: %q", errOut)
+	}
+	if !strings.Contains(errOut, "too many to list") {
+		t.Errorf("stderr missing underlying too-many-children error: %q", errOut)
 	}
 }

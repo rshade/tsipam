@@ -1,9 +1,12 @@
 package registry_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -91,6 +94,7 @@ type subnetPoolOverlapCase struct {
 	existingCIDR  string
 	candidateCIDR string
 	candidateSite string
+	wantMessage   string
 	wantCollision bool
 }
 
@@ -104,19 +108,33 @@ func TestReserveSubnetPoolOverlapRules(t *testing.T) {
 		},
 		{
 			name: "exact duplicate for another site", existingCIDR: "10.0.0.0/24",
-			candidateCIDR: "10.0.0.0/24", candidateSite: "branch-office", wantCollision: true,
+			candidateCIDR: "10.0.0.0/24", candidateSite: "branch-office",
+			wantMessage:   `subnet CIDR 10.0.0.0/24 is already reserved for "hq-vpc", not "branch-office"`,
+			wantCollision: true,
 		},
 		{
 			name: "candidate contained within existing", existingCIDR: "10.0.0.0/16",
-			candidateCIDR: "10.0.1.0/24", candidateSite: "branch-office", wantCollision: true,
+			candidateCIDR: "10.0.1.0/24", candidateSite: "branch-office",
+			wantMessage:   `subnet CIDR 10.0.1.0/24 overlaps 10.0.0.0/16 reserved for "hq-vpc", not "branch-office"`,
+			wantCollision: true,
 		},
 		{
 			name: "existing contained within candidate", existingCIDR: "10.0.1.0/24",
-			candidateCIDR: "10.0.0.0/16", candidateSite: "branch-office", wantCollision: true,
+			candidateCIDR: "10.0.0.0/16", candidateSite: "branch-office",
+			wantMessage:   `subnet CIDR 10.0.0.0/16 overlaps 10.0.1.0/24 reserved for "hq-vpc", not "branch-office"`,
+			wantCollision: true,
 		},
 		{
 			name: "overlap within one site is allowed", existingCIDR: "10.0.0.0/16",
 			candidateCIDR: "10.0.1.0/24", candidateSite: "hq-vpc",
+		},
+		{
+			name:         "IPv4 and IPv4-mapped IPv6 spelling overlap",
+			existingCIDR: "10.0.0.0/8", candidateCIDR: "::ffff:10.0.0.0/104",
+			candidateSite: "branch-office",
+			wantMessage: "subnet CIDR ::ffff:10.0.0.0/104 overlaps 10.0.0.0/8 reserved for " +
+				`"hq-vpc", not "branch-office"`,
+			wantCollision: true,
 		},
 	}
 	for _, tc := range cases {
@@ -147,6 +165,9 @@ func assertSubnetPoolOverlapRule(t *testing.T, tc subnetPoolOverlapCase) {
 		if collision.ExistingCIDR != tc.existingCIDR || collision.ExistingSite != "hq-vpc" ||
 			collision.WantedSite != tc.candidateSite {
 			t.Errorf("collision = %+v, want existing CIDR/site and wanted site", collision)
+		}
+		if err.Error() != tc.wantMessage {
+			t.Errorf("collision error = %q, want %q", err, tc.wantMessage)
 		}
 		if changed {
 			t.Error("changed = true on a refused overlap, want false")
@@ -258,6 +279,11 @@ func TestLoadValidatesSubnetPoolShapeAndOverlaps(t *testing.T) {
 		{
 			name:    "overlap owned by different sites",
 			content: `{"subnetPools":{"10.0.0.0/16":"hq","10.0.1.0/24":"branch"}}`,
+			wantIn:  "overlap",
+		},
+		{
+			name:    "IPv4 and 4-in-6 IPv6 spelling overlap owned by different sites",
+			content: `{"subnetPools":{"10.0.0.0/8":"hq","::ffff:10.0.0.0/104":"branch"}}`,
 			wantIn:  "overlap",
 		},
 	}
@@ -418,4 +444,47 @@ func TestReserveSubnetPoolConcurrentDistinctCIDRsLosesNoReservation(t *testing.T
 		}
 		seen[entry.CIDR] = true
 	}
+}
+
+func BenchmarkListSubnetPoolsWithLogger(b *testing.B) {
+	for _, count := range []int{500, 2_000, 8_000} {
+		b.Run(fmt.Sprintf("pools=%d", count), func(b *testing.B) {
+			path := benchmarkSubnetPoolRegistry(b, count)
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for b.Loop() {
+				entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+				if err != nil {
+					b.Fatalf("ListSubnetPoolsWithLogger: %v", err)
+				}
+				if len(entries) != count {
+					b.Fatalf("ListSubnetPoolsWithLogger returned %d entries, want %d", len(entries), count)
+				}
+			}
+		})
+	}
+}
+
+func benchmarkSubnetPoolRegistry(b *testing.B, count int) string {
+	b.Helper()
+	pools := make(map[string]string, count)
+	for index := range count {
+		addr := netip.AddrFrom4([4]byte{
+			10,
+			byte(index >> 16),
+			byte(index >> 8),
+			byte(index),
+		})
+		pools[addr.String()+"/32"] = "benchmark-site"
+	}
+	content, err := json.Marshal(map[string]any{"subnetPools": pools})
+	if err != nil {
+		b.Fatalf("marshaling benchmark registry: %v", err)
+	}
+	path := filepath.Join(b.TempDir(), "tail-ipam.hujson")
+	if writeErr := os.WriteFile(path, content, 0o600); writeErr != nil {
+		b.Fatalf("writing benchmark registry: %v", writeErr)
+	}
+	return path
 }

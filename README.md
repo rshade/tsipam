@@ -137,24 +137,26 @@ tail-ipam subnet list --registry-dir /etc/tail-ipam --tailnet production
 
 #### `calc split`
 
-Stateless IPv4 CIDR splitting: divides a parent CIDR into equal-sized child
-subnets. No registry, network I/O, or Tailscale API credentials required.
+Stateless IPv4 and IPv6 CIDR splitting: divides a parent CIDR into equal-sized
+child subnets. No registry, network I/O, or Tailscale API credentials required.
 
 ```bash
 tail-ipam calc split 10.0.0.0/16 --prefix 24
-tail-ipam calc split 10.0.0.0/8 --prefix 32
+tail-ipam calc split fd7a:115c:a1e0::/48 --prefix 64
+tail-ipam calc split 2001:db8::/32 --prefix 64
 ```
 
-The first command produces 256 subnets of size `/24`. The second requests
-16,777,216 subnets of size `/32`, which exceeds the in-memory materialization
-limit (65,536); instead of hanging, it refuses the request (exit code 1, like
-a site-ID collision) with the exact count and a suggested narrower parent or
-shorter target, on stderr:
+The first command produces 256 subnets of size `/24`. The second divides
+Tailscale's ULA `/48` into 65,536 `/64`s, exactly the in-memory materialization
+limit. The third requests 4,294,967,296 `/64`s, which exceeds that limit;
+instead of enumerating them, `calc split` refuses the request (exit code 1,
+like a site-ID collision) and reports the exact count with a suggested
+narrower parent or shorter target on stderr:
 
 ```bash
-tail-ipam calc split 10.0.0.0/8 --prefix 32
-# stderr: tail-ipam: splitting 10.0.0.0/8 into /32 blocks would produce
-# 16777216 subnets; too many to list (max 65536); use a shorter target or
+tail-ipam calc split 2001:db8::/32 --prefix 64
+# stderr: tail-ipam: splitting 2001:db8::/32 into /64 blocks would produce
+# 4294967296 subnets; too many to list (max 65536); use a shorter target or
 # narrower parent: ipcalc: split would produce too many children to
 # materialize
 # exit code: 1
@@ -165,7 +167,12 @@ json` changes how a successful split is rendered, not how a refusal is
 reported. Human output for a successful split is one CIDR per line; `-format
 json` emits all subnets in the versioned envelope.
 
-IPv6 support (reserved for a follow-up issue) is rejected with a clear error.
+IPv4-mapped (4-in-6) prefixes with a length of `/96` or longer are converted to
+their equivalent plain IPv4 form before splitting, so `--prefix` then specifies
+IPv4 bits (0–32). Shorter 4-in-6-like prefixes cannot be exclusively IPv4-mapped
+and are treated as native IPv6 (so `--prefix` specifies IPv6 bits, 0–128). For
+example, `tail-ipam calc split '::ffff:10.0.0.0/104' --prefix 20` normalizes to
+`10.0.0.0/8` and splits it into `/20` IPv4 subnets.
 
 ### Registry format
 

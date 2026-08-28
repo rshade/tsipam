@@ -220,15 +220,26 @@ var collisionErrorPattern = regexp.MustCompile(
 )
 
 // subnetPoolCollisionErrorPattern is the matching format-drift guard for
-// SubnetPoolCollisionError.Error(). Capture groups: 1 = requested CIDR,
-// 2 = overlapping existing CIDR, 3 = existing site, 4 = wanted site.
+// SubnetPoolCollisionError.Error()'s overlapping-CIDR branch. Capture groups:
+// 1 = requested CIDR, 2 = overlapping existing CIDR, 3 = existing site,
+// 4 = wanted site.
 var subnetPoolCollisionErrorPattern = regexp.MustCompile(
 	`^subnet CIDR (\S+) overlaps (\S+) reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
+)
+
+// subnetPoolExactCollisionErrorPattern guards SubnetPoolCollisionError.Error()'s
+// exact-key branch. Capture groups: 1 = requested/existing CIDR, 2 = existing
+// site, 3 = wanted site.
+var subnetPoolExactCollisionErrorPattern = regexp.MustCompile(
+	`^subnet CIDR (\S+) is already reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
 )
 
 const (
 	siteIDCollisionExistingSiteGroup  = 2
 	siteIDCollisionWantedSiteGroup    = 3
+	subnetExactCollisionCIDRGroup     = 1
+	subnetExactCollisionExistingGroup = 2
+	subnetExactCollisionWantedGroup   = 3
 	subnetCollisionRequestedCIDRGroup = 1
 	subnetCollisionExistingCIDRGroup  = 2
 	subnetCollisionExistingSiteGroup  = 3
@@ -275,6 +286,13 @@ var subnetCollisionSegments = []collisionSegment{
 	{group: subnetCollisionWantedSiteGroup, kind: kindSite, quoted: true},
 }
 
+//nolint:gochecknoglobals // collision segment specs are data-driven and factored out for sharing with spliceCollisionSegments
+var subnetExactCollisionSegments = []collisionSegment{
+	{group: subnetExactCollisionCIDRGroup, kind: kindCIDR, quoted: false},
+	{group: subnetExactCollisionExistingGroup, kind: kindSite, quoted: true},
+	{group: subnetExactCollisionWantedGroup, kind: kindSite, quoted: true},
+}
+
 // sanitizeErrorIfNeeded returns a sanitized rendering of err's text when
 // sanitization is active, or err unchanged otherwise.
 //
@@ -303,6 +321,9 @@ func sanitizeErrorIfNeeded(err error, sanitizer *sanitize.Sanitizer) error {
 	text := err.Error()
 	if match := collisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
 		return errors.New(spliceCollisionSegments(text, match, siteIDCollisionSegments, sanitizer))
+	}
+	if match := subnetPoolExactCollisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
+		return errors.New(spliceCollisionSegments(text, match, subnetExactCollisionSegments, sanitizer))
 	}
 	if match := subnetPoolCollisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
 		return errors.New(spliceCollisionSegments(text, match, subnetCollisionSegments, sanitizer))
