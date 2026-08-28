@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -605,4 +606,94 @@ func testSubnetPoolCollision(t *testing.T, existingSite, wantedSite, existingCID
 
 	assertNoQuotedLeak(t, stderrText, existingSite)
 	assertNoQuotedLeak(t, stderrText, wantedSite)
+}
+
+// assertReserveMessageSanitized runs command (a reserve invocation, with
+// --registry-dir/--sanitize/--format appended) against dir and checks that
+// the JSON envelope's Message field is consistent with the sanitized Site
+// field -- neither the raw site name nor its %q-escaped rendering survives
+// in Message, and Message contains the same placeholder Site does. This is
+// the regression guard for issue #262: Message used to be pre-formatted with
+// %q before sanitization ran, then swept with a value-based Text() call
+// against the sanitizer's *unescaped* registered value -- the same desync
+// sanitizeErrorIfNeeded's doc comment (main.go) documents for the error
+// path. messageBuilder (output.go) fixes this by rendering Message from the
+// envelope's own already-sanitized Site field instead.
+func assertReserveMessageSanitized(t *testing.T, dir string, command []string, site string) {
+	t.Helper()
+	args := append(append([]string{}, command...),
+		"--registry-dir", dir, "--sanitize", "identity", "--format", formatJSON)
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), args, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code != exitOK {
+		t.Fatalf("reserve exit = %d, want %d; stderr: %s", code, exitOK, stderr.String())
+	}
+
+	var envelope outputEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode reserve JSON: %v", err)
+	}
+
+	assertNoLeak(t, envelope.Message, site)
+	if envelope.Site == "" || !strings.Contains(envelope.Message, envelope.Site) {
+		t.Errorf("message/site placeholder mismatch: message=%q, site=%q", envelope.Message, envelope.Site)
+	}
+	if !strings.HasPrefix(envelope.Site, "site-") {
+		t.Errorf("Site field not sanitized: got %q, want prefix %q", envelope.Site, "site-")
+	}
+}
+
+// TestReserveMessageSanitizesEscapedSiteName covers the first-reservation
+// ("reserved ... for %q") message template for both site-id and subnet
+// reserve, across site names that stress %q escaping.
+func TestReserveMessageSanitizesEscapedSiteName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name, site string
+	}{
+		{name: "embedded backslash", site: `acme\secret`},
+		{name: "embedded quote", site: `acme"secret`},
+		{name: "quote and backslash", site: `se\c"ret`},
+		{name: "trailing backslash", site: `acme\`},
+	}
+
+	for _, tc := range cases {
+		t.Run("site-id/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			assertReserveMessageSanitized(t, t.TempDir(),
+				[]string{commandSiteID, "reserve", "1", tc.site}, tc.site)
+		})
+		t.Run("subnet/"+tc.name, func(t *testing.T) {
+			t.Parallel()
+			assertReserveMessageSanitized(t, t.TempDir(),
+				[]string{commandSubnet, "reserve", "10.0.0.0/24", tc.site}, tc.site)
+		})
+	}
+}
+
+// TestReserveAgainMessageSanitizesEscapedSiteName covers the second,
+// distinct message template ("already reserved for %q") reached when the
+// same id/CIDR+site pair is reserved twice.
+func TestReserveAgainMessageSanitizesEscapedSiteName(t *testing.T) {
+	t.Parallel()
+	const site = `acme\secret`
+
+	t.Run("site-id", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		if _, _, err := runSiteID(t, dir, "reserve", "1", site); err != nil {
+			t.Fatalf("seed reserve: %v", err)
+		}
+		assertReserveMessageSanitized(t, dir, []string{commandSiteID, "reserve", "1", site}, site)
+	})
+	t.Run("subnet", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		if _, _, err := runSubnet(t, dir, "reserve", "10.0.0.0/24", site); err != nil {
+			t.Fatalf("seed reserve: %v", err)
+		}
+		assertReserveMessageSanitized(t, dir, []string{commandSubnet, "reserve", "10.0.0.0/24", site}, site)
+	})
 }

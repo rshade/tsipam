@@ -13,6 +13,25 @@ import (
 
 const subnetReserveArgs = 2
 
+// subnetReserveMessage and subnetReleaseMessage render their command's
+// outcome message from o's own CIDR/Site fields, at emit time -- see
+// outputEnvelope.messageBuilder's doc comment. Reading o.Site rather than
+// closing over the raw API result means a builder invoked after
+// sanitizeOutput sees the already-redacted placeholder.
+func subnetReserveMessage(o *outputEnvelope) string {
+	if o.Changed != nil && *o.Changed {
+		return fmt.Sprintf("reserved subnet CIDR %s for %q", o.CIDR, o.Site)
+	}
+	return fmt.Sprintf("subnet CIDR %s already reserved for %q", o.CIDR, o.Site)
+}
+
+func subnetReleaseMessage(o *outputEnvelope) string {
+	if o.Changed != nil && *o.Changed {
+		return fmt.Sprintf("released subnet CIDR %s", o.CIDR)
+	}
+	return fmt.Sprintf("subnet CIDR %s was not reserved", o.CIDR)
+}
+
 // newSubnetCommand groups subnet-CIDR registry commands. Like site-id, every
 // operation traverses the generated Goa HTTP client and loopback server.
 func newSubnetCommand(state *commandState) *cobra.Command {
@@ -42,14 +61,11 @@ func newSubnetReserveCommand(state *commandState) *cobra.Command {
 				return nil, fmt.Errorf("unexpected reserve_subnet_pool result type %T", res)
 			}
 			status := changedStatus(result.Changed)
-			message := fmt.Sprintf("reserved subnet CIDR %s for %q", result.CIDR, result.Site)
-			if !result.Changed {
-				message = fmt.Sprintf("subnet CIDR %s already reserved for %q", result.CIDR, result.Site)
-			}
-			output := newOutput(commandSubnetReserve, status, message, tailnet)
+			output := newOutput(commandSubnetReserve, status, "", tailnet)
 			output.Changed = &result.Changed
 			output.CIDR = result.CIDR
 			output.Site = result.Site
+			output.messageBuilder = subnetReserveMessage
 			return output, nil
 		},
 	)
@@ -70,13 +86,10 @@ func newSubnetReleaseCommand(state *commandState) *cobra.Command {
 				return nil, fmt.Errorf("unexpected release_subnet_pool result type %T", res)
 			}
 			status := changedStatus(result.Changed)
-			message := fmt.Sprintf("released subnet CIDR %s", result.CIDR)
-			if !result.Changed {
-				message = fmt.Sprintf("subnet CIDR %s was not reserved", result.CIDR)
-			}
-			output := newOutput(commandSubnetRelease, status, message, tailnet)
+			output := newOutput(commandSubnetRelease, status, "", tailnet)
 			output.Changed = &result.Changed
 			output.CIDR = result.CIDR
+			output.messageBuilder = subnetReleaseMessage
 			return output, nil
 		},
 	)

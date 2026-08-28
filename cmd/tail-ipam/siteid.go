@@ -17,6 +17,25 @@ const (
 	localTailnet       = "local"
 )
 
+// siteIDReserveMessage and siteIDReleaseMessage render their command's
+// outcome message from o's own ID/Site fields, at emit time -- see
+// outputEnvelope.messageBuilder's doc comment. Reading o.Site rather than
+// closing over the raw API result means a builder invoked after
+// sanitizeOutput sees the already-redacted placeholder.
+func siteIDReserveMessage(o *outputEnvelope) string {
+	if o.Changed != nil && *o.Changed {
+		return fmt.Sprintf("reserved site ID %s for %q", o.ID, o.Site)
+	}
+	return fmt.Sprintf("site ID %s already reserved for %q", o.ID, o.Site)
+}
+
+func siteIDReleaseMessage(o *outputEnvelope) string {
+	if o.Changed != nil && *o.Changed {
+		return fmt.Sprintf("released site ID %s", o.ID)
+	}
+	return fmt.Sprintf("site ID %s was not reserved", o.ID)
+}
+
 // resolveTailnetWithEnv implements the {tailnet} routing/storage key's
 // resolution order: an explicit --tailnet flag, then TAILSCALE_TAILNET, then
 // the literal "local". Local mode is not a separate code path.
@@ -81,14 +100,11 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 						return fmt.Errorf("unexpected reserve_site_id result type %T", res)
 					}
 					status := changedStatus(result.Changed)
-					message := fmt.Sprintf("reserved site ID %s for %q", result.ID, result.Site)
-					if !result.Changed {
-						message = fmt.Sprintf("site ID %s already reserved for %q", result.ID, result.Site)
-					}
-					output := newOutput(commandSiteIDReserve, status, message, tailnet)
+					output := newOutput(commandSiteIDReserve, status, "", tailnet)
 					output.Changed = &result.Changed
 					output.ID = result.ID
 					output.Site = result.Site
+					output.messageBuilder = siteIDReserveMessage
 					return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
 				},
 			)
@@ -126,13 +142,10 @@ func newSiteIDReleaseCommand(state *commandState) *cobra.Command {
 						return fmt.Errorf("unexpected release_site_id result type %T", res)
 					}
 					status := changedStatus(result.Changed)
-					message := fmt.Sprintf("released site ID %s", result.ID)
-					if !result.Changed {
-						message = fmt.Sprintf("site ID %s was not reserved", result.ID)
-					}
-					output := newOutput(commandSiteIDRelease, status, message, tailnet)
+					output := newOutput(commandSiteIDRelease, status, "", tailnet)
 					output.Changed = &result.Changed
 					output.ID = result.ID
+					output.messageBuilder = siteIDReleaseMessage
 					return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
 				},
 			)

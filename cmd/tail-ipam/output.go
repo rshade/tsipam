@@ -70,6 +70,17 @@ type outputEnvelope struct {
 	SubnetPools   *[]subnetPoolOutput `json:"subnet_pools,omitempty"`
 	Devices       *[]deviceRecord     `json:"devices,omitempty"`
 	Subnets       *[]string           `json:"subnets,omitempty"`
+
+	// messageBuilder, when set, renders Message from this envelope's own
+	// exported fields at emit time instead of Message being pre-formatted
+	// with raw values. emitOutput calls it after any sanitization has run,
+	// so a builder that reads Site/CIDR/ID sees the already-redacted
+	// placeholder rather than the original identity -- avoiding the desync
+	// a value-based text sweep risks against a %q-escaped value (see
+	// sanitizeErrorIfNeeded's doc comment in main.go for the same failure
+	// mode on the error path). Unexported: excluded from JSON and from the
+	// UnhandledFields reflection guard, since it carries no data of its own.
+	messageBuilder func(*outputEnvelope) string
 }
 
 func newOutput(command, status, message, tailnet string) *outputEnvelope {
@@ -148,17 +159,18 @@ func renderSubnets(writer io.Writer, subnets []string) error {
 func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEnvelope {
 	registerOutputIdentities(input, output)
 	result := &outputEnvelope{
-		SchemaVersion: input.SchemaVersion,
-		Tool:          input.Tool,
-		Sanitization:  output.Metadata(),
-		Command:       input.Command,
-		Status:        input.Status,
-		Message:       output.Text(input.Message),
-		Tailnet:       output.Value("tailnet", input.Tailnet),
-		Changed:       input.Changed,
-		ID:            input.ID,
-		CIDR:          output.Value("cidr", input.CIDR),
-		Site:          output.Value("site", input.Site),
+		SchemaVersion:  input.SchemaVersion,
+		Tool:           input.Tool,
+		Sanitization:   output.Metadata(),
+		Command:        input.Command,
+		Status:         input.Status,
+		Message:        output.Text(input.Message),
+		messageBuilder: input.messageBuilder,
+		Tailnet:        output.Value("tailnet", input.Tailnet),
+		Changed:        input.Changed,
+		ID:             input.ID,
+		CIDR:           output.Value("cidr", input.CIDR),
+		Site:           output.Value("site", input.Site),
 	}
 	if input.SiteIDs != nil {
 		entries := make([]siteIDOutput, len(*input.SiteIDs))
@@ -253,6 +265,9 @@ func emitOutput(
 ) error {
 	if outputSanitizer != nil && outputSanitizer.Level() != sanitize.Off {
 		result = sanitizeOutput(result, outputSanitizer)
+	}
+	if result.messageBuilder != nil {
+		result.Message = result.messageBuilder(result)
 	}
 	return renderOutput(writer, format, result)
 }
