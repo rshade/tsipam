@@ -508,8 +508,12 @@ func DecodeReleaseSubnetPoolResponse(decoder func(*http.Response) goahttp.Decode
 // type *ipam.SiteIDReservation from a value of type *SiteIDReservationResponse.
 func unmarshalSiteIDReservationResponseToIpamSiteIDReservation(v *SiteIDReservationResponse) *ipam.SiteIDReservation {
 	res := &ipam.SiteIDReservation{
-		ID:   *v.ID,
-		Site: *v.Site,
+		ID:          *v.ID,
+		Site:        *v.Site,
+		Owner:       v.Owner,
+		Description: v.Description,
+		Ticket:      v.Ticket,
+		ReservedAt:  v.ReservedAt,
 	}
 
 	return res
@@ -520,8 +524,12 @@ func unmarshalSiteIDReservationResponseToIpamSiteIDReservation(v *SiteIDReservat
 // *SubnetPoolReservationResponse.
 func unmarshalSubnetPoolReservationResponseToIpamSubnetPoolReservation(v *SubnetPoolReservationResponse) *ipam.SubnetPoolReservation {
 	res := &ipam.SubnetPoolReservation{
-		CIDR: *v.CIDR,
-		Site: *v.Site,
+		CIDR:        *v.CIDR,
+		Site:        *v.Site,
+		Owner:       v.Owner,
+		Description: v.Description,
+		Ticket:      v.Ticket,
+		ReservedAt:  v.ReservedAt,
 	}
 
 	return res

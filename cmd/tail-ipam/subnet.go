@@ -46,12 +46,15 @@ func newSubnetCommand(state *commandState) *cobra.Command {
 }
 
 func newSubnetReserveCommand(state *commandState) *cobra.Command {
-	return newSubnetLeafCommand(
+	var metadataFlags reservationMetadataFlags
+	cmd := newSubnetLeafCommand(
 		state, "reserve <cidr> <site-name>", "Reserve a subnet CIDR pool for a site.",
 		cobra.ExactArgs(subnetReserveArgs), 0,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
+			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			res, err := client.ReserveSubnetPool()(ctx, &ipam.ReserveSubnetPoolPayload{
 				Tailnet: tailnet, CIDR: args[0], Site: args[1],
+				Owner: owner, Description: description, Ticket: ticket, ReservedAt: reservedAt,
 			})
 			if err != nil {
 				return nil, err
@@ -65,10 +68,15 @@ func newSubnetReserveCommand(state *commandState) *cobra.Command {
 			output.Changed = &result.Changed
 			output.CIDR = result.CIDR
 			output.Site = result.Site
+			output.reservationMetadataOutput = metadataOutputFrom(
+				result.Owner, result.Description, result.Ticket, result.ReservedAt,
+			)
 			output.messageBuilder = subnetReserveMessage
 			return output, nil
 		},
 	)
+	addMetadataFlags(cmd, &metadataFlags)
+	return cmd
 }
 
 func newSubnetReleaseCommand(state *commandState) *cobra.Command {
@@ -109,7 +117,12 @@ func newSubnetListCommand(state *commandState) *cobra.Command {
 			}
 			outputEntries := make([]subnetPoolOutput, len(entries))
 			for index, entry := range entries {
-				outputEntries[index] = subnetPoolOutput{CIDR: entry.CIDR, Site: entry.Site}
+				outputEntries[index] = subnetPoolOutput{
+					CIDR: entry.CIDR, Site: entry.Site,
+					reservationMetadataOutput: metadataOutputFrom(
+						entry.Owner, entry.Description, entry.Ticket, entry.ReservedAt,
+					),
+				}
 			}
 			output := newOutput(
 				commandSubnetList, statusOK,

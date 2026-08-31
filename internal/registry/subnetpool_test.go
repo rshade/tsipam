@@ -63,7 +63,13 @@ func TestReserveSubnetPoolCreatesListsAndIsIdempotent(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	cidr, site, changed, err := registry.ReserveSubnetPoolWithLogger(path, "10.0.0.0/24", "  hq-vpc  ", nil)
+	cidr, site, _, changed, err := registry.ReserveSubnetPoolWithLogger(
+		path,
+		"10.0.0.0/24",
+		"  hq-vpc  ",
+		registry.ReservationMetadata{},
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
@@ -72,7 +78,7 @@ func TestReserveSubnetPoolCreatesListsAndIsIdempotent(t *testing.T) {
 			cidr, site, changed, "10.0.0.0/24", "hq-vpc")
 	}
 
-	_, _, changed, err = registry.ReserveSubnetPoolWithLogger(path, cidr, site, nil)
+	_, _, _, changed, err = registry.ReserveSubnetPoolWithLogger(path, cidr, site, registry.ReservationMetadata{}, nil)
 	if err != nil {
 		t.Fatalf("repeat ReserveSubnetPool: %v", err)
 	}
@@ -148,14 +154,14 @@ func TestReserveSubnetPoolOverlapRules(t *testing.T) {
 func assertSubnetPoolOverlapRule(t *testing.T, tc subnetPoolOverlapCase) {
 	t.Helper()
 	path := regPath(t)
-	if _, _, _, err := registry.ReserveSubnetPoolWithLogger(
-		path, tc.existingCIDR, "hq-vpc", nil,
+	if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
+		path, tc.existingCIDR, "hq-vpc", registry.ReservationMetadata{}, nil,
 	); err != nil {
 		t.Fatalf("seeding reservation: %v", err)
 	}
 
-	_, _, changed, err := registry.ReserveSubnetPoolWithLogger(
-		path, tc.candidateCIDR, tc.candidateSite, nil,
+	_, _, _, changed, err := registry.ReserveSubnetPoolWithLogger(
+		path, tc.candidateCIDR, tc.candidateSite, registry.ReservationMetadata{}, nil,
 	)
 	var collision *registry.SubnetPoolCollisionError
 	if tc.wantCollision {
@@ -187,7 +193,13 @@ func TestListSubnetPoolsSortsByNetworkAddress(t *testing.T) {
 	path := regPath(t)
 
 	for _, cidr := range []string{"192.168.0.0/16", "10.0.2.0/24", "10.0.1.0/24", "2001:db8::/48"} {
-		if _, _, _, err := registry.ReserveSubnetPoolWithLogger(path, cidr, "hq-vpc", nil); err != nil {
+		if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
+			path,
+			cidr,
+			"hq-vpc",
+			registry.ReservationMetadata{},
+			nil,
+		); err != nil {
 			t.Fatalf("ReserveSubnetPool(%q): %v", cidr, err)
 		}
 	}
@@ -210,7 +222,13 @@ func TestReleaseSubnetPoolRemovesEntryAndAbsentIsNoop(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSubnetPoolWithLogger(path, "10.0.0.0/24", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
+		path,
+		"10.0.0.0/24",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
 	cidr, changed, err := registry.ReleaseSubnetPoolWithLogger(path, "10.0.0.0/24", nil)
@@ -239,7 +257,13 @@ func TestReserveSubnetPoolPreservesHandWrittenCommentOnAnotherEntry(t *testing.T
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, err := registry.ReserveSubnetPoolWithLogger(path, "10.0.1.0/24", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
+		path,
+		"10.0.1.0/24",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
 	got, err := os.ReadFile(path)
@@ -331,7 +355,13 @@ func TestReserveSubnetPoolIntoExistingEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, changed, err := registry.ReserveSubnetPoolWithLogger(path, "10.0.0.0/24", "hq-vpc", nil)
+	_, _, _, changed, err := registry.ReserveSubnetPoolWithLogger(
+		path,
+		"10.0.0.0/24",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
@@ -359,7 +389,13 @@ func TestReserveSubnetPoolPreservesCommentInEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, err := registry.ReserveSubnetPoolWithLogger(path, "10.0.0.0/24", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
+		path,
+		"10.0.0.0/24",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
 
@@ -384,7 +420,13 @@ func TestReserveSubnetPoolIntoNullBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, changed, err := registry.ReserveSubnetPoolWithLogger(path, "10.0.0.0/24", "hq-vpc", nil)
+	_, _, _, changed, err := registry.ReserveSubnetPoolWithLogger(
+		path,
+		"10.0.0.0/24",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
@@ -417,7 +459,13 @@ func TestReserveSubnetPoolConcurrentDistinctCIDRsLosesNoReservation(t *testing.T
 			// Reserve non-overlapping /24 subnets (10.0.i.0/24)
 			cidr := fmt.Sprintf("10.0.%d.0/24", i)
 			site := fmt.Sprintf("site-%d", i+1)
-			_, _, _, err := registry.ReserveSubnetPoolWithLogger(path, cidr, site, nil)
+			_, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
+				path,
+				cidr,
+				site,
+				registry.ReservationMetadata{},
+				nil,
+			)
 			errs[i] = err
 		}(i)
 	}

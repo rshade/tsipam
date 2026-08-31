@@ -107,6 +107,14 @@ type ReserveSiteIDPayload struct {
 	ID string
 	// Site name to reserve it for.
 	Site string
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
 }
 
 // ReserveSiteIDResult is the result type of the ipam service reserve_site_id
@@ -116,8 +124,16 @@ type ReserveSiteIDResult struct {
 	ID string
 	// Canonical site name actually written.
 	Site string
-	// False when the exact id+site pair was already reserved.
+	// False when the exact id+site pair and metadata were already reserved.
 	Changed bool
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
 }
 
 // ReserveSubnetPoolPayload is the payload type of the ipam service
@@ -129,6 +145,14 @@ type ReserveSubnetPoolPayload struct {
 	CIDR string
 	// Site name to reserve it for.
 	Site string
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
 }
 
 // ReserveSubnetPoolResult is the result type of the ipam service
@@ -138,8 +162,16 @@ type ReserveSubnetPoolResult struct {
 	CIDR string
 	// Canonical site name actually written.
 	Site string
-	// False when the exact CIDR and site were already reserved.
+	// False when the exact CIDR, site, and metadata were already reserved.
 	Changed bool
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
 }
 
 // A reserved 4via6 site ID.
@@ -148,6 +180,14 @@ type SiteIDReservation struct {
 	ID string
 	// Site name reserved for this ID.
 	Site string
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
 }
 
 // A subnet CIDR pool reserved for a site.
@@ -156,6 +196,14 @@ type SubnetPoolReservation struct {
 	CIDR string
 	// Site name reserved for this subnet pool.
 	Site string
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
 }
 
 // MakeCollision builds a goa.ServiceError from an error.

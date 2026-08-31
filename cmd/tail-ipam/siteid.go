@@ -74,6 +74,7 @@ func addRegistryFlags(cmd *cobra.Command, registryDir, tailnet *string) {
 
 func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 	var registryDir, tailnetFlag string
+	var metadataFlags reservationMetadataFlags
 	cmd := &cobra.Command{
 		Use:           "reserve <id> <site-name>",
 		Short:         "Reserve a 4via6 site ID for a site.",
@@ -86,11 +87,13 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			return loopback.RunWithLogger(
 				cmd.Context(), registryDir, state.logger,
 				func(ctx context.Context, client *ipamclient.Client) error {
 					res, callErr := client.ReserveSiteID()(ctx, &ipam.ReserveSiteIDPayload{
 						Tailnet: tailnet, ID: args[0], Site: args[1],
+						Owner: owner, Description: description, Ticket: ticket, ReservedAt: reservedAt,
 					})
 					if callErr != nil {
 						return callErr
@@ -104,6 +107,9 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 					output.Changed = &result.Changed
 					output.ID = result.ID
 					output.Site = result.Site
+					output.reservationMetadataOutput = metadataOutputFrom(
+						result.Owner, result.Description, result.Ticket, result.ReservedAt,
+					)
 					output.messageBuilder = siteIDReserveMessage
 					return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
 				},
@@ -111,6 +117,7 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 		},
 	}
 	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	addMetadataFlags(cmd, &metadataFlags)
 	return cmd
 }
 
@@ -182,7 +189,12 @@ func newSiteIDListCommand(state *commandState) *cobra.Command {
 					}
 					outputEntries := make([]siteIDOutput, len(entries))
 					for index, entry := range entries {
-						outputEntries[index] = siteIDOutput{ID: entry.ID, Site: entry.Site}
+						outputEntries[index] = siteIDOutput{
+							ID: entry.ID, Site: entry.Site,
+							reservationMetadataOutput: metadataOutputFrom(
+								entry.Owner, entry.Description, entry.Ticket, entry.ReservedAt,
+							),
+						}
 					}
 					output := newOutput(
 						commandSiteIDList, statusOK,

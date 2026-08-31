@@ -49,6 +49,40 @@ func TestServiceReserveListRelease(t *testing.T) {
 	}
 }
 
+func TestServiceReserveSiteIDPassesMetadataThrough(t *testing.T) {
+	t.Parallel()
+	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	ctx := context.Background()
+	owner, ticket := "alice", "OPS-1234"
+
+	reserved, err := svc.ReserveSiteID(ctx, &ipam.ReserveSiteIDPayload{
+		Tailnet: "acme", ID: "1", Site: "hq-vpc", Owner: &owner, Ticket: &ticket,
+	})
+	if err != nil {
+		t.Fatalf("ReserveSiteID: %v", err)
+	}
+	if reserved.Owner == nil || *reserved.Owner != owner {
+		t.Errorf("reserved.Owner = %v, want %q", reserved.Owner, owner)
+	}
+	if reserved.Ticket == nil || *reserved.Ticket != ticket {
+		t.Errorf("reserved.Ticket = %v, want %q", reserved.Ticket, ticket)
+	}
+	if reserved.ReservedAt == nil || *reserved.ReservedAt == "" {
+		t.Error("reserved.ReservedAt is nil or empty, want it auto-stamped")
+	}
+	if reserved.Description != nil {
+		t.Errorf("reserved.Description = %v, want nil (never set)", reserved.Description)
+	}
+
+	list, err := svc.ListSiteIds(ctx, &ipam.ListSiteIdsPayload{Tailnet: "acme"})
+	if err != nil {
+		t.Fatalf("ListSiteIds: %v", err)
+	}
+	if len(list) != 1 || list[0].Owner == nil || *list[0].Owner != owner {
+		t.Errorf("ListSiteIds = %+v, want one entry with Owner=%q", list, owner)
+	}
+}
+
 func TestServiceReserveCollisionReturnsGoaServiceError(t *testing.T) {
 	t.Parallel()
 	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}

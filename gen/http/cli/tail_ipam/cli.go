@@ -230,7 +230,7 @@ func ipamReserveSiteIDUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-site-id --body '{\n      \"id\": \"Qui repudiandae in hic et porro quas.\",\n      \"site\": \"Aliquid facere.\"\n   }' --tailnet \"Voluptatum facilis suscipit magni.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-site-id --body '{\n      \"description\": \"Ratione est omnis at voluptatem explicabo qui.\",\n      \"id\": \"Qui repudiandae in hic et porro quas.\",\n      \"owner\": \"Eum fugit inventore sit.\",\n      \"reserved_at\": \"1984-12-10T06:42:10Z\",\n      \"site\": \"Aliquid facere.\",\n      \"ticket\": \"Culpa magni cum omnis.\"\n   }' --tailnet \"Voluptatum facilis suscipit magni.\"")
 }
 
 func ipamReleaseSiteIDUsage() {
@@ -288,7 +288,7 @@ func ipamReserveSubnetPoolUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-subnet-pool --body '{\n      \"cidr\": \"Iste voluptatem modi aut id illum rerum.\",\n      \"site\": \"Occaecati assumenda quia.\"\n   }' --tailnet \"Explicabo dolor est voluptate dolores nesciunt.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-subnet-pool --body '{\n      \"cidr\": \"Iste voluptatem modi aut id illum rerum.\",\n      \"description\": \"Eos et nesciunt aperiam molestiae iusto quia.\",\n      \"owner\": \"Consequuntur facilis.\",\n      \"reserved_at\": \"1999-05-20T14:51:36Z\",\n      \"site\": \"Occaecati assumenda quia.\",\n      \"ticket\": \"Qui labore facilis deleniti.\"\n   }' --tailnet \"Explicabo dolor est voluptate dolores nesciunt.\"")
 }
 
 func ipamReleaseSubnetPoolUsage() {

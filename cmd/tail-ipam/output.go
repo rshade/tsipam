@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"strings"
 
 	"github.com/rshade/tailscale-utils/policycore/sanitize"
 )
@@ -35,13 +36,54 @@ func changedStatus(changed bool) string {
 }
 
 type siteIDOutput struct {
+	reservationMetadataOutput
+
 	ID   string `json:"id"`
 	Site string `json:"site"`
 }
 
 type subnetPoolOutput struct {
+	reservationMetadataOutput
+
 	CIDR string `json:"cidr"`
 	Site string `json:"site"`
+}
+
+// reservationMetadataOutput is the optional ownership/tracking metadata
+// shared by every reservation-shaped output field. Embedding it keeps the
+// four JSON tags (and the omitempty that lets them disappear cleanly for a
+// metadata-free reservation) declared once instead of per output type.
+type reservationMetadataOutput struct {
+	Owner       string `json:"owner,omitempty"`
+	Description string `json:"description,omitempty"`
+	Ticket      string `json:"ticket,omitempty"`
+	ReservedAt  string `json:"reserved_at,omitempty"`
+}
+
+// hasMetadata reports whether o carries any ownership/tracking metadata,
+// for callers deciding whether to render it in human output.
+func (o reservationMetadataOutput) hasMetadata() bool {
+	return o != reservationMetadataOutput{}
+}
+
+// formatMetadata renders o as space-separated key=value pairs, in a fixed
+// field order, for human (tab-separated) output. Empty for a metadata-free
+// reservation.
+func (o reservationMetadataOutput) formatMetadata() string {
+	var parts []string
+	if o.Owner != "" {
+		parts = append(parts, "owner="+o.Owner)
+	}
+	if o.Ticket != "" {
+		parts = append(parts, "ticket="+o.Ticket)
+	}
+	if o.Description != "" {
+		parts = append(parts, "description="+o.Description)
+	}
+	if o.ReservedAt != "" {
+		parts = append(parts, "reserved="+o.ReservedAt)
+	}
+	return strings.Join(parts, " ")
 }
 
 type deviceRecord struct {
@@ -55,6 +97,8 @@ type deviceRecord struct {
 // empty collection" ([]) from "this payload does not apply to the command"
 // (field omitted).
 type outputEnvelope struct {
+	reservationMetadataOutput
+
 	SchemaVersion string              `json:"schema_version"`
 	Tool          string              `json:"tool"`
 	Sanitization  *sanitize.Metadata  `json:"sanitization,omitempty"`
@@ -118,7 +162,7 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 
 func renderSiteIDs(writer io.Writer, entries []siteIDOutput) error {
 	for _, entry := range entries {
-		if _, err := fmt.Fprintf(writer, "%s\t%s\n", entry.ID, entry.Site); err != nil {
+		if err := renderReservationLine(writer, entry.ID, entry.Site, entry.reservationMetadataOutput); err != nil {
 			return err
 		}
 	}
@@ -127,11 +171,26 @@ func renderSiteIDs(writer io.Writer, entries []siteIDOutput) error {
 
 func renderSubnetPools(writer io.Writer, entries []subnetPoolOutput) error {
 	for _, entry := range entries {
-		if _, err := fmt.Fprintf(writer, "%s\t%s\n", entry.CIDR, entry.Site); err != nil {
+		if err := renderReservationLine(writer, entry.CIDR, entry.Site, entry.reservationMetadataOutput); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// renderReservationLine writes one tab-separated human-output line: key,
+// site, and -- only when present -- a third tab-separated field carrying the
+// reservation's metadata as space-separated key=value pairs. Omitting the
+// third field entirely for a metadata-free reservation, rather than writing
+// an empty one, is what lets existing scripts parsing two tab-separated
+// columns keep working unchanged.
+func renderReservationLine(writer io.Writer, key, site string, metadata reservationMetadataOutput) error {
+	line := key + "\t" + site
+	if metadata.hasMetadata() {
+		line += "\t" + metadata.formatMetadata()
+	}
+	_, err := fmt.Fprintln(writer, line)
+	return err
 }
 
 func renderDevices(writer io.Writer, devices []deviceRecord) error {
@@ -159,23 +218,27 @@ func renderSubnets(writer io.Writer, subnets []string) error {
 func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEnvelope {
 	registerOutputIdentities(input, output)
 	result := &outputEnvelope{
-		SchemaVersion:  input.SchemaVersion,
-		Tool:           input.Tool,
-		Sanitization:   output.Metadata(),
-		Command:        input.Command,
-		Status:         input.Status,
-		Message:        output.Text(input.Message),
-		messageBuilder: input.messageBuilder,
-		Tailnet:        output.Value("tailnet", input.Tailnet),
-		Changed:        input.Changed,
-		ID:             input.ID,
-		CIDR:           output.Value("cidr", input.CIDR),
-		Site:           output.Value("site", input.Site),
+		SchemaVersion:             input.SchemaVersion,
+		Tool:                      input.Tool,
+		Sanitization:              output.Metadata(),
+		Command:                   input.Command,
+		Status:                    input.Status,
+		Message:                   output.Text(input.Message),
+		messageBuilder:            input.messageBuilder,
+		Tailnet:                   output.Value("tailnet", input.Tailnet),
+		Changed:                   input.Changed,
+		ID:                        input.ID,
+		CIDR:                      output.Value("cidr", input.CIDR),
+		Site:                      output.Value("site", input.Site),
+		reservationMetadataOutput: sanitizeMetadata(input.reservationMetadataOutput, output),
 	}
 	if input.SiteIDs != nil {
 		entries := make([]siteIDOutput, len(*input.SiteIDs))
 		for index, entry := range *input.SiteIDs {
-			entries[index] = siteIDOutput{ID: entry.ID, Site: output.Value("site", entry.Site)}
+			entries[index] = siteIDOutput{
+				ID: entry.ID, Site: output.Value("site", entry.Site),
+				reservationMetadataOutput: sanitizeMetadata(entry.reservationMetadataOutput, output),
+			}
 		}
 		result.SiteIDs = &entries
 	}
@@ -183,8 +246,9 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		entries := make([]subnetPoolOutput, len(*input.SubnetPools))
 		for index, entry := range *input.SubnetPools {
 			entries[index] = subnetPoolOutput{
-				CIDR: output.Value("cidr", entry.CIDR),
-				Site: output.Value("site", entry.Site),
+				CIDR:                      output.Value("cidr", entry.CIDR),
+				Site:                      output.Value("site", entry.Site),
+				reservationMetadataOutput: sanitizeMetadata(entry.reservationMetadataOutput, output),
 			}
 		}
 		result.SubnetPools = &entries
@@ -207,19 +271,33 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 	return result
 }
 
+// sanitizeMetadata sweeps Owner the same way a site or hostname is swept --
+// it is an operator-chosen identity, not free text -- and passes
+// Description, Ticket, and ReservedAt through unredacted: a description or
+// ticket reference is free-form prose the sanitizer's exact-token
+// replacement cannot meaningfully redact, and a timestamp carries no tailnet
+// identity to sweep.
+func sanitizeMetadata(metadata reservationMetadataOutput, output *sanitize.Sanitizer) reservationMetadataOutput {
+	metadata.Owner = output.Value("owner", metadata.Owner)
+	return metadata
+}
+
 func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer) {
 	output.Value("tailnet", input.Tailnet)
 	output.Value("cidr", input.CIDR)
 	output.Value("site", input.Site)
+	output.Value("owner", input.Owner)
 	if input.SiteIDs != nil {
 		for _, entry := range *input.SiteIDs {
 			output.Value("site", entry.Site)
+			output.Value("owner", entry.Owner)
 		}
 	}
 	if input.SubnetPools != nil {
 		for _, entry := range *input.SubnetPools {
 			output.Value("cidr", entry.CIDR)
 			output.Value("site", entry.Site)
+			output.Value("owner", entry.Owner)
 		}
 	}
 	if input.Devices == nil {

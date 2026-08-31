@@ -105,13 +105,33 @@
       "usage": "site-id reserve \u003cid\u003e \u003csite-name\u003e",
       "flags": [
         {
+          "name": "description",
+          "usage": "free-text description of why this address space is reserved",
+          "default": ""
+        },
+        {
+          "name": "owner",
+          "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
         },
         {
+          "name": "reserved-at",
+          "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
           "name": "tailnet",
           "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        },
+        {
+          "name": "ticket",
+          "usage": "tracking ticket or issue reference for this reservation",
           "default": ""
         }
       ]
@@ -161,13 +181,33 @@
       "usage": "subnet reserve \u003ccidr\u003e \u003csite-name\u003e",
       "flags": [
         {
+          "name": "description",
+          "usage": "free-text description of why this address space is reserved",
+          "default": ""
+        },
+        {
+          "name": "owner",
+          "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
         },
         {
+          "name": "reserved-at",
+          "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
           "name": "tailnet",
           "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        },
+        {
+          "name": "ticket",
+          "usage": "tracking ticket or issue reference for this reservation",
           "default": ""
         }
       ]

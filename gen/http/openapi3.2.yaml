@@ -34,19 +34,43 @@ paths:
                                 items:
                                     $ref: '#/components/schemas/SiteIDReservation'
                                 example:
-                                    - id: Est assumenda quibusdam.
+                                    - description: Maxime porro rerum illum sed dicta.
+                                      id: Est assumenda quibusdam.
+                                      owner: Similique labore.
+                                      reserved_at: "2001-11-05T19:55:55Z"
                                       site: Nobis id rerum fugit eum.
-                                    - id: Est assumenda quibusdam.
+                                      ticket: Eum voluptatem consequatur in voluptatibus.
+                                    - description: Maxime porro rerum illum sed dicta.
+                                      id: Est assumenda quibusdam.
+                                      owner: Similique labore.
+                                      reserved_at: "2001-11-05T19:55:55Z"
                                       site: Nobis id rerum fugit eum.
-                                    - id: Est assumenda quibusdam.
+                                      ticket: Eum voluptatem consequatur in voluptatibus.
+                                    - description: Maxime porro rerum illum sed dicta.
+                                      id: Est assumenda quibusdam.
+                                      owner: Similique labore.
+                                      reserved_at: "2001-11-05T19:55:55Z"
                                       site: Nobis id rerum fugit eum.
+                                      ticket: Eum voluptatem consequatur in voluptatibus.
                             example:
-                                - id: Est assumenda quibusdam.
+                                - description: Maxime porro rerum illum sed dicta.
+                                  id: Est assumenda quibusdam.
+                                  owner: Similique labore.
+                                  reserved_at: "2001-11-05T19:55:55Z"
                                   site: Nobis id rerum fugit eum.
-                                - id: Est assumenda quibusdam.
+                                  ticket: Eum voluptatem consequatur in voluptatibus.
+                                - description: Maxime porro rerum illum sed dicta.
+                                  id: Est assumenda quibusdam.
+                                  owner: Similique labore.
+                                  reserved_at: "2001-11-05T19:55:55Z"
                                   site: Nobis id rerum fugit eum.
-                                - id: Est assumenda quibusdam.
+                                  ticket: Eum voluptatem consequatur in voluptatibus.
+                                - description: Maxime porro rerum illum sed dicta.
+                                  id: Est assumenda quibusdam.
+                                  owner: Similique labore.
+                                  reserved_at: "2001-11-05T19:55:55Z"
                                   site: Nobis id rerum fugit eum.
+                                  ticket: Eum voluptatem consequatur in voluptatibus.
         post:
             tags:
                 - ipam
@@ -70,8 +94,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/SiteIDReservation'
                         example:
+                            description: Ratione est omnis at voluptatem explicabo qui.
                             id: Qui repudiandae in hic et porro quas.
+                            owner: Eum fugit inventore sit.
+                            reserved_at: "1984-12-10T06:42:10Z"
                             site: Aliquid facere.
+                            ticket: Culpa magni cum omnis.
             responses:
                 "200":
                     description: OK response.
@@ -81,8 +109,12 @@ paths:
                                 $ref: '#/components/schemas/ReserveSiteIDResponseBody'
                             example:
                                 changed: true
+                                description: Dolor sed tempore suscipit qui id provident.
                                 id: Occaecati accusamus nobis asperiores.
+                                owner: Quisquam a ut dignissimos.
+                                reserved_at: "1976-01-14T22:54:54Z"
                                 site: Quod qui autem.
+                                ticket: Voluptatem sed quo corporis asperiores corrupti.
                 "409":
                     description: 'collision: id is already reserved for a different site.'
                     content:
@@ -186,14 +218,30 @@ paths:
                                     $ref: '#/components/schemas/SubnetPoolReservation'
                                 example:
                                     - cidr: Sit corrupti dolorem harum voluptatum.
+                                      description: Aperiam cumque minus aut illum non suscipit.
+                                      owner: Recusandae quaerat.
+                                      reserved_at: "1997-03-26T19:38:02Z"
                                       site: Sit nulla recusandae perspiciatis sit saepe.
+                                      ticket: Hic corporis.
                                     - cidr: Sit corrupti dolorem harum voluptatum.
+                                      description: Aperiam cumque minus aut illum non suscipit.
+                                      owner: Recusandae quaerat.
+                                      reserved_at: "1997-03-26T19:38:02Z"
                                       site: Sit nulla recusandae perspiciatis sit saepe.
+                                      ticket: Hic corporis.
                             example:
                                 - cidr: Sit corrupti dolorem harum voluptatum.
+                                  description: Aperiam cumque minus aut illum non suscipit.
+                                  owner: Recusandae quaerat.
+                                  reserved_at: "1997-03-26T19:38:02Z"
                                   site: Sit nulla recusandae perspiciatis sit saepe.
+                                  ticket: Hic corporis.
                                 - cidr: Sit corrupti dolorem harum voluptatum.
+                                  description: Aperiam cumque minus aut illum non suscipit.
+                                  owner: Recusandae quaerat.
+                                  reserved_at: "1997-03-26T19:38:02Z"
                                   site: Sit nulla recusandae perspiciatis sit saepe.
+                                  ticket: Hic corporis.
         post:
             tags:
                 - ipam
@@ -218,7 +266,11 @@ paths:
                             $ref: '#/components/schemas/SubnetPoolReservation'
                         example:
                             cidr: Iste voluptatem modi aut id illum rerum.
+                            description: Eos et nesciunt aperiam molestiae iusto quia.
+                            owner: Consequuntur facilis.
+                            reserved_at: "1999-05-20T14:51:36Z"
                             site: Occaecati assumenda quia.
+                            ticket: Qui labore facilis deleniti.
             responses:
                 "200":
                     description: OK response.
@@ -229,7 +281,11 @@ paths:
                             example:
                                 changed: false
                                 cidr: Est dolor.
+                                description: Et corporis iste.
+                                owner: Est dolorem accusantium commodi.
+                                reserved_at: "2009-01-30T14:45:12Z"
                                 site: Et voluptatem sit iusto.
+                                ticket: Necessitatibus impedit ducimus facere quas.
                 "409":
                     description: 'collision: cidr overlaps a subnet pool reserved for a different site.'
                     content:
@@ -319,20 +375,41 @@ components:
             properties:
                 changed:
                     type: boolean
-                    description: False when the exact id+site pair was already reserved.
+                    description: False when the exact id+site pair and metadata were already reserved.
                     example: true
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Dolor sed tempore suscipit qui id provident.
                 id:
                     type: string
                     description: Canonical site ID actually written.
                     example: Occaecati accusamus nobis asperiores.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Quisquam a ut dignissimos.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "1976-01-14T22:54:54Z"
+                    format: date-time
                 site:
                     type: string
                     description: Canonical site name actually written.
                     example: Quod qui autem.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Voluptatem sed quo corporis asperiores corrupti.
             example:
                 changed: true
+                description: Dolor sed tempore suscipit qui id provident.
                 id: Occaecati accusamus nobis asperiores.
+                owner: Quisquam a ut dignissimos.
+                reserved_at: "1976-01-14T22:54:54Z"
                 site: Quod qui autem.
+                ticket: Voluptatem sed quo corporis asperiores corrupti.
             required:
                 - id
                 - site
@@ -342,20 +419,41 @@ components:
             properties:
                 changed:
                     type: boolean
-                    description: False when the exact CIDR and site were already reserved.
+                    description: False when the exact CIDR, site, and metadata were already reserved.
                     example: false
                 cidr:
                     type: string
                     description: Canonical subnet CIDR actually written.
                     example: Est dolor.
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Et corporis iste.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Est dolorem accusantium commodi.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "2009-01-30T14:45:12Z"
+                    format: date-time
                 site:
                     type: string
                     description: Canonical site name actually written.
                     example: Et voluptatem sit iusto.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Necessitatibus impedit ducimus facere quas.
             example:
                 changed: false
                 cidr: Est dolor.
+                description: Et corporis iste.
+                owner: Est dolorem accusantium commodi.
+                reserved_at: "2009-01-30T14:45:12Z"
                 site: Et voluptatem sit iusto.
+                ticket: Necessitatibus impedit ducimus facere quas.
             required:
                 - cidr
                 - site
@@ -363,18 +461,39 @@ components:
         SiteIDReservation:
             type: object
             properties:
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Maxime porro rerum illum sed dicta.
                 id:
                     type: string
                     description: 'Canonical site ID: a decimal integer, 0-65535.'
                     example: Est assumenda quibusdam.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Similique labore.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "2001-11-05T19:55:55Z"
+                    format: date-time
                 site:
                     type: string
                     description: Site name reserved for this ID.
                     example: Nobis id rerum fugit eum.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Eum voluptatem consequatur in voluptatibus.
             description: A reserved 4via6 site ID.
             example:
+                description: Maxime porro rerum illum sed dicta.
                 id: Est assumenda quibusdam.
+                owner: Similique labore.
+                reserved_at: "2001-11-05T19:55:55Z"
                 site: Nobis id rerum fugit eum.
+                ticket: Eum voluptatem consequatur in voluptatibus.
             required:
                 - id
                 - site
@@ -385,14 +504,35 @@ components:
                     type: string
                     description: Canonical IPv4 or IPv6 CIDR prefix.
                     example: Sit corrupti dolorem harum voluptatum.
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Aperiam cumque minus aut illum non suscipit.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Recusandae quaerat.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "1997-03-26T19:38:02Z"
+                    format: date-time
                 site:
                     type: string
                     description: Site name reserved for this subnet pool.
                     example: Sit nulla recusandae perspiciatis sit saepe.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Hic corporis.
             description: A subnet CIDR pool reserved for a site.
             example:
                 cidr: Sit corrupti dolorem harum voluptatum.
+                description: Aperiam cumque minus aut illum non suscipit.
+                owner: Recusandae quaerat.
+                reserved_at: "1997-03-26T19:38:02Z"
                 site: Sit nulla recusandae perspiciatis sit saepe.
+                ticket: Hic corporis.
             required:
                 - cidr
                 - site

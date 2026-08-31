@@ -305,8 +305,12 @@ func DecodeReleaseSubnetPoolRequest(mux goahttp.Muxer, decoder func(*http.Reques
 // type *SiteIDReservationResponse from a value of type *ipam.SiteIDReservation.
 func marshalIpamSiteIDReservationToSiteIDReservationResponse(v *ipam.SiteIDReservation) *SiteIDReservationResponse {
 	res := &SiteIDReservationResponse{
-		ID:   v.ID,
-		Site: v.Site,
+		ID:          v.ID,
+		Site:        v.Site,
+		Owner:       v.Owner,
+		Description: v.Description,
+		Ticket:      v.Ticket,
+		ReservedAt:  v.ReservedAt,
 	}
 
 	return res
@@ -317,8 +321,12 @@ func marshalIpamSiteIDReservationToSiteIDReservationResponse(v *ipam.SiteIDReser
 // *ipam.SubnetPoolReservation.
 func marshalIpamSubnetPoolReservationToSubnetPoolReservationResponse(v *ipam.SubnetPoolReservation) *SubnetPoolReservationResponse {
 	res := &SubnetPoolReservationResponse{
-		CIDR: v.CIDR,
-		Site: v.Site,
+		CIDR:        v.CIDR,
+		Site:        v.Site,
+		Owner:       v.Owner,
+		Description: v.Description,
+		Ticket:      v.Ticket,
+		ReservedAt:  v.ReservedAt,
 	}
 
 	return res

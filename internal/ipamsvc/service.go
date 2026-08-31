@@ -29,6 +29,37 @@ func (s *Service) registryPath(tailnet string) string {
 	return filepath.Join(s.RegistryDir, tailnet+".ipam.hujson")
 }
 
+// nonEmptyPtr returns nil for an empty string, and a pointer to value
+// otherwise -- goa's optional attributes are *string, but registry.Entry's
+// metadata fields use "" as their absent sentinel (see ReservationMetadata's
+// doc comment), so every result crossing that boundary goes through here.
+func nonEmptyPtr(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+// stringOrEmpty is nonEmptyPtr's inverse: a nil optional attribute reads back
+// as "", registry's own absent sentinel.
+func stringOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+// metadataFromPayload builds a registry.ReservationMetadata from a reserve
+// payload's four optional attributes.
+func metadataFromPayload(owner, description, ticket, reservedAt *string) registry.ReservationMetadata {
+	return registry.ReservationMetadata{
+		Owner:       stringOrEmpty(owner),
+		Description: stringOrEmpty(description),
+		Ticket:      stringOrEmpty(ticket),
+		ReservedAt:  stringOrEmpty(reservedAt),
+	}
+}
+
 // ListSiteIds implements ipam.Service.
 //
 //nolint:revive // must match the generated ipam.Service interface's exact method name (ListSiteIds, not ListSiteIDs).
@@ -39,15 +70,25 @@ func (s *Service) ListSiteIds(_ context.Context, p *ipam.ListSiteIdsPayload) ([]
 	}
 	out := make([]*ipam.SiteIDReservation, len(entries))
 	for i, entry := range entries {
-		out[i] = &ipam.SiteIDReservation{ID: entry.ID, Site: entry.Site}
+		out[i] = &ipam.SiteIDReservation{
+			ID: entry.ID, Site: entry.Site,
+			Owner: nonEmptyPtr(entry.Owner), Description: nonEmptyPtr(entry.Description),
+			Ticket: nonEmptyPtr(entry.Ticket), ReservedAt: nonEmptyPtr(entry.ReservedAt),
+		}
 	}
 	return out, nil
 }
 
 // ReserveSiteID implements ipam.Service.
 func (s *Service) ReserveSiteID(_ context.Context, p *ipam.ReserveSiteIDPayload) (*ipam.ReserveSiteIDResult, error) {
-	id, site, changed, err := registry.ReserveSiteIDWithLogger(
-		s.registryPath(p.Tailnet), p.ID, p.Site, s.Logger,
+	id, site, metadata, changed, err := registry.ReserveSiteIDWithLogger(
+		s.registryPath(
+			p.Tailnet,
+		),
+		p.ID,
+		p.Site,
+		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt),
+		s.Logger,
 	)
 	if err != nil {
 		var collision *registry.SiteIDCollisionError
@@ -56,7 +97,11 @@ func (s *Service) ReserveSiteID(_ context.Context, p *ipam.ReserveSiteIDPayload)
 		}
 		return nil, err
 	}
-	return &ipam.ReserveSiteIDResult{ID: id, Site: site, Changed: changed}, nil
+	return &ipam.ReserveSiteIDResult{
+		ID: id, Site: site, Changed: changed,
+		Owner: nonEmptyPtr(metadata.Owner), Description: nonEmptyPtr(metadata.Description),
+		Ticket: nonEmptyPtr(metadata.Ticket), ReservedAt: nonEmptyPtr(metadata.ReservedAt),
+	}, nil
 }
 
 // ReleaseSiteID implements ipam.Service.
@@ -79,7 +124,11 @@ func (s *Service) ListSubnetPools(
 	}
 	out := make([]*ipam.SubnetPoolReservation, len(entries))
 	for i, entry := range entries {
-		out[i] = &ipam.SubnetPoolReservation{CIDR: entry.CIDR, Site: entry.Site}
+		out[i] = &ipam.SubnetPoolReservation{
+			CIDR: entry.CIDR, Site: entry.Site,
+			Owner: nonEmptyPtr(entry.Owner), Description: nonEmptyPtr(entry.Description),
+			Ticket: nonEmptyPtr(entry.Ticket), ReservedAt: nonEmptyPtr(entry.ReservedAt),
+		}
 	}
 	return out, nil
 }
@@ -89,8 +138,9 @@ func (s *Service) ReserveSubnetPool(
 	_ context.Context,
 	p *ipam.ReserveSubnetPoolPayload,
 ) (*ipam.ReserveSubnetPoolResult, error) {
-	cidr, site, changed, err := registry.ReserveSubnetPoolWithLogger(
-		s.registryPath(p.Tailnet), p.CIDR, p.Site, s.Logger,
+	cidr, site, metadata, changed, err := registry.ReserveSubnetPoolWithLogger(
+		s.registryPath(p.Tailnet), p.CIDR, p.Site,
+		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt), s.Logger,
 	)
 	if err != nil {
 		var collision *registry.SubnetPoolCollisionError
@@ -99,7 +149,11 @@ func (s *Service) ReserveSubnetPool(
 		}
 		return nil, err
 	}
-	return &ipam.ReserveSubnetPoolResult{CIDR: cidr, Site: site, Changed: changed}, nil
+	return &ipam.ReserveSubnetPoolResult{
+		CIDR: cidr, Site: site, Changed: changed,
+		Owner: nonEmptyPtr(metadata.Owner), Description: nonEmptyPtr(metadata.Description),
+		Ticket: nonEmptyPtr(metadata.Ticket), ReservedAt: nonEmptyPtr(metadata.ReservedAt),
+	}, nil
 }
 
 // ReleaseSubnetPool implements ipam.Service.

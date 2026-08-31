@@ -89,7 +89,13 @@ func assertNoQuotedLeak(t *testing.T, haystack, value string) {
 func seedCollision(t *testing.T, dir, existing string) {
 	t.Helper()
 	path := filepath.Join(dir, localTailnet+".ipam.hujson")
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", existing, nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"1",
+		existing,
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("seeding reservation: %v", err)
 	}
 }
@@ -438,7 +444,7 @@ func TestHelperTriggerRegistryWriteFailure(t *testing.T) {
 	}
 
 	path := os.Getenv("TAILIPAM_WRITE_FAILURE_PATH")
-	_, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "site", nil)
+	_, _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "site", registry.ReservationMetadata{}, nil)
 	if err == nil {
 		fmt.Fprintln(os.Stdout, helperMarkerUnexpectedSuccess)
 		os.Exit(1)

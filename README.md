@@ -74,6 +74,24 @@ tail-ipam site-id reserve 1 hq-vpc \
   --tailnet production
 ```
 
+`--owner`, `--description`, and `--ticket` attach optional ownership/tracking
+metadata to the reservation; `--reserved-at` overrides the RFC 3339 timestamp
+that is otherwise auto-stamped (UTC, now) the first time any of the other
+three is set on a reservation that does not already carry one:
+
+```bash
+tail-ipam site-id reserve 1 hq-vpc --owner platform-team --ticket OPS-1234 \
+  --description "HQ gateway, migrated from the old ACL"
+```
+
+Reserving the same id and site again amends only the fields explicitly
+passed — a field left out keeps its stored value rather than being cleared —
+so a later `--ticket OPS-5678` on its own updates just the ticket, leaving
+`--owner` and the original `--reserved-at` untouched. A bare reserve (no
+metadata flags at all) stays exactly as idempotent as before, including
+against an already-owned reservation. Reserving the same id for a
+*different* site is always refused as a collision, regardless of metadata.
+
 #### `site-id release <id>`
 
 Releases a reserved site ID. Errors if the registry file does not exist.
@@ -94,8 +112,12 @@ tail-ipam site-id list
 tail-ipam site-id list --registry-dir /etc/tail-ipam --tailnet production
 ```
 
-Human output is tab-separated (site ID, site name). `-format json` emits the
-same entries in the versioned envelope.
+Human output is tab-separated (site ID, site name), plus a third
+tab-separated field — space-separated `key=value` pairs, e.g.
+`owner=platform-team ticket=OPS-1234` — appended only for a reservation that
+carries metadata; a metadata-free reservation's line is unchanged. `-format
+json` emits the same entries in the versioned envelope, with `owner`,
+`description`, `ticket`, and `reserved_at` present only when set.
 
 #### `subnet reserve <cidr> <site-name>`
 
@@ -110,6 +132,10 @@ does not query the Tailscale control plane.
 tail-ipam subnet reserve 10.20.0.0/16 hq-vpc
 tail-ipam subnet reserve 2001:db8:20::/48 branch-office
 ```
+
+`subnet reserve` accepts the same `--owner`, `--description`, `--ticket`, and
+`--reserved-at` metadata flags as `site-id reserve`, with the same amend and
+collision-regardless-of-metadata semantics described above.
 
 CIDRs must already be in `net/netip`'s canonical form. For example,
 `10.20.0.1/16` is rejected with a suggestion to use `10.20.0.0/16`, rather
@@ -127,8 +153,10 @@ tail-ipam subnet release 10.20.0.0/16
 #### `subnet list`
 
 Lists all subnet-pool reservations sorted by network address. Human output is
-tab-separated (CIDR, site name); `-format json` emits `subnet_pools` in the
-versioned envelope.
+tab-separated (CIDR, site name), with the same metadata third field as
+`site-id list` when a reservation carries any; `-format json` emits
+`subnet_pools` in the versioned envelope, `owner`/`description`/`ticket`/
+`reserved_at` included only when set.
 
 ```bash
 tail-ipam subnet list
@@ -187,7 +215,12 @@ straightforward:
   // Site ID allocations
   "siteIDs": {
     "1": "hq-vpc",
-    "2": "branch-office",
+    "2": {
+      "site": "branch-office",
+      "owner": "platform-team",
+      "ticket": "OPS-1234",
+      "reservedAt": "2026-01-15T09:00:00Z",
+    },
   },
 
   // Subnet CIDR pool reservations
@@ -205,6 +238,13 @@ shape (comment preserved, trailing comma on an expanded block) except for the
 indentation character: it is shown here with spaces because this repository's
 markdown lint config forbids hard tabs in a fenced code block, but the tool
 itself always writes tabs.
+
+An entry is either a bare string (the site name, and the only shape `reserve`
+writes when no metadata flags are given) or an object carrying `site` plus
+whatever optional `owner`, `description`, `ticket`, and `reservedAt` fields
+were attached — see `site-id reserve`/`subnet reserve` above. A registry with
+only bare-string entries loads and re-saves byte-for-byte unchanged; the two
+shapes freely coexist in one file, as `"1"` and `"2"` do above.
 
 Site IDs are canonicalized as decimal integers from 0 to 65535 (Tailscale's
 16-bit site-ID field): `"01"` and `"1"` map to the same key. This is a
@@ -246,9 +286,12 @@ top-level contract as the repository's other action-oriented CLI output:
 
 `site-id list` carries `site_ids`, `subnet list` carries `subnet_pools`, and
 `devices list` carries `devices`. Reserve/release results carry the applicable
-`changed`, `id`, `cidr`, and `site` fields. Empty list results remain JSON
-arrays. Treat field names and meanings as a compatibility surface;
-`schema_version` changes before a breaking contract change.
+`changed`, `id`, `cidr`, and `site` fields, plus `owner`, `description`,
+`ticket`, and `reserved_at` when the reservation carries that metadata (a
+reserve echoes back what was actually written, including any auto-stamped
+`reserved_at`). Empty list results remain JSON arrays. Treat field names and
+meanings as a compatibility surface; `schema_version` changes before a
+breaking contract change.
 
 Run `tail-ipam -schema` for the authoritative machine-readable command, flag,
 and exit-code catalog. Run `tail-ipam --help` for examples and the human-facing
@@ -260,8 +303,11 @@ transport, registry loading/creation, and lock acquisition. Diagnostics stay
 on stderr, so stdout remains parse-clean under `-format json`.
 
 `TAILSCALE_SANITIZE=identity` or `strict` replaces device names, addresses,
-routes, tailnet routing keys, site names, and reserved subnet CIDRs after the
-real operation has completed. A non-`off` environment value overrides
+routes, tailnet routing keys, site names, reservation owners, and reserved
+subnet CIDRs after the real operation has completed. `description`, `ticket`,
+and `reserved_at` are left unredacted: they are free-form operator text and a
+timestamp, not tailnet-derived identities the sanitizer's exact-token
+replacement can meaningfully sweep. A non-`off` environment value overrides
 `--sanitize` and is announced on stderr. `calc split` output is not sanitized
 because it contains no tailnet-derived data. Placeholders for other commands
 are scoped to the artifact's routing/storage key (the `--tailnet` alias for

@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rshade/tailscale-utils/policycore/addrspace"
 	"github.com/rshade/tailscale-utils/policycore/hujsonedit"
@@ -15,6 +16,8 @@ import (
 // SubnetPoolEntry is one resolved subnet-pool reservation, returned by
 // ListSubnetPoolsWithLogger.
 type SubnetPoolEntry struct {
+	ReservationMetadata
+
 	CIDR string
 	Site string
 }
@@ -66,7 +69,7 @@ func NormalizeSubnetCIDR(cidr string) (string, error) {
 // that no two pools belonging to different sites overlap. The overlap check
 // deliberately uses policycore/addrspace's shared primitive so registry,
 // policy, and audit consumers cannot drift on CIDR semantics.
-func canonicalizeSubnetPools(raw map[string]string) (map[string]string, map[string]string, error) {
+func canonicalizeSubnetPools(raw map[string]Entry) (map[string]Entry, map[string]string, error) {
 	if len(raw) == 0 {
 		return nil, nil, nil
 	}
@@ -77,7 +80,7 @@ func canonicalizeSubnetPools(raw map[string]string) (map[string]string, map[stri
 	}
 	sort.Strings(rawCIDRs)
 
-	pools := make(map[string]string, len(raw))
+	pools := make(map[string]Entry, len(raw))
 	rawKeys := make(map[string]string, len(raw))
 	canonicalCIDRs := make([]string, 0, len(raw))
 	for _, rawCIDR := range rawCIDRs {
@@ -88,11 +91,11 @@ func canonicalizeSubnetPools(raw map[string]string) (map[string]string, map[stri
 		if firstRaw, ok := rawKeys[cidr]; ok {
 			return nil, nil, fmt.Errorf("subnet CIDR %s is defined twice, as %q and %q", cidr, firstRaw, rawCIDR)
 		}
-		site := raw[rawCIDR]
-		if site == "" {
+		entry := raw[rawCIDR]
+		if entry.Site == "" {
 			return nil, nil, fmt.Errorf("subnet CIDR %s (key %q) has an empty or null site name", cidr, rawCIDR)
 		}
-		pools[cidr] = site
+		pools[cidr] = entry
 		rawKeys[cidr] = rawCIDR
 		canonicalCIDRs = append(canonicalCIDRs, cidr)
 	}
@@ -108,10 +111,10 @@ func canonicalizeSubnetPools(raw map[string]string) (map[string]string, map[stri
 	if validationErr == nil {
 		for _, pair := range pairs {
 			left, right := canonicalCIDRs[pair[0]], canonicalCIDRs[pair[1]]
-			if pools[left] != pools[right] {
+			if pools[left].Site != pools[right].Site {
 				validationErr = fmt.Errorf(
 					"subnet CIDRs %s (%q) and %s (%q) overlap",
-					left, pools[left], right, pools[right],
+					left, pools[left].Site, right, pools[right].Site,
 				)
 				break
 			}
@@ -129,59 +132,92 @@ func canonicalizeSubnetPools(raw map[string]string) (map[string]string, map[stri
 }
 
 // ReserveSubnetPoolWithLogger reserves cidr for site in the registry at path,
-// creating the file if needed. Repeating an exact CIDR+site reservation is an
-// idempotent no-op. A CIDR that overlaps any pool owned by a different site is
-// refused with *SubnetPoolCollisionError; overlaps within one site are legal.
+// creating the file if needed. Repeating an exact CIDR+site reservation with
+// no metadata is an idempotent no-op. A CIDR that overlaps any pool owned by a
+// different site is refused with *SubnetPoolCollisionError, regardless of
+// metadata; overlaps within one site are legal.
+//
+// metadata follows the same merge and auto-stamp rules as
+// ReserveSiteIDWithLogger — see its doc comment.
 func ReserveSubnetPoolWithLogger(
 	path, cidr, site string,
+	metadata ReservationMetadata,
 	logger diagnostics.Logger,
-) (string, string, bool, error) {
+) (string, string, ReservationMetadata, bool, error) {
 	cidr, err := NormalizeSubnetCIDR(cidr)
 	if err != nil {
-		return "", "", false, err
+		return "", "", ReservationMetadata{}, false, err
 	}
 	site, err = NormalizeSiteName(site)
 	if err != nil {
-		return "", "", false, err
+		return "", "", ReservationMetadata{}, false, err
+	}
+	metadata, err = normalizeMetadata(metadata)
+	if err != nil {
+		return "", "", ReservationMetadata{}, false, err
 	}
 
 	changed := false
+	var resultMetadata ReservationMetadata
 	lockErr := withRegistryLock(path, logger, func() error {
 		reg, loadErr := loadOrCreate(path, subnetPoolsKey, logger)
 		if loadErr != nil {
 			return loadErr
 		}
 
-		if existing, ok := reg.SubnetPools[cidr]; ok {
-			if existing == site {
-				diagnostics.Debug(logger, "subnet-pool reservation already present")
-				return nil
-			}
-			return &SubnetPoolCollisionError{
-				CIDR: cidr, ExistingCIDR: cidr, ExistingSite: existing, WantedSite: site,
-			}
+		existingEntry, exists := reg.SubnetPools[cidr]
+		if conflictErr := checkSubnetPoolConflict(
+			existingEntry,
+			exists,
+			reg.SubnetPools,
+			cidr,
+			site,
+		); conflictErr != nil {
+			return conflictErr
 		}
-		if overlapErr := validateSubnetPoolOverlap(reg.SubnetPools, cidr, site); overlapErr != nil {
-			return overlapErr
+		newEntry, unchanged := resolveReservationEntry(existingEntry, exists, site, metadata, time.Now)
+		if unchanged {
+			resultMetadata = existingEntry.ReservationMetadata
+			diagnostics.Debug(logger, "subnet-pool reservation already present")
+			return nil
 		}
 
 		var op hujsonedit.PatchOperation
 		if !reg.subnetPoolsPresent {
-			op = hujsonedit.PatchAdd(map[string]string{cidr: site}, subnetPoolsKey)
+			op = hujsonedit.PatchAdd(map[string]Entry{cidr: newEntry}, subnetPoolsKey)
 		} else {
-			op = hujsonedit.PatchAdd(site, subnetPoolsKey, cidr)
+			op = hujsonedit.PatchAdd(newEntry, subnetPoolsKey, cidr)
 		}
 		if patchErr := hujsonedit.WritePatch(path, nil, op); patchErr != nil {
 			return fmt.Errorf("reserving subnet CIDR %s: %w", cidr, patchErr)
 		}
 		changed = true
+		resultMetadata = newEntry.ReservationMetadata
 		diagnostics.Debug(logger, "subnet-pool reservation written")
 		return nil
 	})
 	if lockErr != nil {
-		return "", "", false, lockErr
+		return "", "", ReservationMetadata{}, false, lockErr
 	}
-	return cidr, site, changed, nil
+	return cidr, site, resultMetadata, changed, nil
+}
+
+// checkSubnetPoolConflict refuses cidr against reg's existing subnet pools:
+// an exact-CIDR match owned by a different site is a *SubnetPoolCollisionError
+// regardless of metadata, and a genuinely new CIDR is checked for an overlap
+// against every other pool (see validateSubnetPoolOverlap). An existing entry
+// for cidr already establishes ownership, so it is not re-checked for overlap
+// against itself or anything else.
+func checkSubnetPoolConflict(existingEntry Entry, exists bool, pools map[string]Entry, cidr, site string) error {
+	if exists {
+		if existingEntry.Site != site {
+			return &SubnetPoolCollisionError{
+				CIDR: cidr, ExistingCIDR: cidr, ExistingSite: existingEntry.Site, WantedSite: site,
+			}
+		}
+		return nil
+	}
+	return validateSubnetPoolOverlap(pools, cidr, site)
 }
 
 // validateSubnetPoolOverlap checks cidr against every existing pool for an
@@ -190,17 +226,17 @@ func ReserveSubnetPoolWithLogger(
 // -- not worth sortedSubnetPoolEntries's ordering cost (used where display
 // order matters, e.g. ListSubnetPoolsWithLogger) on this membership scan.
 func validateSubnetPoolOverlap(
-	pools map[string]string,
+	pools map[string]Entry,
 	cidr, site string,
 ) error {
-	for existingCIDR, existingSite := range pools {
+	for existingCIDR, existingEntry := range pools {
 		overlaps, err := addrspace.Overlaps(cidr, existingCIDR)
 		if err != nil {
 			return fmt.Errorf("comparing subnet CIDRs %s and %s: %w", cidr, existingCIDR, err)
 		}
-		if overlaps && existingSite != site {
+		if overlaps && existingEntry.Site != site {
 			return &SubnetPoolCollisionError{
-				CIDR: cidr, ExistingCIDR: existingCIDR, ExistingSite: existingSite, WantedSite: site,
+				CIDR: cidr, ExistingCIDR: existingCIDR, ExistingSite: existingEntry.Site, WantedSite: site,
 			}
 		}
 	}
@@ -242,10 +278,13 @@ func ListSubnetPoolsWithLogger(path string, logger diagnostics.Logger) ([]Subnet
 	return sortedSubnetPoolEntries(reg.SubnetPools), nil
 }
 
-func sortedSubnetPoolEntries(pools map[string]string) []SubnetPoolEntry {
+func sortedSubnetPoolEntries(pools map[string]Entry) []SubnetPoolEntry {
 	entries := make([]SubnetPoolEntry, 0, len(pools))
-	for cidr, site := range pools {
-		entries = append(entries, SubnetPoolEntry{CIDR: cidr, Site: site})
+	for cidr, entry := range pools {
+		entries = append(
+			entries,
+			SubnetPoolEntry{CIDR: cidr, Site: entry.Site, ReservationMetadata: entry.ReservationMetadata},
+		)
 	}
 	sort.SliceStable(entries, func(i, j int) bool {
 		left, leftErr := netip.ParsePrefix(entries[i].CIDR)

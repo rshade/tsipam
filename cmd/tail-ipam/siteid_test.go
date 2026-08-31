@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -85,6 +86,65 @@ func TestSiteIDReserveCommandPreservesHandWrittenComment(t *testing.T) {
 	if !strings.Contains(string(got), want) {
 		t.Errorf("registry after reserving a second entry through the command layer = %q, want it to still contain %q",
 			got, want)
+	}
+}
+
+func TestSiteIDReserveWithMetadataFlagsThenList(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	out, errOut, err := runSiteID(
+		t, dir, "reserve", "1", "hq-vpc",
+		"--owner", "alice", "--ticket", "OPS-1234", "--description", "HQ gateway",
+	)
+	if err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	if errOut != "" {
+		t.Errorf("reserve stderr = %q, want empty on success", errOut)
+	}
+	if !strings.Contains(out, "reserved site ID 1") {
+		t.Errorf("reserve stdout = %q, want it to confirm the reservation", out)
+	}
+
+	out, _, err = runSiteID(t, dir, "list")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, want := range []string{"1\thq-vpc", "owner=alice", "ticket=OPS-1234", "description=HQ gateway"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("list stdout = %q, want it to contain %q", out, want)
+		}
+	}
+
+	out, _, err = runSiteID(t, dir, "list", "--format", formatJSON)
+	if err != nil {
+		t.Fatalf("list --format json: %v", err)
+	}
+	var listed outputEnvelope
+	if err = json.Unmarshal([]byte(out), &listed); err != nil {
+		t.Fatalf("decode list JSON: %v", err)
+	}
+	if listed.SiteIDs == nil || len(*listed.SiteIDs) != 1 {
+		t.Fatalf("list JSON = %+v, want one entry", listed)
+	}
+	got := (*listed.SiteIDs)[0]
+	if got.Owner != "alice" || got.Ticket != "OPS-1234" || got.Description != "HQ gateway" || got.ReservedAt == "" {
+		t.Errorf("list JSON entry = %+v, want Owner=alice Ticket=OPS-1234 Description=%q and a non-empty ReservedAt",
+			got, "HQ gateway")
+	}
+}
+
+func TestSiteIDReserveWithoutMetadataOmitsItFromJSON(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	out, _, err := runSiteID(t, dir, "reserve", "1", "hq-vpc", "--format", formatJSON)
+	if err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	if strings.Contains(out, `"owner"`) || strings.Contains(out, `"reserved_at"`) {
+		t.Errorf("reserve --format json without metadata flags = %s, want no metadata fields present", out)
 	}
 }
 

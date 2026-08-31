@@ -19,6 +19,14 @@ type ReserveSiteIDRequestBody struct {
 	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
 	// Site name to reserve it for.
 	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
 // ReserveSubnetPoolRequestBody is the type of the "ipam" service
@@ -28,6 +36,14 @@ type ReserveSubnetPoolRequestBody struct {
 	CIDR *string `form:"cidr,omitempty" json:"cidr,omitempty" xml:"cidr,omitempty"`
 	// Site name to reserve it for.
 	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
 // ListSiteIdsResponseBody is the type of the "ipam" service "list_site_ids"
@@ -41,8 +57,16 @@ type ReserveSiteIDResponseBody struct {
 	ID string `form:"id" json:"id" xml:"id"`
 	// Canonical site name actually written.
 	Site string `form:"site" json:"site" xml:"site"`
-	// False when the exact id+site pair was already reserved.
+	// False when the exact id+site pair and metadata were already reserved.
 	Changed bool `form:"changed" json:"changed" xml:"changed"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
 // ReleaseSiteIDResponseBody is the type of the "ipam" service
@@ -65,8 +89,16 @@ type ReserveSubnetPoolResponseBody struct {
 	CIDR string `form:"cidr" json:"cidr" xml:"cidr"`
 	// Canonical site name actually written.
 	Site string `form:"site" json:"site" xml:"site"`
-	// False when the exact CIDR and site were already reserved.
+	// False when the exact CIDR, site, and metadata were already reserved.
 	Changed bool `form:"changed" json:"changed" xml:"changed"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
 // ReleaseSubnetPoolResponseBody is the type of the "ipam" service
@@ -120,6 +152,14 @@ type SiteIDReservationResponse struct {
 	ID string `form:"id" json:"id" xml:"id"`
 	// Site name reserved for this ID.
 	Site string `form:"site" json:"site" xml:"site"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
 // SubnetPoolReservationResponse is used to define fields on response body
@@ -129,6 +169,14 @@ type SubnetPoolReservationResponse struct {
 	CIDR string `form:"cidr" json:"cidr" xml:"cidr"`
 	// Site name reserved for this subnet pool.
 	Site string `form:"site" json:"site" xml:"site"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
 // NewListSiteIdsResponseBody builds the HTTP response body from the result of
@@ -149,9 +197,13 @@ func NewListSiteIdsResponseBody(res []*ipam.SiteIDReservation) ListSiteIdsRespon
 // of the "reserve_site_id" endpoint of the "ipam" service.
 func NewReserveSiteIDResponseBody(res *ipam.ReserveSiteIDResult) *ReserveSiteIDResponseBody {
 	body := &ReserveSiteIDResponseBody{
-		ID:      res.ID,
-		Site:    res.Site,
-		Changed: res.Changed,
+		ID:          res.ID,
+		Site:        res.Site,
+		Changed:     res.Changed,
+		Owner:       res.Owner,
+		Description: res.Description,
+		Ticket:      res.Ticket,
+		ReservedAt:  res.ReservedAt,
 	}
 	return body
 }
@@ -184,9 +236,13 @@ func NewListSubnetPoolsResponseBody(res []*ipam.SubnetPoolReservation) ListSubne
 // result of the "reserve_subnet_pool" endpoint of the "ipam" service.
 func NewReserveSubnetPoolResponseBody(res *ipam.ReserveSubnetPoolResult) *ReserveSubnetPoolResponseBody {
 	body := &ReserveSubnetPoolResponseBody{
-		CIDR:    res.CIDR,
-		Site:    res.Site,
-		Changed: res.Changed,
+		CIDR:        res.CIDR,
+		Site:        res.Site,
+		Changed:     res.Changed,
+		Owner:       res.Owner,
+		Description: res.Description,
+		Ticket:      res.Ticket,
+		ReservedAt:  res.ReservedAt,
 	}
 	return body
 }
@@ -241,8 +297,12 @@ func NewListSiteIdsPayload(tailnet string) *ipam.ListSiteIdsPayload {
 // payload.
 func NewReserveSiteIDPayload(body *ReserveSiteIDRequestBody, tailnet string) *ipam.ReserveSiteIDPayload {
 	v := &ipam.ReserveSiteIDPayload{
-		ID:   *body.ID,
-		Site: *body.Site,
+		ID:          *body.ID,
+		Site:        *body.Site,
+		Owner:       body.Owner,
+		Description: body.Description,
+		Ticket:      body.Ticket,
+		ReservedAt:  body.ReservedAt,
 	}
 	v.Tailnet = tailnet
 
@@ -272,8 +332,12 @@ func NewListSubnetPoolsPayload(tailnet string) *ipam.ListSubnetPoolsPayload {
 // endpoint payload.
 func NewReserveSubnetPoolPayload(body *ReserveSubnetPoolRequestBody, tailnet string) *ipam.ReserveSubnetPoolPayload {
 	v := &ipam.ReserveSubnetPoolPayload{
-		CIDR: *body.CIDR,
-		Site: *body.Site,
+		CIDR:        *body.CIDR,
+		Site:        *body.Site,
+		Owner:       body.Owner,
+		Description: body.Description,
+		Ticket:      body.Ticket,
+		ReservedAt:  body.ReservedAt,
 	}
 	v.Tailnet = tailnet
 
@@ -299,6 +363,9 @@ func ValidateReserveSiteIDRequestBody(body *ReserveSiteIDRequestBody) (err error
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
 	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
 	return
 }
 
@@ -310,6 +377,9 @@ func ValidateReserveSubnetPoolRequestBody(body *ReserveSubnetPoolRequestBody) (e
 	}
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
 	}
 	return
 }

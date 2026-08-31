@@ -182,6 +182,28 @@ func TestSiteIDJSONEnvelopeGolden(t *testing.T) {
 	assertGolden(t, "site_id_reserve.golden.json", []byte(stdout))
 }
 
+// TestSiteIDReserveWithMetadataJSONEnvelopeGolden locks the object-shaped
+// entry's JSON envelope contract, the way TestSiteIDJSONEnvelopeGolden locks
+// the metadata-free shape. --reserved-at is passed explicitly rather than
+// left to auto-stamp: a golden fixture is a byte-for-byte comparison, and an
+// auto-stamped [time.Now] timestamp would make the diff nondeterministic.
+func TestSiteIDReserveWithMetadataJSONEnvelopeGolden(t *testing.T) {
+	t.Parallel()
+
+	stdout, stderr, err := runSiteID(
+		t, t.TempDir(), "reserve", "007", "hq-vpc", "--format", formatJSON,
+		"--owner", "platform-team", "--ticket", "OPS-1234", "--description", "HQ gateway",
+		"--reserved-at", "2026-01-15T09:00:00Z",
+	)
+	if err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	if stderr != "" {
+		t.Errorf("reserve stderr = %q, want empty", stderr)
+	}
+	assertGolden(t, "site_id_reserve_with_metadata.golden.json", []byte(stdout))
+}
+
 func TestSiteIDListAndReleaseJSONEnvelopes(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -377,6 +399,17 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 	}
 	if missing := sanitize.UnhandledFields[subnetPoolOutput]("CIDR", "Site"); len(missing) != 0 {
 		t.Errorf("subnetPoolOutput fields without an explicit sanitization decision: %v", missing)
+	}
+	// reservationMetadataOutput is embedded (anonymously) into outputEnvelope,
+	// siteIDOutput, and subnetPoolOutput above. UnhandledFields skips an
+	// anonymous field whose type name is unexported -- reservationMetadataOutput
+	// starts lowercase -- so its own fields never surface through those three
+	// checks; asserted directly here so a fifth metadata field still can't reach
+	// output without an explicit sanitization decision (see sanitizeMetadata).
+	if missing := sanitize.UnhandledFields[reservationMetadataOutput](
+		"Owner", "Description", "Ticket", "ReservedAt",
+	); len(missing) != 0 {
+		t.Errorf("reservationMetadataOutput fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[deviceRecord](
 		"Name", "Addresses", "AdvertisedRoutes",

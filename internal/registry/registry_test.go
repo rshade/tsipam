@@ -22,7 +22,7 @@ func TestReserveSiteIDCreatesFileWhenMissing(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	_, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil)
+	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", registry.ReservationMetadata{}, nil)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -43,10 +43,16 @@ func TestReserveSiteIDIsIdempotent(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"1",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("first ReserveSiteID: %v", err)
 	}
-	_, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil)
+	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", registry.ReservationMetadata{}, nil)
 	if err != nil {
 		t.Fatalf("second ReserveSiteID: %v", err)
 	}
@@ -59,7 +65,13 @@ func TestReserveSiteIDReturnsCanonicalIDAndSite(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	id, site, _, err := registry.ReserveSiteIDWithLogger(path, "007", "  hq-vpc  ", nil)
+	id, site, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"007",
+		"  hq-vpc  ",
+		registry.ReservationMetadata{},
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -72,10 +84,16 @@ func TestReserveSiteIDRefusesCollision(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"1",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("first ReserveSiteID: %v", err)
 	}
-	_, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "branch-office", nil)
+	_, _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "branch-office", registry.ReservationMetadata{}, nil)
 	var collision *registry.SiteIDCollisionError
 	if !errors.As(err, &collision) {
 		t.Fatalf("ReserveSiteID error = %v, want *SiteIDCollisionError", err)
@@ -89,10 +107,22 @@ func TestReserveSiteIDAddsSecondEntryToExistingRegistry(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"1",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("first ReserveSiteID: %v", err)
 	}
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "2", "branch-office", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"2",
+		"branch-office",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("second ReserveSiteID: %v", err)
 	}
 
@@ -124,7 +154,13 @@ func TestReserveSiteIDRejectsInvalidInput(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if _, _, _, err := registry.ReserveSiteIDWithLogger(path, tc.id, tc.site, nil); err == nil {
+			if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+				path,
+				tc.id,
+				tc.site,
+				registry.ReservationMetadata{},
+				nil,
+			); err == nil {
 				t.Errorf("ReserveSiteID(%q, %q) error = nil, want an error", tc.id, tc.site)
 			}
 		})
@@ -168,7 +204,13 @@ func TestReleaseSiteIDRemovesEntry(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"1",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 	id, changed, err := registry.ReleaseSiteIDWithLogger(path, "1", nil)
@@ -195,7 +237,13 @@ func TestReleaseSiteIDOnAbsentIDIsNoopNotError(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"1",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 	_, changed, err := registry.ReleaseSiteIDWithLogger(path, "2", nil)
@@ -233,7 +281,13 @@ func TestReserveSiteIDPreservesHandWrittenComment(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "2", "branch-office", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"2",
+		"branch-office",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 
@@ -270,7 +324,13 @@ func TestLoadAcceptsUnrelatedTopLevelKeyAndRoundTrips(t *testing.T) {
 		t.Errorf("ListSiteIDs = %+v, want [{1 hq-vpc}]", entries)
 	}
 
-	if _, _, _, reserveErr := registry.ReserveSiteIDWithLogger(path, "2", "branch-office", nil); reserveErr != nil {
+	if _, _, _, _, reserveErr := registry.ReserveSiteIDWithLogger(
+		path,
+		"2",
+		"branch-office",
+		registry.ReservationMetadata{},
+		nil,
+	); reserveErr != nil {
 		t.Fatalf("ReserveSiteID: %v", reserveErr)
 	}
 	if _, _, releaseErr := registry.ReleaseSiteIDWithLogger(path, "1", nil); releaseErr != nil {
@@ -310,7 +370,7 @@ func TestReserveSiteIDCollidesAgainstUnNormalizedFileKey(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "branch-office", nil)
+	_, _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "branch-office", registry.ReservationMetadata{}, nil)
 	var collision *registry.SiteIDCollisionError
 	if !errors.As(err, &collision) {
 		t.Fatalf("ReserveSiteID(%q, ...) error = %v, want *SiteIDCollisionError against the un-normalized file key %q",
@@ -366,7 +426,7 @@ func TestReserveSiteIDConcurrentDistinctIDsLosesNoReservation(t *testing.T) {
 			defer wg.Done()
 			id := strconv.Itoa(i + 1)
 			site := fmt.Sprintf("site-%d", i+1)
-			_, _, _, err := registry.ReserveSiteIDWithLogger(path, id, site, nil)
+			_, _, _, _, err := registry.ReserveSiteIDWithLogger(path, id, site, registry.ReservationMetadata{}, nil)
 			errs[i] = err
 		}(i)
 	}
@@ -482,7 +542,7 @@ func TestReserveSiteIDIntoExistingEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil)
+	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", registry.ReservationMetadata{}, nil)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -512,7 +572,13 @@ func TestReserveSiteIDPreservesCommentInEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil); err != nil {
+	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"1",
+		"hq-vpc",
+		registry.ReservationMetadata{},
+		nil,
+	); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 
@@ -538,7 +604,7 @@ func TestReserveSiteIDIntoNullBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", nil)
+	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", registry.ReservationMetadata{}, nil)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -618,7 +684,13 @@ func TestLoadScopesSiteIDErrorsAndAllowsSubnetPoolOperations(t *testing.T) {
 		t.Errorf("ListSiteIDs = %+v, want one entry for site ID 1", entries)
 	}
 
-	id, site, changed, err := registry.ReserveSiteIDWithLogger(path, "2", "branch-office", nil)
+	id, site, _, changed, err := registry.ReserveSiteIDWithLogger(
+		path,
+		"2",
+		"branch-office",
+		registry.ReservationMetadata{},
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("ReserveSiteID should succeed despite subnetPools error: %v", err)
 	}
@@ -655,7 +727,13 @@ func TestLoadScopesSubnetPoolErrorsAndAllowsSiteIDOperations(t *testing.T) {
 		t.Errorf("ListSubnetPools = %+v, want one entry for 10.0.0.0/16", entries)
 	}
 
-	cidr, site, changed, err := registry.ReserveSubnetPoolWithLogger(path, "192.168.0.0/16", "branch-office", nil)
+	cidr, site, _, changed, err := registry.ReserveSubnetPoolWithLogger(
+		path,
+		"192.168.0.0/16",
+		"branch-office",
+		registry.ReservationMetadata{},
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool should succeed despite siteIDs error: %v", err)
 	}

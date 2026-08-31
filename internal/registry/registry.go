@@ -65,8 +65,8 @@ const (
 // problem confined to the other (e.g., a malformed subnetPools does not
 // prevent site-ID commands from working).
 type Registry struct {
-	SiteIDs            map[string]string
-	SubnetPools        map[string]string
+	SiteIDs            map[string]Entry
+	SubnetPools        map[string]Entry
 	rawKeys            map[string]string
 	subnetPoolRawKeys  map[string]string
 	siteIDsPresent     bool
@@ -77,6 +77,8 @@ type Registry struct {
 
 // SiteIDEntry is one resolved site-ID reservation, returned by ListSiteIDs.
 type SiteIDEntry struct {
+	ReservationMetadata
+
 	ID   string
 	Site string
 }
@@ -118,8 +120,8 @@ func NormalizeSiteName(name string) (string, error) {
 	if name == "" {
 		return "", errors.New("site name must not be empty")
 	}
-	if i := strings.IndexFunc(name, func(r rune) bool { return r < 0x20 || r == 0x7f }); i >= 0 {
-		return "", fmt.Errorf("site name %q must not contain control characters", name)
+	if err := rejectControlChars("site name", name); err != nil {
+		return "", err
 	}
 	return name, nil
 }
@@ -201,7 +203,7 @@ func Load(path string) (*Registry, error) {
 // SiteIDs unset -- canonicalize has no partial-data case to hand back (see
 // its own doc comment), so there is nothing to populate.
 func (reg *Registry) loadSiteIDs(object *hujson.Object) {
-	entries, present, err := decodeStringMapMember(object, siteIDsKey)
+	entries, present, err := decodeMapMember[Entry](object, siteIDsKey)
 	if err != nil {
 		reg.siteIDsErr = fmt.Errorf("decoding registry: %w", err)
 		return
@@ -223,7 +225,7 @@ func (reg *Registry) loadSiteIDs(object *hujson.Object) {
 // error (e.g., overlapping pools), the partial pools map is still populated
 // so that operations like release can repair the broken state.
 func (reg *Registry) loadSubnetPools(object *hujson.Object) {
-	entries, present, err := decodeStringMapMember(object, subnetPoolsKey)
+	entries, present, err := decodeMapMember[Entry](object, subnetPoolsKey)
 	if err != nil {
 		reg.subnetPoolsErr = fmt.Errorf("decoding registry: %w", err)
 		return
@@ -244,7 +246,7 @@ func (reg *Registry) loadSubnetPools(object *hujson.Object) {
 // per-service /32 allocations named as future work above) is added and only
 // one switch is updated for it.
 type mapAccessor struct {
-	entries map[string]string
+	entries map[string]Entry
 	rawKeys map[string]string
 	err     error
 }
@@ -271,10 +273,12 @@ func (reg *Registry) mapError(topLevel string) error {
 	return acc.err
 }
 
-// decodeStringMapMember resolves key as a top-level object member, rejects
-// duplicate entry keys, and decodes its string map. present reports whether
-// the member is an object rather than absent or null.
-func decodeStringMapMember(object *hujson.Object, key string) (map[string]string, bool, error) {
+// decodeMapMember resolves key as a top-level object member, rejects
+// duplicate entry keys, and decodes its map of value type V (string for a
+// pre-metadata document; Entry once the schema also allows an object form).
+// present reports whether the member is an object rather than absent or
+// null.
+func decodeMapMember[V any](object *hujson.Object, key string) (map[string]V, bool, error) {
 	idx, err := registryMemberIndex(object, key)
 	if err != nil {
 		return nil, false, err
@@ -290,7 +294,7 @@ func decodeStringMapMember(object *hujson.Object, key string) (map[string]string
 			return nil, false, dupErr
 		}
 	}
-	var entries map[string]string
+	var entries map[string]V
 	if unmarshalErr := json.Unmarshal(member.Pack(), &entries); unmarshalErr != nil {
 		return nil, false, fmt.Errorf("%q: %w", key, unmarshalErr)
 	}
@@ -363,7 +367,7 @@ func duplicateEntryKey(object *hujson.Object, key string) error {
 // canonicalize builds the canonical view of a raw siteIDs map: SiteIDs keyed
 // by NormalizeSiteID's canonical spelling, and rawKeys recording each entry's
 // original on-file key.
-func canonicalize(raw map[string]string) (*Registry, error) {
+func canonicalize(raw map[string]Entry) (*Registry, error) {
 	if len(raw) == 0 {
 		return &Registry{}, nil
 	}
@@ -374,7 +378,7 @@ func canonicalize(raw map[string]string) (*Registry, error) {
 	}
 	sort.Strings(rawIDs)
 
-	siteIDs := make(map[string]string, len(raw))
+	siteIDs := make(map[string]Entry, len(raw))
 	rawKeys := make(map[string]string, len(raw))
 	for _, rawID := range rawIDs {
 		canonicalID, err := NormalizeSiteID(rawID)
@@ -384,11 +388,11 @@ func canonicalize(raw map[string]string) (*Registry, error) {
 		if firstRaw, ok := rawKeys[canonicalID]; ok {
 			return nil, fmt.Errorf("site ID %s is defined twice, as %q and %q", canonicalID, firstRaw, rawID)
 		}
-		site := raw[rawID]
-		if site == "" {
+		entry := raw[rawID]
+		if entry.Site == "" {
 			return nil, fmt.Errorf("site ID %s (key %q) has an empty or null site name", canonicalID, rawID)
 		}
-		siteIDs[canonicalID] = site
+		siteIDs[canonicalID] = entry
 		rawKeys[canonicalID] = rawID
 	}
 	return &Registry{SiteIDs: siteIDs, rawKeys: rawKeys}, nil
@@ -559,43 +563,66 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 
 // ReserveSiteIDWithLogger reserves id for site in the registry at path, creating the
 // file (as "{}\n") if it does not exist yet. Reserving the same id+site pair
-// again is a no-op — changed reports false, err is nil — so repeating the
-// command is idempotent. Reserving an id already held by a different site
-// fails with *SiteIDCollisionError rather than overwriting it. The whole
-// read-decide-write span runs under an exclusive file lock (see
-// withRegistryLock), so two concurrent reservations against a fresh registry
-// cannot both win a whole-object create and silently drop one another.
+// again with no metadata is a no-op — changed reports false, err is nil — so
+// repeating the bare command is idempotent. Reserving an id already held by a
+// different site fails with *SiteIDCollisionError rather than overwriting it,
+// regardless of metadata. The whole read-decide-write span runs under an
+// exclusive file lock (see withRegistryLock), so two concurrent reservations
+// against a fresh registry cannot both win a whole-object create and silently
+// drop one another.
+//
+// metadata is optional: a zero ReservationMetadata reproduces the original
+// bare-string behavior exactly, including the file bytes written, so an
+// existing plain-string registry re-saves unchanged. A non-zero metadata is
+// merged onto whatever the id already carries — a field left blank in
+// metadata keeps its stored value rather than being cleared — which lets a
+// second reserve call amend just the field that changed (e.g. correct a
+// ticket reference) without erasing the rest. ReservedAt is auto-stamped to
+// now (UTC) the first time Owner, Description, or Ticket is set on this
+// reservation and no ReservedAt (explicit or already stored) exists yet; it
+// is left untouched otherwise, including on a bare repeat reserve of an
+// entry that already carries metadata.
 //
 // On success it returns the canonical id and site name actually written
 // (e.g. "007" normalizes to "7"), not the raw arguments, so a caller does not
-// need to re-derive what NormalizeSiteID/NormalizeSiteName already computed.
+// need to re-derive what NormalizeSiteID/NormalizeSiteName already computed,
+// plus the metadata actually stored after the merge and any auto-stamp.
 // logger receives identity-free I/O diagnostics; nil is quiet.
 func ReserveSiteIDWithLogger(
 	path, id, site string,
+	metadata ReservationMetadata,
 	logger diagnostics.Logger,
-) (string, string, bool, error) {
+) (string, string, ReservationMetadata, bool, error) {
 	id, err := NormalizeSiteID(id)
 	if err != nil {
-		return "", "", false, err
+		return "", "", ReservationMetadata{}, false, err
 	}
 	site, err = NormalizeSiteName(site)
 	if err != nil {
-		return "", "", false, err
+		return "", "", ReservationMetadata{}, false, err
+	}
+	metadata, err = normalizeMetadata(metadata)
+	if err != nil {
+		return "", "", ReservationMetadata{}, false, err
 	}
 
 	changed := false
+	var resultMetadata ReservationMetadata
 	lockErr := withRegistryLock(path, logger, func() error {
 		reg, loadErr := loadOrCreate(path, siteIDsKey, logger)
 		if loadErr != nil {
 			return loadErr
 		}
 
-		if existing, ok := reg.SiteIDs[id]; ok {
-			if existing == site {
-				diagnostics.Debug(logger, "site-ID reservation already present")
-				return nil
-			}
-			return &SiteIDCollisionError{ID: id, Existing: existing, Wanted: site}
+		existingEntry, exists := reg.SiteIDs[id]
+		if exists && existingEntry.Site != site {
+			return &SiteIDCollisionError{ID: id, Existing: existingEntry.Site, Wanted: site}
+		}
+		newEntry, unchanged := resolveReservationEntry(existingEntry, exists, site, metadata, time.Now)
+		if unchanged {
+			resultMetadata = existingEntry.ReservationMetadata
+			diagnostics.Debug(logger, "site-ID reservation already present")
+			return nil
 		}
 
 		var op hujsonedit.PatchOperation
@@ -612,21 +639,22 @@ func ReserveSiteIDWithLogger(
 			// that node -- e.g. a hand-written comment inside "siteIDs": {}
 			// -- by replacing the node instead of adding a key into it. See
 			// siteIDsPresent's doc comment.
-			op = hujsonedit.PatchAdd(map[string]string{id: site}, siteIDsKey)
+			op = hujsonedit.PatchAdd(map[string]Entry{id: newEntry}, siteIDsKey)
 		} else {
-			op = hujsonedit.PatchAdd(site, siteIDsKey, id)
+			op = hujsonedit.PatchAdd(newEntry, siteIDsKey, id)
 		}
 		if patchErr := hujsonedit.WritePatch(path, nil, op); patchErr != nil {
 			return fmt.Errorf("reserving site ID %s: %w", id, patchErr)
 		}
 		changed = true
+		resultMetadata = newEntry.ReservationMetadata
 		diagnostics.Debug(logger, "site-ID reservation written")
 		return nil
 	})
 	if lockErr != nil {
-		return "", "", false, lockErr
+		return "", "", ReservationMetadata{}, false, lockErr
 	}
-	return id, site, changed, nil
+	return id, site, resultMetadata, changed, nil
 }
 
 // ReleaseSiteIDWithLogger removes id from the registry at path. Releasing an id that is
@@ -696,7 +724,7 @@ func releaseRegistryEntry(
 	return changed, err
 }
 
-func registryMap(reg *Registry, topLevel string) (map[string]string, map[string]string, error) {
+func registryMap(reg *Registry, topLevel string) (map[string]Entry, map[string]string, error) {
 	acc, err := reg.mapAccessorFor(topLevel)
 	if err != nil {
 		return nil, nil, err
@@ -721,8 +749,8 @@ func ListSiteIDsWithLogger(path string, logger diagnostics.Logger) ([]SiteIDEntr
 	diagnostics.Debug(logger, "registry loaded",
 		"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools))
 	entries := make([]SiteIDEntry, 0, len(reg.SiteIDs))
-	for id, site := range reg.SiteIDs {
-		entries = append(entries, SiteIDEntry{ID: id, Site: site})
+	for id, entry := range reg.SiteIDs {
+		entries = append(entries, SiteIDEntry{ID: id, Site: entry.Site, ReservationMetadata: entry.ReservationMetadata})
 	}
 	sort.SliceStable(entries, func(i, j int) bool {
 		left, leftErr := strconv.Atoi(entries[i].ID)

@@ -7,11 +7,31 @@ import (
 	. "goa.design/goa/v3/dsl" //nolint:staticcheck,revive // goa's DSL is designed for dot-import
 )
 
+// reservationMetadataAttributes declares the optional ownership/tracking
+// attributes shared by every reservation payload and result: owner,
+// description, ticket, and reserved_at. Reusing this one function is what
+// keeps the four fields from drifting between SiteIDReservation,
+// SubnetPoolReservation, and each reserve method's payload/result -- goa's
+// DSL has no attribute-set inheritance, so a shared helper is the only way to
+// declare the same optional fields in more than one place without hand-typing
+// them apart.
+//
+//nolint:gochecknoglobals // goa's DSL requires a package-level var per declared type/service/API; this is design source, not application state.
+var reservationMetadataAttributes = func() {
+	Attribute("owner", String, "Operator or team that owns this reservation.")
+	Attribute("description", String, "Free-text description of why this address space is reserved.")
+	Attribute("ticket", String, "Tracking ticket or issue reference for this reservation.")
+	Attribute("reserved_at", String, "RFC 3339 timestamp this reservation's metadata was recorded.", func() {
+		Format(FormatDateTime)
+	})
+}
+
 //nolint:gochecknoglobals // goa's DSL requires a package-level var per declared type/service/API; this is design source, not application state.
 var SiteIDReservation = Type("SiteIDReservation", func() {
 	Description("A reserved 4via6 site ID.")
 	Attribute("id", String, "Canonical site ID: a decimal integer, 0-65535.")
 	Attribute("site", String, "Site name reserved for this ID.")
+	reservationMetadataAttributes()
 	Required("id", "site")
 })
 
@@ -22,6 +42,7 @@ var SubnetPoolReservation = Type("SubnetPoolReservation", func() {
 		Meta("struct:field:name", "CIDR")
 	})
 	Attribute("site", String, "Site name reserved for this subnet pool.")
+	reservationMetadataAttributes()
 	Required("cidr", "site")
 })
 
@@ -54,12 +75,14 @@ var _ = Service("ipam", func() {
 			Attribute("tailnet", String, "Routing/storage key for the registry.")
 			Attribute("id", String, "4via6 site ID to reserve.")
 			Attribute("site", String, "Site name to reserve it for.")
+			reservationMetadataAttributes()
 			Required("tailnet", "id", "site")
 		})
 		Result(func() {
 			Attribute("id", String, "Canonical site ID actually written.")
 			Attribute("site", String, "Canonical site name actually written.")
-			Attribute("changed", Boolean, "False when the exact id+site pair was already reserved.")
+			Attribute("changed", Boolean, "False when the exact id+site pair and metadata were already reserved.")
+			reservationMetadataAttributes()
 			Required("id", "site", "changed")
 		})
 		Error("collision", func() {
@@ -110,6 +133,7 @@ var _ = Service("ipam", func() {
 				Meta("struct:field:name", "CIDR")
 			})
 			Attribute("site", String, "Site name to reserve it for.")
+			reservationMetadataAttributes()
 			Required("tailnet", "cidr", "site")
 		})
 		Result(func() {
@@ -117,7 +141,8 @@ var _ = Service("ipam", func() {
 				Meta("struct:field:name", "CIDR")
 			})
 			Attribute("site", String, "Canonical site name actually written.")
-			Attribute("changed", Boolean, "False when the exact CIDR and site were already reserved.")
+			Attribute("changed", Boolean, "False when the exact CIDR, site, and metadata were already reserved.")
+			reservationMetadataAttributes()
 			Required("cidr", "site", "changed")
 		})
 		Error("collision", func() {

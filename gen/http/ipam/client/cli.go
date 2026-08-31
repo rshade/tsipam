@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	goa "goa.design/goa/v3/pkg"
 )
 
 // BuildListSiteIdsPayload builds the payload for the ipam list_site_ids
@@ -35,7 +36,13 @@ func BuildReserveSiteIDPayload(ipamReserveSiteIDBody string, ipamReserveSiteIDTa
 	{
 		err = json.Unmarshal([]byte(ipamReserveSiteIDBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"id\": \"Qui repudiandae in hic et porro quas.\",\n      \"site\": \"Aliquid facere.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Ratione est omnis at voluptatem explicabo qui.\",\n      \"id\": \"Qui repudiandae in hic et porro quas.\",\n      \"owner\": \"Eum fugit inventore sit.\",\n      \"reserved_at\": \"1984-12-10T06:42:10Z\",\n      \"site\": \"Aliquid facere.\",\n      \"ticket\": \"Culpa magni cum omnis.\"\n   }'")
+		}
+		if body.ReservedAt != nil {
+			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	var tailnet string
@@ -43,8 +50,12 @@ func BuildReserveSiteIDPayload(ipamReserveSiteIDBody string, ipamReserveSiteIDTa
 		tailnet = ipamReserveSiteIDTailnet
 	}
 	v := &ipam.ReserveSiteIDPayload{
-		ID:   body.ID,
-		Site: body.Site,
+		ID:          body.ID,
+		Site:        body.Site,
+		Owner:       body.Owner,
+		Description: body.Description,
+		Ticket:      body.Ticket,
+		ReservedAt:  body.ReservedAt,
 	}
 	v.Tailnet = tailnet
 
@@ -90,7 +101,13 @@ func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody string, ipamReserve
 	{
 		err = json.Unmarshal([]byte(ipamReserveSubnetPoolBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"cidr\": \"Iste voluptatem modi aut id illum rerum.\",\n      \"site\": \"Occaecati assumenda quia.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"cidr\": \"Iste voluptatem modi aut id illum rerum.\",\n      \"description\": \"Eos et nesciunt aperiam molestiae iusto quia.\",\n      \"owner\": \"Consequuntur facilis.\",\n      \"reserved_at\": \"1999-05-20T14:51:36Z\",\n      \"site\": \"Occaecati assumenda quia.\",\n      \"ticket\": \"Qui labore facilis deleniti.\"\n   }'")
+		}
+		if body.ReservedAt != nil {
+			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	var tailnet string
@@ -98,8 +115,12 @@ func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody string, ipamReserve
 		tailnet = ipamReserveSubnetPoolTailnet
 	}
 	v := &ipam.ReserveSubnetPoolPayload{
-		CIDR: body.CIDR,
-		Site: body.Site,
+		CIDR:        body.CIDR,
+		Site:        body.Site,
+		Owner:       body.Owner,
+		Description: body.Description,
+		Ticket:      body.Ticket,
+		ReservedAt:  body.ReservedAt,
 	}
 	v.Tailnet = tailnet
 

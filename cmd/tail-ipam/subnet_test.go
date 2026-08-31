@@ -31,6 +31,34 @@ func runSubnet(t *testing.T, registryDir string, args ...string) (string, string
 	return outBuf.String(), errBuf.String(), err
 }
 
+func TestSubnetReserveWithMetadataFlagsThenList(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	if _, errOut, err := runSubnet(
+		t, dir, "reserve", "10.0.0.0/24", "hq-vpc",
+		"--owner", "carol", "--ticket", "OPS-3",
+	); err != nil || errOut != "" {
+		t.Fatalf("reserve: err=%v stderr=%q", err, errOut)
+	}
+
+	out, _, err := runSubnet(t, dir, "list", "--format", formatJSON)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var listed outputEnvelope
+	if err = json.Unmarshal([]byte(out), &listed); err != nil {
+		t.Fatalf("decode list JSON: %v", err)
+	}
+	if listed.SubnetPools == nil || len(*listed.SubnetPools) != 1 {
+		t.Fatalf("list JSON = %+v, want one entry", listed)
+	}
+	got := (*listed.SubnetPools)[0]
+	if got.Owner != "carol" || got.Ticket != "OPS-3" || got.ReservedAt == "" {
+		t.Errorf("list JSON entry = %+v, want Owner=carol Ticket=OPS-3 and a non-empty ReservedAt", got)
+	}
+}
+
 func TestSubnetReserveListReleaseHappyPath(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
