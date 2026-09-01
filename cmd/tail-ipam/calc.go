@@ -24,6 +24,64 @@ func newCalcCommand(state *commandState) *cobra.Command {
 		Short: "Subnet and IP arithmetic (stateless).",
 	}
 	cmd.AddCommand(newCalcSplitCommand(state))
+	cmd.AddCommand(newCalcInfoCommand(state))
+	return cmd
+}
+
+func newCalcInfoCommand(state *commandState) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "info <cidr>",
+		Short:         "Report network, broadcast, usable range, and host count for an IPv4 CIDR.",
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cidrArg := args[0]
+
+			outputSanitizer, err := state.outputSanitizer("")
+			if err != nil {
+				return err
+			}
+
+			prefix, err := netip.ParsePrefix(cidrArg)
+			if err != nil {
+				return fmt.Errorf("invalid CIDR %q: %w", cidrArg, err)
+			}
+
+			if normalized, ok := ipcalc.Unmap4In6(prefix); ok {
+				prefix = normalized
+			}
+
+			masked := prefix.Masked()
+
+			info, err := ipcalc.Info(prefix)
+			if errors.Is(err, ipcalc.ErrIPv6NotSupported) {
+				return fmt.Errorf(
+					"calc info does not support IPv6 yet (tracked in rshade/tailscale-utils#251): %s: %w",
+					cidrArg, err)
+			}
+			if err != nil {
+				return err
+			}
+
+			blockInfo := &blockInfoOutput{
+				Prefix:      masked.String(),
+				Network:     info.Network.String(),
+				FirstUsable: info.FirstUsable.String(),
+				LastUsable:  info.LastUsable.String(),
+				UsableHosts: info.UsableHosts.String(),
+			}
+			if info.Broadcast.IsValid() {
+				blockInfo.Broadcast = info.Broadcast.String()
+			}
+
+			message := fmt.Sprintf("block facts for %s", masked)
+			output := newOutput(commandCalcInfo, statusOK, message, "")
+			output.BlockInfo = blockInfo
+
+			return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
+		},
+	}
 	return cmd
 }
 

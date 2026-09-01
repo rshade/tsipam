@@ -24,6 +24,7 @@ const (
 	commandSubnetReserve = commandSubnet + " reserve"
 	commandSubnetRelease = commandSubnet + " release"
 	commandCalcSplit     = commandCalc + " split"
+	commandCalcInfo      = commandCalc + " info"
 	statusOK             = "ok"
 	statusNoChanges      = "no_changes"
 )
@@ -86,6 +87,22 @@ func (o reservationMetadataOutput) formatMetadata() string {
 	return strings.Join(parts, " ")
 }
 
+// blockInfoOutput mirrors ipcalc.BlockInfo in the machine contract.
+// Prefix is the masked CIDR (identity), followed by network, broadcast,
+// first_usable, last_usable, and usable_hosts facts. Broadcast is omitted,
+// not empty, for a /31 or /32 (RFC 3021 point-to-point and host routes have
+// no broadcast address). UsableHosts is a decimal string rather than a JSON
+// number: an IPv6 extension can exceed integer-safe JSON range, and switching
+// the field's type later would break the versioned envelope.
+type blockInfoOutput struct {
+	Prefix      string `json:"prefix"`
+	Network     string `json:"network"`
+	Broadcast   string `json:"broadcast,omitempty"`
+	FirstUsable string `json:"first_usable"`
+	LastUsable  string `json:"last_usable"`
+	UsableHosts string `json:"usable_hosts"`
+}
+
 type deviceRecord struct {
 	Name             string   `json:"name"`
 	Addresses        []string `json:"addresses"`
@@ -114,6 +131,7 @@ type outputEnvelope struct {
 	SubnetPools   *[]subnetPoolOutput `json:"subnet_pools,omitempty"`
 	Devices       *[]deviceRecord     `json:"devices,omitempty"`
 	Subnets       *[]string           `json:"subnets,omitempty"`
+	BlockInfo     *blockInfoOutput    `json:"block_info,omitempty"`
 
 	// messageBuilder, when set, renders Message from this envelope's own
 	// exported fields at emit time instead of Message being pre-formatted
@@ -156,6 +174,9 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 	if result.Subnets != nil {
 		return renderSubnets(writer, *result.Subnets)
 	}
+	if result.BlockInfo != nil {
+		return renderBlockInfo(writer, *result.BlockInfo)
+	}
 	_, err := fmt.Fprintln(writer, result.Message)
 	return err
 }
@@ -197,6 +218,32 @@ func renderDevices(writer io.Writer, devices []deviceRecord) error {
 	for _, device := range devices {
 		if _, err := fmt.Fprintf(writer, "%s\t%v\troutes=%v\n",
 			device.Name, device.Addresses, device.AdvertisedRoutes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// renderBlockInfo writes one tab-separated fact<TAB>value line per block
+// fact, keys matching the JSON field names so the human and machine
+// vocabularies stay one set. The prefix (masked CIDR) is emitted first,
+// then network, broadcast, first_usable, last_usable, and usable_hosts.
+// The broadcast line is omitted when the block has none, mirroring the
+// JSON encoding.
+func renderBlockInfo(writer io.Writer, info blockInfoOutput) error {
+	facts := []struct{ key, value string }{
+		{"prefix", info.Prefix},
+		{"network", info.Network},
+		{"broadcast", info.Broadcast},
+		{"first_usable", info.FirstUsable},
+		{"last_usable", info.LastUsable},
+		{"usable_hosts", info.UsableHosts},
+	}
+	for _, fact := range facts {
+		if fact.value == "" {
+			continue
+		}
+		if _, err := fmt.Fprintf(writer, "%s\t%s\n", fact.key, fact.value); err != nil {
 			return err
 		}
 	}
@@ -264,10 +311,11 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		}
 		result.Devices = &devices
 	}
-	// Subnets is computed from a CLI-supplied CIDR, not fetched from the
-	// tailnet, so unlike every other field above there is no identity to
-	// sweep here — copy it through unredacted.
+	// Subnets and BlockInfo are computed from a CLI-supplied CIDR, not
+	// fetched from the tailnet, so unlike every other field above there is
+	// no identity to sweep here — copy them through unredacted.
 	result.Subnets = input.Subnets
+	result.BlockInfo = input.BlockInfo
 	return result
 }
 

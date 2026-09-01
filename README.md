@@ -202,6 +202,56 @@ and are treated as native IPv6 (so `--prefix` specifies IPv6 bits, 0–128). For
 example, `tail-ipam calc split '::ffff:10.0.0.0/104' --prefix 20` normalizes to
 `10.0.0.0/8` and splits it into `/20` IPv4 subnets.
 
+#### `calc info`
+
+Stateless IPv4 block facts: the network address, broadcast address, usable
+host range, and usable-host count for a CIDR — classic ipcalc output. Like
+`calc split`, it needs no registry, network I/O, or Tailscale API
+credentials. Host bits in the argument are masked off first, so an address
+inside a block reports the facts for its containing block. Human output is
+one tab-separated `fact` and `value` pair per line:
+
+```bash
+tail-ipam calc info 192.168.1.0/24
+# prefix        192.168.1.0/24
+# network       192.168.1.0
+# broadcast     192.168.1.255
+# first_usable  192.168.1.1
+# last_usable   192.168.1.254
+# usable_hosts  254
+```
+
+`/31` and `/32` blocks report correctly instead of erroring or showing an
+inverted range: a `/31` is an RFC 3021 point-to-point link — no broadcast
+address, both addresses usable — and a `/32` is a host route whose single
+address is the whole range. The broadcast fact is omitted entirely for
+those sizes, in both formats, rather than rendered empty:
+
+```bash
+tail-ipam calc info 10.0.0.0/31
+# prefix        10.0.0.0/31
+# network       10.0.0.0
+# first_usable  10.0.0.0
+# last_usable   10.0.0.1
+# usable_hosts  2
+```
+
+`-format json` carries the facts as a `block_info` object in the versioned
+envelope. `usable_hosts` is a decimal **string**, not a JSON number, so the
+planned IPv6 extension can exceed integer-safe JSON range without changing
+the field's type; use `jq -r '.block_info.usable_hosts | tonumber'` where a
+number is required.
+
+Native IPv6 input is rejected as a usage error (exit code 2) until the IPv6
+follow-up lands (tracked in
+[issue #251](https://github.com/rshade/tailscale-utils/issues/251)).
+IPv4-mapped (4-in-6) prefixes of `/96` or longer are normalized to plain
+IPv4 first, exactly as `calc split` does, so
+`tail-ipam calc info '::ffff:10.0.0.0/120'` reports the facts for
+`10.0.0.0/24`. Shorter 4-in-6-like prefixes cannot be exclusively IPv4-mapped
+and are treated as native IPv6, so they are rejected as a usage error (exit
+code 2) with a reference to the IPv6 follow-up work.
+
 ### Registry format
 
 The registry is a comment-preserving HuJSON file named
@@ -308,15 +358,15 @@ subnet CIDRs after the real operation has completed. `description`, `ticket`,
 and `reserved_at` are left unredacted: they are free-form operator text and a
 timestamp, not tailnet-derived identities the sanitizer's exact-token
 replacement can meaningfully sweep. A non-`off` environment value overrides
-`--sanitize` and is announced on stderr. `calc split` output is not sanitized
-because it contains no tailnet-derived data. Placeholders for other commands
-are scoped to the artifact's routing/storage key (the `--tailnet` alias for
-registry commands, or the live tailnet from `TAILSCALE_TAILNET` for `devices`
-commands), so passing an explicit `--tailnet` alias to a registry command
-intentionally creates a separate pseudonym domain from `devices list` output
-for the same real tailnet. Set `TAILSCALE_SANITIZE_KEY` to exactly 64
-hexadecimal characters for stable tailnet-scoped placeholders; without it
-placeholders are artifact-scoped.
+`--sanitize` and is announced on stderr. `calc` output (stateless arithmetic
+over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived
+data. Placeholders for other commands are scoped to the artifact's routing/storage
+key (the `--tailnet` alias for registry commands, or the live tailnet from
+`TAILSCALE_TAILNET` for `devices` commands), so passing an explicit `--tailnet`
+alias to a registry command intentionally creates a separate pseudonym domain
+from `devices list` output for the same real tailnet. Set `TAILSCALE_SANITIZE_KEY`
+to exactly 64 hexadecimal characters for stable tailnet-scoped placeholders;
+without it placeholders are artifact-scoped.
 
 ### Not yet implemented
 

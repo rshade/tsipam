@@ -137,7 +137,7 @@ func assertSchemaCatalog(t *testing.T, document struct {
 		commandDevices, commandDevicesList, commandSiteID,
 		commandSiteIDList, commandSiteIDRelease, commandSiteIDReserve,
 		commandSubnet, commandSubnetList, commandSubnetRelease, commandSubnetReserve,
-		commandCalc, commandCalcSplit,
+		commandCalc, commandCalcSplit, commandCalcInfo,
 	}
 	for _, want := range wantCommands {
 		if !slices.ContainsFunc(document.Commands, func(command schemaCommand) bool { return command.Name == want }) {
@@ -391,6 +391,7 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 	if missing := sanitize.UnhandledFields[outputEnvelope](
 		"SchemaVersion", "Tool", "Sanitization", "Command", "Status", "Message", "Tailnet",
 		"Changed", "ID", "CIDR", "Site", "SiteIDs", "SubnetPools", "Devices", "Subnets",
+		"BlockInfo",
 	); len(missing) != 0 {
 		t.Errorf("outputEnvelope fields without an explicit sanitization decision: %v", missing)
 	}
@@ -399,6 +400,11 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 	}
 	if missing := sanitize.UnhandledFields[subnetPoolOutput]("CIDR", "Site"); len(missing) != 0 {
 		t.Errorf("subnetPoolOutput fields without an explicit sanitization decision: %v", missing)
+	}
+	if missing := sanitize.UnhandledFields[blockInfoOutput](
+		"Prefix", "Network", "Broadcast", "FirstUsable", "LastUsable", "UsableHosts",
+	); len(missing) != 0 {
+		t.Errorf("blockInfoOutput fields without an explicit sanitization decision: %v", missing)
 	}
 	// reservationMetadataOutput is embedded (anonymously) into outputEnvelope,
 	// siteIDOutput, and subnetPoolOutput above. UnhandledFields skips an

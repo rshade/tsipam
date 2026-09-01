@@ -87,7 +87,7 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 			"a non-off environment value overrides --sanitize. Device names, addresses, and routes; " +
 			"tailnet routing keys; site names; and reserved subnet CIDRs are replaced. strict is accepted for cross-tool " +
 			"flag compatibility and is currently equivalent to identity for tail-ipam. " +
-			"calc split output (subnets and parent CIDR) is not sanitized because it contains no tailnet-derived data. " +
+			"calc output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data. " +
 			"Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; " +
 			"without it placeholders are artifact-scoped.",
 		Flags:    flagSchemaFor(root.Flags()),
