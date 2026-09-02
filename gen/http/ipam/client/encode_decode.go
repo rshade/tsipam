@@ -135,6 +135,7 @@ func EncodeReserveSiteIDRequest(encoder func(*http.Request) goahttp.Encoder) fun
 // ipam reserve_site_id endpoint. restoreBody controls whether the response
 // body should be restored after having been read.
 // DecodeReserveSiteIDResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
 //   - "collision" (type *goa.ServiceError): http.StatusConflict
 //   - error: internal error
 func DecodeReserveSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
@@ -167,6 +168,20 @@ func DecodeReserveSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, r
 			}
 			res := NewReserveSiteIDResultOK(&body)
 			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ReserveSiteIDInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_site_id", err)
+			}
+			err = ValidateReserveSiteIDInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_site_id", err)
+			}
+			return nil, NewReserveSiteIDInvalidInput(&body)
 		case http.StatusConflict:
 			var (
 				body ReserveSiteIDCollisionResponseBody
@@ -218,6 +233,9 @@ func (c *Client) BuildReleaseSiteIDRequest(ctx context.Context, v any) (*http.Re
 // DecodeReleaseSiteIDResponse returns a decoder for responses returned by the
 // ipam release_site_id endpoint. restoreBody controls whether the response
 // body should be restored after having been read.
+// DecodeReleaseSiteIDResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - error: internal error
 func DecodeReleaseSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
 		if restoreBody {
@@ -248,6 +266,20 @@ func DecodeReleaseSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, r
 			}
 			res := NewReleaseSiteIDResultOK(&body)
 			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ReleaseSiteIDInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_site_id", err)
+			}
+			err = ValidateReleaseSiteIDInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "release_site_id", err)
+			}
+			return nil, NewReleaseSiteIDInvalidInput(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("ipam", "release_site_id", resp.StatusCode, string(body))
@@ -371,6 +403,7 @@ func EncodeReserveSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder)
 // the ipam reserve_subnet_pool endpoint. restoreBody controls whether the
 // response body should be restored after having been read.
 // DecodeReserveSubnetPoolResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
 //   - "collision" (type *goa.ServiceError): http.StatusConflict
 //   - error: internal error
 func DecodeReserveSubnetPoolResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
@@ -403,6 +436,20 @@ func DecodeReserveSubnetPoolResponse(decoder func(*http.Response) goahttp.Decode
 			}
 			res := NewReserveSubnetPoolResultOK(&body)
 			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ReserveSubnetPoolInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_subnet_pool", err)
+			}
+			err = ValidateReserveSubnetPoolInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_subnet_pool", err)
+			}
+			return nil, NewReserveSubnetPoolInvalidInput(&body)
 		case http.StatusConflict:
 			var (
 				body ReserveSubnetPoolCollisionResponseBody
@@ -467,6 +514,9 @@ func EncodeReleaseSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder)
 // DecodeReleaseSubnetPoolResponse returns a decoder for responses returned by
 // the ipam release_subnet_pool endpoint. restoreBody controls whether the
 // response body should be restored after having been read.
+// DecodeReleaseSubnetPoolResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - error: internal error
 func DecodeReleaseSubnetPoolResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
 	return func(resp *http.Response) (any, error) {
 		if restoreBody {
@@ -497,9 +547,307 @@ func DecodeReleaseSubnetPoolResponse(decoder func(*http.Response) goahttp.Decode
 			}
 			res := NewReleaseSubnetPoolResultOK(&body)
 			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ReleaseSubnetPoolInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_subnet_pool", err)
+			}
+			err = ValidateReleaseSubnetPoolInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "release_subnet_pool", err)
+			}
+			return nil, NewReleaseSubnetPoolInvalidInput(&body)
 		default:
 			body, _ := io.ReadAll(resp.Body)
 			return nil, goahttp.ErrInvalidResponse("ipam", "release_subnet_pool", resp.StatusCode, string(body))
+		}
+	}
+}
+
+// BuildListServiceAddressesRequest instantiates a HTTP request object with
+// method and path set to call the "ipam" service "list_service_addresses"
+// endpoint
+func (c *Client) BuildListServiceAddressesRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ListServiceAddressesPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "list_service_addresses", "*ipam.ListServiceAddressesPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListServiceAddressesIpamPath(tailnet)}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "list_service_addresses", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// DecodeListServiceAddressesResponse returns a decoder for responses returned
+// by the ipam list_service_addresses endpoint. restoreBody controls whether
+// the response body should be restored after having been read.
+func DecodeListServiceAddressesResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body []*ServiceAddressReservationResponse
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_service_addresses", err)
+			}
+			for _, e := range body {
+				if e != nil {
+					if err2 := ValidateServiceAddressReservationResponse(e); err2 != nil {
+						err = goa.MergeErrors(err, err2)
+					}
+				}
+			}
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "list_service_addresses", err)
+			}
+			res := NewListServiceAddressesServiceAddressReservationOK(body)
+			return res, nil
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "list_service_addresses", resp.StatusCode, string(body))
+		}
+	}
+}
+
+// BuildReserveServiceAddressRequest instantiates a HTTP request object with
+// method and path set to call the "ipam" service "reserve_service_address"
+// endpoint
+func (c *Client) BuildReserveServiceAddressRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ReserveServiceAddressPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "reserve_service_address", "*ipam.ReserveServiceAddressPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveServiceAddressIpamPath(tailnet)}
+	req, err := http.NewRequest("POST", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "reserve_service_address", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeReserveServiceAddressRequest returns an encoder for requests sent to
+// the ipam reserve_service_address server.
+func EncodeReserveServiceAddressRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ReserveServiceAddressPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "reserve_service_address", "*ipam.ReserveServiceAddressPayload", v)
+		}
+		body := NewReserveServiceAddressRequestBody(p)
+		if err := encoder(req).Encode(&body); err != nil {
+			return goahttp.ErrEncodingError("ipam", "reserve_service_address", err)
+		}
+		return nil
+	}
+}
+
+// DecodeReserveServiceAddressResponse returns a decoder for responses returned
+// by the ipam reserve_service_address endpoint. restoreBody controls whether
+// the response body should be restored after having been read.
+// DecodeReserveServiceAddressResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - "collision" (type *goa.ServiceError): http.StatusConflict
+//   - error: internal error
+func DecodeReserveServiceAddressResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body ReserveServiceAddressResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_service_address", err)
+			}
+			err = ValidateReserveServiceAddressResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_service_address", err)
+			}
+			res := NewReserveServiceAddressResultOK(&body)
+			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ReserveServiceAddressInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_service_address", err)
+			}
+			err = ValidateReserveServiceAddressInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_service_address", err)
+			}
+			return nil, NewReserveServiceAddressInvalidInput(&body)
+		case http.StatusConflict:
+			var (
+				body ReserveServiceAddressCollisionResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_service_address", err)
+			}
+			err = ValidateReserveServiceAddressCollisionResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_service_address", err)
+			}
+			return nil, NewReserveServiceAddressCollision(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "reserve_service_address", resp.StatusCode, string(body))
+		}
+	}
+}
+
+// BuildReleaseServiceAddressRequest instantiates a HTTP request object with
+// method and path set to call the "ipam" service "release_service_address"
+// endpoint
+func (c *Client) BuildReleaseServiceAddressRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ReleaseServiceAddressPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "release_service_address", "*ipam.ReleaseServiceAddressPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseServiceAddressIpamPath(tailnet)}
+	req, err := http.NewRequest("DELETE", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "release_service_address", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeReleaseServiceAddressRequest returns an encoder for requests sent to
+// the ipam release_service_address server.
+func EncodeReleaseServiceAddressRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ReleaseServiceAddressPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "release_service_address", "*ipam.ReleaseServiceAddressPayload", v)
+		}
+		values := req.URL.Query()
+		values.Add("address", p.Address)
+		req.URL.RawQuery = values.Encode()
+		return nil
+	}
+}
+
+// DecodeReleaseServiceAddressResponse returns a decoder for responses returned
+// by the ipam release_service_address endpoint. restoreBody controls whether
+// the response body should be restored after having been read.
+// DecodeReleaseServiceAddressResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - error: internal error
+func DecodeReleaseServiceAddressResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body ReleaseServiceAddressResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_service_address", err)
+			}
+			err = ValidateReleaseServiceAddressResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "release_service_address", err)
+			}
+			res := NewReleaseServiceAddressResultOK(&body)
+			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ReleaseServiceAddressInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_service_address", err)
+			}
+			err = ValidateReleaseServiceAddressInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "release_service_address", err)
+			}
+			return nil, NewReleaseServiceAddressInvalidInput(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "release_service_address", resp.StatusCode, string(body))
 		}
 	}
 }
@@ -526,6 +874,22 @@ func unmarshalSubnetPoolReservationResponseToIpamSubnetPoolReservation(v *Subnet
 	res := &ipam.SubnetPoolReservation{
 		CIDR:        *v.CIDR,
 		Site:        *v.Site,
+		Owner:       v.Owner,
+		Description: v.Description,
+		Ticket:      v.Ticket,
+		ReservedAt:  v.ReservedAt,
+	}
+
+	return res
+}
+
+// unmarshalServiceAddressReservationResponseToIpamServiceAddressReservation
+// builds a value of type *ipam.ServiceAddressReservation from a value of type
+// *ServiceAddressReservationResponse.
+func unmarshalServiceAddressReservationResponseToIpamServiceAddressReservation(v *ServiceAddressReservationResponse) *ipam.ServiceAddressReservation {
+	res := &ipam.ServiceAddressReservation{
+		Address:     *v.Address,
+		Service:     *v.Service,
 		Owner:       v.Owner,
 		Description: v.Description,
 		Ticket:      v.Ticket,

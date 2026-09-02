@@ -18,13 +18,16 @@ import (
 
 // Server lists the ipam service endpoint HTTP handlers.
 type Server struct {
-	Mounts            []*MountPoint
-	ListSiteIds       http.Handler
-	ReserveSiteID     http.Handler
-	ReleaseSiteID     http.Handler
-	ListSubnetPools   http.Handler
-	ReserveSubnetPool http.Handler
-	ReleaseSubnetPool http.Handler
+	Mounts                []*MountPoint
+	ListSiteIds           http.Handler
+	ReserveSiteID         http.Handler
+	ReleaseSiteID         http.Handler
+	ListSubnetPools       http.Handler
+	ReserveSubnetPool     http.Handler
+	ReleaseSubnetPool     http.Handler
+	ListServiceAddresses  http.Handler
+	ReserveServiceAddress http.Handler
+	ReleaseServiceAddress http.Handler
 }
 
 // MountPoint holds information about the mounted endpoints.
@@ -60,13 +63,19 @@ func New(
 			{"ListSubnetPools", "GET", "/tailnet/{tailnet}/ipam/subnet-pools"},
 			{"ReserveSubnetPool", "POST", "/tailnet/{tailnet}/ipam/subnet-pools"},
 			{"ReleaseSubnetPool", "DELETE", "/tailnet/{tailnet}/ipam/subnet-pools"},
+			{"ListServiceAddresses", "GET", "/tailnet/{tailnet}/ipam/service-addresses"},
+			{"ReserveServiceAddress", "POST", "/tailnet/{tailnet}/ipam/service-addresses"},
+			{"ReleaseServiceAddress", "DELETE", "/tailnet/{tailnet}/ipam/service-addresses"},
 		},
-		ListSiteIds:       NewListSiteIdsHandler(e.ListSiteIds, mux, decoder, encoder, errhandler, formatter),
-		ReserveSiteID:     NewReserveSiteIDHandler(e.ReserveSiteID, mux, decoder, encoder, errhandler, formatter),
-		ReleaseSiteID:     NewReleaseSiteIDHandler(e.ReleaseSiteID, mux, decoder, encoder, errhandler, formatter),
-		ListSubnetPools:   NewListSubnetPoolsHandler(e.ListSubnetPools, mux, decoder, encoder, errhandler, formatter),
-		ReserveSubnetPool: NewReserveSubnetPoolHandler(e.ReserveSubnetPool, mux, decoder, encoder, errhandler, formatter),
-		ReleaseSubnetPool: NewReleaseSubnetPoolHandler(e.ReleaseSubnetPool, mux, decoder, encoder, errhandler, formatter),
+		ListSiteIds:           NewListSiteIdsHandler(e.ListSiteIds, mux, decoder, encoder, errhandler, formatter),
+		ReserveSiteID:         NewReserveSiteIDHandler(e.ReserveSiteID, mux, decoder, encoder, errhandler, formatter),
+		ReleaseSiteID:         NewReleaseSiteIDHandler(e.ReleaseSiteID, mux, decoder, encoder, errhandler, formatter),
+		ListSubnetPools:       NewListSubnetPoolsHandler(e.ListSubnetPools, mux, decoder, encoder, errhandler, formatter),
+		ReserveSubnetPool:     NewReserveSubnetPoolHandler(e.ReserveSubnetPool, mux, decoder, encoder, errhandler, formatter),
+		ReleaseSubnetPool:     NewReleaseSubnetPoolHandler(e.ReleaseSubnetPool, mux, decoder, encoder, errhandler, formatter),
+		ListServiceAddresses:  NewListServiceAddressesHandler(e.ListServiceAddresses, mux, decoder, encoder, errhandler, formatter),
+		ReserveServiceAddress: NewReserveServiceAddressHandler(e.ReserveServiceAddress, mux, decoder, encoder, errhandler, formatter),
+		ReleaseServiceAddress: NewReleaseServiceAddressHandler(e.ReleaseServiceAddress, mux, decoder, encoder, errhandler, formatter),
 	}
 }
 
@@ -81,6 +90,9 @@ func (s *Server) Use(m func(http.Handler) http.Handler) {
 	s.ListSubnetPools = m(s.ListSubnetPools)
 	s.ReserveSubnetPool = m(s.ReserveSubnetPool)
 	s.ReleaseSubnetPool = m(s.ReleaseSubnetPool)
+	s.ListServiceAddresses = m(s.ListServiceAddresses)
+	s.ReserveServiceAddress = m(s.ReserveServiceAddress)
+	s.ReleaseServiceAddress = m(s.ReleaseServiceAddress)
 }
 
 // MethodNames returns the methods served.
@@ -94,6 +106,9 @@ func Mount(mux goahttp.Muxer, h *Server) {
 	MountListSubnetPoolsHandler(mux, h.ListSubnetPools)
 	MountReserveSubnetPoolHandler(mux, h.ReserveSubnetPool)
 	MountReleaseSubnetPoolHandler(mux, h.ReleaseSubnetPool)
+	MountListServiceAddressesHandler(mux, h.ListServiceAddresses)
+	MountReserveServiceAddressHandler(mux, h.ReserveServiceAddress)
+	MountReleaseServiceAddressHandler(mux, h.ReleaseServiceAddress)
 }
 
 // Mount configures the mux to serve the ipam endpoints.
@@ -232,7 +247,7 @@ func NewReleaseSiteIDHandler(
 	var (
 		decodeRequest  = DecodeReleaseSiteIDRequest(mux, decoder)
 		encodeResponse = EncodeReleaseSiteIDResponse(encoder)
-		encodeError    = goahttp.ErrorEncoder(encoder, formatter)
+		encodeError    = EncodeReleaseSiteIDError(encoder, formatter)
 	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
@@ -391,11 +406,170 @@ func NewReleaseSubnetPoolHandler(
 	var (
 		decodeRequest  = DecodeReleaseSubnetPoolRequest(mux, decoder)
 		encodeResponse = EncodeReleaseSubnetPoolResponse(encoder)
-		encodeError    = goahttp.ErrorEncoder(encoder, formatter)
+		encodeError    = EncodeReleaseSubnetPoolError(encoder, formatter)
 	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
 		ctx = context.WithValue(ctx, goa.MethodKey, "release_subnet_pool")
+		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
+		payload, err := decodeRequest(r)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		res, err := endpoint(ctx, payload)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		if err := encodeResponse(ctx, w, res); err != nil {
+			if errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+		}
+	})
+}
+
+// MountListServiceAddressesHandler configures the mux to serve the "ipam"
+// service "list_service_addresses" endpoint.
+func MountListServiceAddressesHandler(mux goahttp.Muxer, h http.Handler) {
+	f, ok := h.(http.HandlerFunc)
+	if !ok {
+		f = func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+		}
+	}
+	mux.Handle("GET", "/tailnet/{tailnet}/ipam/service-addresses", f)
+}
+
+// NewListServiceAddressesHandler creates a HTTP handler which loads the HTTP
+// request and calls the "ipam" service "list_service_addresses" endpoint.
+func NewListServiceAddressesHandler(
+	endpoint goa.Endpoint,
+	mux goahttp.Muxer,
+	decoder func(*http.Request) goahttp.Decoder,
+	encoder func(context.Context, http.ResponseWriter) goahttp.Encoder,
+	errhandler func(context.Context, http.ResponseWriter, error),
+	formatter func(ctx context.Context, err error) goahttp.Statuser,
+) http.Handler {
+	var (
+		decodeRequest  = DecodeListServiceAddressesRequest(mux, decoder)
+		encodeResponse = EncodeListServiceAddressesResponse(encoder)
+		encodeError    = goahttp.ErrorEncoder(encoder, formatter)
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
+		ctx = context.WithValue(ctx, goa.MethodKey, "list_service_addresses")
+		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
+		payload, err := decodeRequest(r)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		res, err := endpoint(ctx, payload)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		if err := encodeResponse(ctx, w, res); err != nil {
+			if errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+		}
+	})
+}
+
+// MountReserveServiceAddressHandler configures the mux to serve the "ipam"
+// service "reserve_service_address" endpoint.
+func MountReserveServiceAddressHandler(mux goahttp.Muxer, h http.Handler) {
+	f, ok := h.(http.HandlerFunc)
+	if !ok {
+		f = func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+		}
+	}
+	mux.Handle("POST", "/tailnet/{tailnet}/ipam/service-addresses", f)
+}
+
+// NewReserveServiceAddressHandler creates a HTTP handler which loads the HTTP
+// request and calls the "ipam" service "reserve_service_address" endpoint.
+func NewReserveServiceAddressHandler(
+	endpoint goa.Endpoint,
+	mux goahttp.Muxer,
+	decoder func(*http.Request) goahttp.Decoder,
+	encoder func(context.Context, http.ResponseWriter) goahttp.Encoder,
+	errhandler func(context.Context, http.ResponseWriter, error),
+	formatter func(ctx context.Context, err error) goahttp.Statuser,
+) http.Handler {
+	var (
+		decodeRequest  = DecodeReserveServiceAddressRequest(mux, decoder)
+		encodeResponse = EncodeReserveServiceAddressResponse(encoder)
+		encodeError    = EncodeReserveServiceAddressError(encoder, formatter)
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
+		ctx = context.WithValue(ctx, goa.MethodKey, "reserve_service_address")
+		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
+		payload, err := decodeRequest(r)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		res, err := endpoint(ctx, payload)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		if err := encodeResponse(ctx, w, res); err != nil {
+			if errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+		}
+	})
+}
+
+// MountReleaseServiceAddressHandler configures the mux to serve the "ipam"
+// service "release_service_address" endpoint.
+func MountReleaseServiceAddressHandler(mux goahttp.Muxer, h http.Handler) {
+	f, ok := h.(http.HandlerFunc)
+	if !ok {
+		f = func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+		}
+	}
+	mux.Handle("DELETE", "/tailnet/{tailnet}/ipam/service-addresses", f)
+}
+
+// NewReleaseServiceAddressHandler creates a HTTP handler which loads the HTTP
+// request and calls the "ipam" service "release_service_address" endpoint.
+func NewReleaseServiceAddressHandler(
+	endpoint goa.Endpoint,
+	mux goahttp.Muxer,
+	decoder func(*http.Request) goahttp.Decoder,
+	encoder func(context.Context, http.ResponseWriter) goahttp.Encoder,
+	errhandler func(context.Context, http.ResponseWriter, error),
+	formatter func(ctx context.Context, err error) goahttp.Statuser,
+) http.Handler {
+	var (
+		decodeRequest  = DecodeReleaseServiceAddressRequest(mux, decoder)
+		encodeResponse = EncodeReleaseServiceAddressResponse(encoder)
+		encodeError    = EncodeReleaseServiceAddressError(encoder, formatter)
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
+		ctx = context.WithValue(ctx, goa.MethodKey, "release_service_address")
 		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
 		payload, err := decodeRequest(r)
 		if err != nil {

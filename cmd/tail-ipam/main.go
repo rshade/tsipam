@@ -1,10 +1,11 @@
 // Command tail-ipam manages a declarative registry of Tailscale address
-// space -- 4via6 site IDs and subnet CIDR pools so far, with per-service /32
-// allocations as separately scoped future work -- and will plan/check that
+// space -- 4via6 site IDs, subnet CIDR pools, and per-service IPv4 addresses
+// so far -- and will plan/check that
 // registry against live control-plane state.
 //
-// "site-id reserve/release/list" and "subnet reserve/release/list" edit and
-// read the local registry file (comment-preserving HuJSON, see
+// "site-id reserve/release/list", "subnet reserve/release/list", and
+// "service reserve/release/list" edit and read the local registry file
+// (comment-preserving HuJSON, see
 // internal/registry); "devices list" is a read-only proof that the
 // tscli-backed client construction works. Neither cross-checks the registry
 // against live state yet -- that's the "plan"/"check" surface, still future
@@ -89,9 +90,9 @@ func (s *commandState) outputSanitizer(tailnet string) (*sanitize.Sanitizer, err
 	// Pre-register the tailnet itself so an error's free-text sweep (see
 	// sanitizeErrorIfNeeded) can already redact it even if the command fails
 	// before registerOutputIdentities (output.go's success-path registration)
-	// ever runs. Kind matches registerOutputIdentities's "tailnet" so both
+	// ever runs. Kind matches registerOutputIdentities's kindTailnet so both
 	// paths resolve to the same placeholder for the same value.
-	registerSweepValue(sanitizer, "tailnet", tailnet)
+	registerSweepValue(sanitizer, kindTailnet, tailnet)
 	s.sanitizer = sanitizer
 	return sanitizer, nil
 }
@@ -105,12 +106,70 @@ func (s *commandState) outputSanitizer(tailnet string) (*sanitize.Sanitizer, err
 const minSweepValueLength = 3
 
 // registerSweepValue registers value with sanitizer for Sanitizer.Text's
-// free-text sweep, skipping anything shorter than minSweepValueLength.
+// free-text sweep, skipping anything shorter than minSweepValueLength. The
+// svc: selector token is deliberately omitted only for a kindService
+// registration, since there it is grammar (a Tailscale policy selector), not
+// identity -- NormalizeSiteName legitimately accepts a site literally named
+// "svc:", so the skip must not apply to kindSite or any other kind. It also
+// registers value's %q-escape closure -- see registerQuotedForm's doc
+// comment -- so an identity-echoing error built with %q is covered even when
+// escaping means the raw value never appears as a literal substring of that
+// error's text.
 func registerSweepValue(sanitizer *sanitize.Sanitizer, kind, value string) {
 	if len(value) < minSweepValueLength {
 		return
 	}
+	if kind == kindService && value == svcSelectorToken {
+		return
+	}
 	sanitizer.Value(kind, value)
+	registerQuotedForm(sanitizer, kind, value)
+}
+
+// registerQuotedForm additionally registers, under kind, the literal bytes
+// [strconv.Quote] renders inside value's surrounding quotes whenever quoting
+// changes them -- for example a raw TAB byte becomes the two ASCII bytes '\'
+// and 't'. This closes the identity-echoing %q closure that registering only
+// the raw value can never reach: an error built with [fmt.Errorf]("... %q
+// ...", value) never contains the raw value as a contiguous substring once
+// escaping has rewritten even one byte (a control character, an embedded
+// quote, a backslash, or invalid UTF-8), so Sanitizer.Text's literal
+// token-delimited byte match against the raw registration can never find it.
+// The surrounding quotes themselves are deliberately not part of the
+// registered form: '"' is not a tokenByte
+// (policycore/sanitize.tokenByte), so the escaped inner text alone is still
+// correctly delimited by the %q quote marks that surround it in the
+// rendered error text -- verified empirically against a real %q-formatted
+// error (see the round-2 fix report's revert-proof evidence).
+func registerQuotedForm(sanitizer *sanitize.Sanitizer, kind, value string) {
+	quoted := strconv.Quote(value)
+	if quoted == `"`+value+`"` {
+		return
+	}
+	sanitizer.Value(kind, quoted[1:len(quoted)-1])
+}
+
+// registerSweepValueWithCanonical registers value under kind, and when
+// normalize accepts it and changes its spelling, the canonical form too.
+// Error frames built after normalization embed the canonical spelling, so
+// registering only the value as written would leave that form unswept. Also
+// registers the trimmed form when it differs from the raw value, since
+// normalizers call [strings.TrimSpace] before validation and error messages
+// echo the trimmed spelling -- each of raw/trimmed/canonical also gets its
+// own %q-escape closure registered automatically, through registerSweepValue
+// calling registerQuotedForm, so a trimmed value's control-character error is
+// covered too.
+func registerSweepValueWithCanonical(
+	sanitizer *sanitize.Sanitizer, kind, value string, normalize func(string) (string, error),
+) {
+	registerSweepValue(sanitizer, kind, value)
+	trimmed := strings.TrimSpace(value)
+	if trimmed != value {
+		registerSweepValue(sanitizer, kind, trimmed)
+	}
+	if canonical, err := normalize(value); err == nil && canonical != value {
+		registerSweepValue(sanitizer, kind, canonical)
+	}
 }
 
 // registerKnownIdentityInventory registers the identity values this CLI
@@ -141,20 +200,27 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 	}
 	tailnet := resolveTailnetWithEnv(tailnetFlagValue, state.getenv)
 
-	registerSweepValue(state.sanitizer, "tailnet", tailnet)
-	registerSweepValue(state.sanitizer, "path", registryDir)
+	registerSweepValue(state.sanitizer, kindTailnet, tailnet)
+	registerSweepValue(state.sanitizer, kindPath, registryDir)
 	filename := tailnet + ".ipam.hujson"
 	registryPath := filepath.Join(registryDir, filename)
-	registerSweepValue(state.sanitizer, "path", registryPath)
-	registerSweepValue(state.sanitizer, "path", filename)
+	registerSweepValue(state.sanitizer, kindPath, registryPath)
+	registerSweepValue(state.sanitizer, kindPath, filename)
 
-	siteIDs, subnetPools := registry.RawEntries(registryPath)
+	siteIDs, subnetPools, serviceAddresses := registry.RawEntries(registryPath)
 	for _, site := range siteIDs {
-		registerSweepValue(state.sanitizer, "site", site)
+		registerSweepValue(state.sanitizer, kindSite, site)
 	}
 	for cidr, site := range subnetPools {
-		registerSweepValue(state.sanitizer, "cidr", cidr)
-		registerSweepValue(state.sanitizer, "site", site)
+		registerSweepValue(state.sanitizer, kindCIDR, cidr)
+		registerSweepValue(state.sanitizer, kindSite, site)
+	}
+	for address, service := range serviceAddresses {
+		// Service-address keys and identities each have two legal spellings
+		// (bare vs /32 alias, bare name vs svc: selector), so both the raw and
+		// canonical forms share one sweep domain.
+		registerSweepValueWithCanonical(state.sanitizer, kindIP, address, registry.NormalizeServiceAddress)
+		registerSweepValueWithCanonical(state.sanitizer, kindService, service, registry.NormalizeServiceName)
 	}
 }
 
@@ -234,6 +300,14 @@ var subnetPoolExactCollisionErrorPattern = regexp.MustCompile(
 	`^subnet CIDR (\S+) is already reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
 )
 
+// serviceAddressCollisionErrorPattern guards
+// ServiceAddressCollisionError.Error(). Capture groups: 1 = canonical bare
+// IPv4 address, 2 = existing canonical service identity, 3 = wanted canonical
+// service identity.
+var serviceAddressCollisionErrorPattern = regexp.MustCompile(
+	`^service address (\S+) is already reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
+)
+
 const (
 	siteIDCollisionExistingSiteGroup  = 2
 	siteIDCollisionWantedSiteGroup    = 3
@@ -244,23 +318,24 @@ const (
 	subnetCollisionExistingCIDRGroup  = 2
 	subnetCollisionExistingSiteGroup  = 3
 	subnetCollisionWantedSiteGroup    = 4
+	serviceCollisionAddressGroup      = 1
+	serviceCollisionExistingGroup     = 2
+	serviceCollisionWantedGroup       = 3
 )
 
-// unprintableSitePlaceholder replaces a matched quoted segment that
+// unprintableIdentityPlaceholder replaces a matched quoted segment that
 // [strconv.Unquote] cannot decode: failing closed with a fixed, non-identity
 // placeholder rather than falling through to the raw (still possibly
 // identity-bearing) escaped bytes.
-const unprintableSitePlaceholder = `"<unprintable>"`
+const unprintableIdentityPlaceholder = `"<unprintable>"`
 
 // collisionSegment names one submatch group within a collision error's
 // regex match to redact by byte-offset splice: group is the regex capture
 // group number (1-based, matching FindStringSubmatchIndex's numbering --
 // group N's byte range is match[2N:2N+2]), and quoted reports whether the
-// segment is a [strconv.Unquote]-able %q-quoted Go string literal (site
-// names) or a bare token printed with %s (CIDRs). kind is the sanitizer.Value
-// kind to register it under -- consulted only when quoted is false, since a
-// quoted segment is always a site name and sanitizedQuotedSegment hardcodes
-// that kind itself.
+// segment is a [strconv.Unquote]-able %q-quoted Go string literal (site or
+// service identity) or a bare token printed with %s (CIDR or address). kind
+// is the sanitizer.Value kind to register it under.
 type collisionSegment struct {
 	group  int
 	kind   string
@@ -268,8 +343,16 @@ type collisionSegment struct {
 }
 
 const (
-	kindSite = "site"
-	kindCIDR = "cidr"
+	kindSite     = "site"
+	kindCIDR     = "cidr"
+	kindIP       = "ip"
+	kindService  = "service"
+	kindTailnet  = "tailnet"
+	kindPath     = "path"
+	kindOwner    = "owner"
+	kindHostname = "hostname"
+
+	svcSelectorToken = "svc:"
 )
 
 //nolint:gochecknoglobals // collision segment specs are data-driven and factored out for sharing with spliceCollisionSegments
@@ -293,10 +376,17 @@ var subnetExactCollisionSegments = []collisionSegment{
 	{group: subnetExactCollisionWantedGroup, kind: kindSite, quoted: true},
 }
 
+//nolint:gochecknoglobals // collision segment specs are data-driven and factored out for sharing with spliceCollisionSegments
+var serviceAddressCollisionSegments = []collisionSegment{
+	{group: serviceCollisionAddressGroup, kind: kindIP, quoted: false},
+	{group: serviceCollisionExistingGroup, kind: kindService, quoted: true},
+	{group: serviceCollisionWantedGroup, kind: kindService, quoted: true},
+}
+
 // sanitizeErrorIfNeeded returns a sanitized rendering of err's text when
 // sanitization is active, or err unchanged otherwise.
 //
-// A genuine site-ID or subnet-pool collision is redacted by splicing its
+// A genuine site-ID, subnet-pool, or service-address collision is redacted by splicing its
 // known byte ranges out of the *original* text and back in as their
 // sanitized renderings, using the segments' regex-matched offsets -- never a
 // value-based search-and-replace, so escaping cannot desync the replacement
@@ -327,6 +417,9 @@ func sanitizeErrorIfNeeded(err error, sanitizer *sanitize.Sanitizer) error {
 	}
 	if match := subnetPoolCollisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
 		return errors.New(spliceCollisionSegments(text, match, subnetCollisionSegments, sanitizer))
+	}
+	if match := serviceAddressCollisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
+		return errors.New(spliceCollisionSegments(text, match, serviceAddressCollisionSegments, sanitizer))
 	}
 	return errors.New(sanitizer.Text(text))
 }
@@ -362,7 +455,7 @@ func spliceCollisionSegments(
 		start, end := match[seg.group*2], match[seg.group*2+1]
 		out.WriteString(text[cursor:start])
 		if seg.quoted {
-			out.WriteString(sanitizedQuotedSegment(text[start:end], sanitizer))
+			out.WriteString(sanitizedQuotedSegment(text[start:end], seg.kind, sanitizer))
 		} else {
 			out.WriteString(sanitizer.Value(seg.kind, text[start:end]))
 		}
@@ -373,16 +466,15 @@ func spliceCollisionSegments(
 }
 
 // sanitizedQuotedSegment unquotes a %q-quoted segment (surrounding quotes
-// included), registers the recovered value with sanitizer under the "site"
-// kind, and returns the placeholder re-quoted so the surrounding message
-// grammar is preserved (resolved decision D1). A segment [strconv.Unquote]
-// cannot decode fails closed to unprintableSitePlaceholder.
-func sanitizedQuotedSegment(quoted string, sanitizer *sanitize.Sanitizer) string {
+// included), registers the recovered value with sanitizer under kind, and
+// returns the placeholder re-quoted so the surrounding message grammar is
+// preserved. A segment [strconv.Unquote] cannot decode fails closed.
+func sanitizedQuotedSegment(quoted, kind string, sanitizer *sanitize.Sanitizer) string {
 	value, err := strconv.Unquote(quoted)
 	if err != nil {
-		return unprintableSitePlaceholder
+		return unprintableIdentityPlaceholder
 	}
-	return `"` + sanitizer.Value("site", value) + `"`
+	return `"` + sanitizer.Value(kind, value) + `"`
 }
 
 // collisionErrorName must match design.Error("collision", ...) in
@@ -414,6 +506,10 @@ func exitCodeFor(err error) int {
 	if errors.As(err, &subnetCollision) {
 		return exitFailure
 	}
+	var serviceAddressCollision *registry.ServiceAddressCollisionError
+	if errors.As(err, &serviceAddressCollision) {
+		return exitFailure
+	}
 	if errors.Is(err, ipcalc.ErrTooManyChildren) {
 		return exitFailure
 	}
@@ -442,6 +538,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 			"  2  invalid invocation, collection failure, or unreadable registry",
 		Example: "  tail-ipam site-id reserve 1 hq-vpc\n" +
 			"  tail-ipam subnet reserve 10.0.0.0/24 hq-vpc\n" +
+			"  tail-ipam service reserve 100.100.100.8 dashboard\n" +
 			"  tail-ipam site-id list -format json\n" +
 			"  tail-ipam devices list -verbose\n" +
 			"  tail-ipam -schema",
@@ -505,6 +602,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	root.AddCommand(newDevicesCommand(state, deps.listDevices))
 	root.AddCommand(newSiteIDCommand(state))
 	root.AddCommand(newSubnetCommand(state))
+	root.AddCommand(newServiceCommand(state))
 	root.AddCommand(newCalcCommand(state))
 	root.InitDefaultHelpFlag()
 	return root

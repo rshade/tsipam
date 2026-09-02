@@ -106,6 +106,19 @@ func EncodeReserveSiteIDError(encoder func(context.Context, http.ResponseWriter)
 			return encodeError(ctx, w, v)
 		}
 		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReserveSiteIDInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
 		case "collision":
 			var res *goa.ServiceError
 			errors.As(v, &res)
@@ -153,6 +166,35 @@ func DecodeReleaseSiteIDRequest(mux goahttp.Muxer, decoder func(*http.Request) g
 		payload = NewReleaseSiteIDPayload(tailnet, id)
 
 		return payload, nil
+	}
+}
+
+// EncodeReleaseSiteIDError returns an encoder for errors returned by the
+// release_site_id ipam endpoint.
+func EncodeReleaseSiteIDError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReleaseSiteIDInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
 	}
 }
 
@@ -244,6 +286,19 @@ func EncodeReserveSubnetPoolError(encoder func(context.Context, http.ResponseWri
 			return encodeError(ctx, w, v)
 		}
 		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReserveSubnetPoolInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
 		case "collision":
 			var res *goa.ServiceError
 			errors.As(v, &res)
@@ -301,6 +356,222 @@ func DecodeReleaseSubnetPoolRequest(mux goahttp.Muxer, decoder func(*http.Reques
 	}
 }
 
+// EncodeReleaseSubnetPoolError returns an encoder for errors returned by the
+// release_subnet_pool ipam endpoint.
+func EncodeReleaseSubnetPoolError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReleaseSubnetPoolInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
+// EncodeListServiceAddressesResponse returns an encoder for responses returned
+// by the ipam list_service_addresses endpoint.
+func EncodeListServiceAddressesResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.([]*ipam.ServiceAddressReservation)
+		enc := encoder(ctx, w)
+		body := NewListServiceAddressesResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeListServiceAddressesRequest returns a decoder for requests sent to the
+// ipam list_service_addresses endpoint.
+func DecodeListServiceAddressesRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ListServiceAddressesPayload, error) {
+	return func(r *http.Request) (*ipam.ListServiceAddressesPayload, error) {
+		var payload *ipam.ListServiceAddressesPayload
+		var (
+			tailnet string
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		payload = NewListServiceAddressesPayload(tailnet)
+
+		return payload, nil
+	}
+}
+
+// EncodeReserveServiceAddressResponse returns an encoder for responses
+// returned by the ipam reserve_service_address endpoint.
+func EncodeReserveServiceAddressResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.ReserveServiceAddressResult)
+		enc := encoder(ctx, w)
+		body := NewReserveServiceAddressResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeReserveServiceAddressRequest returns a decoder for requests sent to
+// the ipam reserve_service_address endpoint.
+func DecodeReserveServiceAddressRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ReserveServiceAddressPayload, error) {
+	return func(r *http.Request) (*ipam.ReserveServiceAddressPayload, error) {
+		var payload *ipam.ReserveServiceAddressPayload
+		var (
+			body ReserveServiceAddressRequestBody
+			err  error
+		)
+		err = decoder(r).Decode(&body)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return payload, goa.MissingPayloadError()
+			}
+			var gerr *goa.ServiceError
+			if errors.As(err, &gerr) {
+				return payload, gerr
+			}
+			return payload, goa.DecodePayloadError(err.Error())
+		}
+		err = ValidateReserveServiceAddressRequestBody(&body)
+		if err != nil {
+			return payload, err
+		}
+
+		var (
+			tailnet string
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		payload = NewReserveServiceAddressPayload(&body, tailnet)
+
+		return payload, nil
+	}
+}
+
+// EncodeReserveServiceAddressError returns an encoder for errors returned by
+// the reserve_service_address ipam endpoint.
+func EncodeReserveServiceAddressError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReserveServiceAddressInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		case "collision":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReserveServiceAddressCollisionResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusConflict)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
+// EncodeReleaseServiceAddressResponse returns an encoder for responses
+// returned by the ipam release_service_address endpoint.
+func EncodeReleaseServiceAddressResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.ReleaseServiceAddressResult)
+		enc := encoder(ctx, w)
+		body := NewReleaseServiceAddressResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeReleaseServiceAddressRequest returns a decoder for requests sent to
+// the ipam release_service_address endpoint.
+func DecodeReleaseServiceAddressRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ReleaseServiceAddressPayload, error) {
+	return func(r *http.Request) (*ipam.ReleaseServiceAddressPayload, error) {
+		var payload *ipam.ReleaseServiceAddressPayload
+		var (
+			tailnet string
+			address string
+			err     error
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		address = r.URL.Query().Get("address")
+		if address == "" {
+			err = goa.MergeErrors(err, goa.MissingFieldError("address", "query string"))
+		}
+		if err != nil {
+			return payload, err
+		}
+		payload = NewReleaseServiceAddressPayload(tailnet, address)
+
+		return payload, nil
+	}
+}
+
+// EncodeReleaseServiceAddressError returns an encoder for errors returned by
+// the release_service_address ipam endpoint.
+func EncodeReleaseServiceAddressError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReleaseServiceAddressInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
 // marshalIpamSiteIDReservationToSiteIDReservationResponse builds a value of
 // type *SiteIDReservationResponse from a value of type *ipam.SiteIDReservation.
 func marshalIpamSiteIDReservationToSiteIDReservationResponse(v *ipam.SiteIDReservation) *SiteIDReservationResponse {
@@ -323,6 +594,22 @@ func marshalIpamSubnetPoolReservationToSubnetPoolReservationResponse(v *ipam.Sub
 	res := &SubnetPoolReservationResponse{
 		CIDR:        v.CIDR,
 		Site:        v.Site,
+		Owner:       v.Owner,
+		Description: v.Description,
+		Ticket:      v.Ticket,
+		ReservedAt:  v.ReservedAt,
+	}
+
+	return res
+}
+
+// marshalIpamServiceAddressReservationToServiceAddressReservationResponse
+// builds a value of type *ServiceAddressReservationResponse from a value of
+// type *ipam.ServiceAddressReservation.
+func marshalIpamServiceAddressReservationToServiceAddressReservationResponse(v *ipam.ServiceAddressReservation) *ServiceAddressReservationResponse {
+	res := &ServiceAddressReservationResponse{
+		Address:     v.Address,
+		Service:     v.Service,
 		Owner:       v.Owner,
 		Description: v.Description,
 		Ticket:      v.Ticket,

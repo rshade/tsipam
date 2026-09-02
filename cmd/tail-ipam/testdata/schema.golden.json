@@ -66,6 +66,82 @@
       "usage": "devices list"
     },
     {
+      "name": "service",
+      "summary": "Manage per-service IPv4 address reservations.",
+      "usage": "service"
+    },
+    {
+      "name": "service list",
+      "summary": "List reserved service addresses.",
+      "usage": "service list",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "service release",
+      "summary": "Release a reserved service address.",
+      "usage": "service release \u003caddress\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "service reserve",
+      "summary": "Reserve an IPv4 host address for a Tailscale Service.",
+      "usage": "service reserve \u003caddress\u003e \u003cservice-name\u003e",
+      "flags": [
+        {
+          "name": "description",
+          "usage": "free-text description of why this address space is reserved",
+          "default": ""
+        },
+        {
+          "name": "owner",
+          "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "reserved-at",
+          "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        },
+        {
+          "name": "ticket",
+          "usage": "tracking ticket or issue reference for this reservation",
+          "default": ""
+        }
+      ]
+    },
+    {
       "name": "site-id",
       "summary": "Manage the 4via6 site-ID registry.",
       "usage": "site-id"

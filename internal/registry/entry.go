@@ -105,23 +105,25 @@ func rejectControlChars(kind, value string) error {
 // normalizes ReservedAt to a canonical UTC RFC 3339 timestamp. A field left
 // blank (or blank after trimming) normalizes to "" -- these fields are
 // optional, so unlike NormalizeSiteName a blank value is not an error, it is
-// simply absent.
+// simply absent. Validation errors are wrapped with invalidInput so they are
+// classified as HTTP 400 caller-input failures on caller-supplied metadata,
+// and unwrapped by storedStateError on stored-state validation.
 func normalizeMetadata(m ReservationMetadata) (ReservationMetadata, error) {
 	owner, err := normalizeMetadataText("owner", m.Owner)
 	if err != nil {
-		return ReservationMetadata{}, err
+		return ReservationMetadata{}, invalidInput(err)
 	}
 	description, err := normalizeMetadataText("description", m.Description)
 	if err != nil {
-		return ReservationMetadata{}, err
+		return ReservationMetadata{}, invalidInput(err)
 	}
 	ticket, err := normalizeMetadataText("ticket", m.Ticket)
 	if err != nil {
-		return ReservationMetadata{}, err
+		return ReservationMetadata{}, invalidInput(err)
 	}
 	reservedAt, err := normalizeReservedAt(m.ReservedAt)
 	if err != nil {
-		return ReservationMetadata{}, err
+		return ReservationMetadata{}, invalidInput(err)
 	}
 	return ReservationMetadata{Owner: owner, Description: description, Ticket: ticket, ReservedAt: reservedAt}, nil
 }
@@ -196,6 +198,23 @@ func stampReservedAt(
 	return merged
 }
 
+// resolveReservationMetadata computes the metadata a reserve call should end
+// up storing. It is shared by site/subnet Entry and ServiceEntry resolution so
+// the merge/stamp rules cannot drift between registry maps with different
+// subject-field names.
+func resolveReservationMetadata(
+	existing ReservationMetadata,
+	exists bool,
+	requested ReservationMetadata,
+	now func() time.Time,
+) ReservationMetadata {
+	merged := requested
+	if exists {
+		merged = mergeMetadataInto(existing, requested)
+	}
+	return stampReservedAt(requested, merged, now)
+}
+
 // resolveReservationEntry computes the Entry a reserve call should end up
 // storing for site, given whatever entry (if any) already exists under this
 // key and the requested metadata. Shared by ReserveSiteIDWithLogger and
@@ -206,11 +225,7 @@ func stampReservedAt(
 func resolveReservationEntry(
 	existingEntry Entry, exists bool, site string, metadata ReservationMetadata, now func() time.Time,
 ) (Entry, bool) {
-	merged := metadata
-	if exists {
-		merged = mergeMetadataInto(existingEntry.ReservationMetadata, metadata)
-	}
-	merged = stampReservedAt(metadata, merged, now)
+	merged := resolveReservationMetadata(existingEntry.ReservationMetadata, exists, metadata, now)
 	newEntry := Entry{Site: site, ReservationMetadata: merged}
 	return newEntry, exists && newEntry == existingEntry
 }

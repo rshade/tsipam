@@ -91,11 +91,7 @@ func (s *Service) ReserveSiteID(_ context.Context, p *ipam.ReserveSiteIDPayload)
 		s.Logger,
 	)
 	if err != nil {
-		var collision *registry.SiteIDCollisionError
-		if errors.As(err, &collision) {
-			return nil, ipam.MakeCollision(collision)
-		}
-		return nil, err
+		return nil, translateSiteIDError(err)
 	}
 	return &ipam.ReserveSiteIDResult{
 		ID: id, Site: site, Changed: changed,
@@ -108,7 +104,7 @@ func (s *Service) ReserveSiteID(_ context.Context, p *ipam.ReserveSiteIDPayload)
 func (s *Service) ReleaseSiteID(_ context.Context, p *ipam.ReleaseSiteIDPayload) (*ipam.ReleaseSiteIDResult, error) {
 	id, changed, err := registry.ReleaseSiteIDWithLogger(s.registryPath(p.Tailnet), p.ID, s.Logger)
 	if err != nil {
-		return nil, err
+		return nil, translateSiteIDError(err)
 	}
 	return &ipam.ReleaseSiteIDResult{ID: id, Changed: changed}, nil
 }
@@ -143,11 +139,7 @@ func (s *Service) ReserveSubnetPool(
 		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt), s.Logger,
 	)
 	if err != nil {
-		var collision *registry.SubnetPoolCollisionError
-		if errors.As(err, &collision) {
-			return nil, ipam.MakeCollision(collision)
-		}
-		return nil, err
+		return nil, translateSubnetPoolError(err)
 	}
 	return &ipam.ReserveSubnetPoolResult{
 		CIDR: cidr, Site: site, Changed: changed,
@@ -163,7 +155,96 @@ func (s *Service) ReleaseSubnetPool(
 ) (*ipam.ReleaseSubnetPoolResult, error) {
 	cidr, changed, err := registry.ReleaseSubnetPoolWithLogger(s.registryPath(p.Tailnet), p.CIDR, s.Logger)
 	if err != nil {
-		return nil, err
+		return nil, translateSubnetPoolError(err)
 	}
 	return &ipam.ReleaseSubnetPoolResult{CIDR: cidr, Changed: changed}, nil
+}
+
+// ListServiceAddresses implements ipam.Service.
+func (s *Service) ListServiceAddresses(
+	_ context.Context,
+	p *ipam.ListServiceAddressesPayload,
+) ([]*ipam.ServiceAddressReservation, error) {
+	entries, err := registry.ListServiceAddressesWithLogger(s.registryPath(p.Tailnet), s.Logger)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*ipam.ServiceAddressReservation, len(entries))
+	for i, entry := range entries {
+		out[i] = &ipam.ServiceAddressReservation{
+			Address: entry.Address, Service: entry.Service,
+			Owner: nonEmptyPtr(entry.Owner), Description: nonEmptyPtr(entry.Description),
+			Ticket: nonEmptyPtr(entry.Ticket), ReservedAt: nonEmptyPtr(entry.ReservedAt),
+		}
+	}
+	return out, nil
+}
+
+// ReserveServiceAddress implements ipam.Service.
+func (s *Service) ReserveServiceAddress(
+	_ context.Context,
+	p *ipam.ReserveServiceAddressPayload,
+) (*ipam.ReserveServiceAddressResult, error) {
+	address, service, metadata, changed, err := registry.ReserveServiceAddressWithLogger(
+		s.registryPath(p.Tailnet), p.Address, p.Service,
+		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt), s.Logger,
+	)
+	if err != nil {
+		return nil, translateServiceAddressError(err)
+	}
+	return &ipam.ReserveServiceAddressResult{
+		Address: address, Service: service, Changed: changed,
+		Owner: nonEmptyPtr(metadata.Owner), Description: nonEmptyPtr(metadata.Description),
+		Ticket: nonEmptyPtr(metadata.Ticket), ReservedAt: nonEmptyPtr(metadata.ReservedAt),
+	}, nil
+}
+
+// ReleaseServiceAddress implements ipam.Service.
+func (s *Service) ReleaseServiceAddress(
+	_ context.Context,
+	p *ipam.ReleaseServiceAddressPayload,
+) (*ipam.ReleaseServiceAddressResult, error) {
+	address, changed, err := registry.ReleaseServiceAddressWithLogger(
+		s.registryPath(p.Tailnet), p.Address, s.Logger,
+	)
+	if err != nil {
+		return nil, translateServiceAddressError(err)
+	}
+	return &ipam.ReleaseServiceAddressResult{Address: address, Changed: changed}, nil
+}
+
+func translateServiceAddressError(err error) error {
+	var collision *registry.ServiceAddressCollisionError
+	if errors.As(err, &collision) {
+		return ipam.MakeCollision(collision)
+	}
+	var invalidInput *registry.InvalidInputError
+	if errors.As(err, &invalidInput) {
+		return ipam.MakeInvalidInput(err)
+	}
+	return err
+}
+
+func translateSiteIDError(err error) error {
+	var collision *registry.SiteIDCollisionError
+	if errors.As(err, &collision) {
+		return ipam.MakeCollision(collision)
+	}
+	var invalidInput *registry.InvalidInputError
+	if errors.As(err, &invalidInput) {
+		return ipam.MakeInvalidInput(err)
+	}
+	return err
+}
+
+func translateSubnetPoolError(err error) error {
+	var collision *registry.SubnetPoolCollisionError
+	if errors.As(err, &collision) {
+		return ipam.MakeCollision(collision)
+	}
+	var invalidInput *registry.InvalidInputError
+	if errors.As(err, &invalidInput) {
+		return ipam.MakeInvalidInput(err)
+	}
+	return err
 }

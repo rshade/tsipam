@@ -9,6 +9,7 @@ import (
 	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/loopback"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
 
 const (
@@ -86,6 +87,17 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 			outputSanitizer, err := state.outputSanitizer(tailnet)
 			if err != nil {
 				return err
+			}
+			// The site-name and ID args must be registered before the
+			// reserve call can fail: NormalizeSiteName/NormalizeSiteID
+			// validation errors echo the trimmed spelling (and, for a
+			// control character or a non-numeric ID, its %q-escaped
+			// rendering -- see registerQuotedForm) before the loopback
+			// client is ever invoked.
+			registerSweepValueWithCanonical(outputSanitizer, kindSite, args[1], registry.NormalizeSiteName)
+			registerSweepValueWithCanonical(outputSanitizer, kindSite, args[0], registry.NormalizeSiteID)
+			if metadataFlags.owner != "" {
+				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)
 			}
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			return loopback.RunWithLogger(

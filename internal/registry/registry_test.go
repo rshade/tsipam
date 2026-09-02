@@ -627,18 +627,25 @@ func TestReserveSiteIDIntoNullBlock(t *testing.T) {
 func TestRawEntriesExtractsUnvalidatedValuesFromFile(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
-	content := `{"siteIDs":{"1":"hq-vpc"},"subnetPools":{"10.0.0.0/16":"secret-hq","10.0.1.0/24":"secret-branch"}}`
+	content := `{"siteIDs":{"1":{"site":"hq-vpc","owner":"ops"}},` +
+		`"subnetPools":{"10.0.0.0/16":"secret-hq","10.0.1.0/24":"secret-branch"},` +
+		`"serviceAddresses":{"100.100.100.7":"svc:payments",` +
+		`"100.100.100.8":{"service":"svc:search","owner":"platform"}}}`
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	siteIDs, subnetPools := registry.RawEntries(path)
+	siteIDs, subnetPools, serviceAddresses := registry.RawEntries(path)
 	if len(siteIDs) != 1 || siteIDs["1"] != "hq-vpc" {
 		t.Errorf("RawEntries siteIDs = %+v, want {1:hq-vpc}", siteIDs)
 	}
 	if len(subnetPools) != 2 || subnetPools["10.0.0.0/16"] != "secret-hq" ||
 		subnetPools["10.0.1.0/24"] != "secret-branch" {
 		t.Errorf("RawEntries subnetPools = %+v, want both entries verbatim", subnetPools)
+	}
+	if len(serviceAddresses) != 2 || serviceAddresses["100.100.100.7"] != "svc:payments" ||
+		serviceAddresses["100.100.100.8"] != "svc:search" {
+		t.Errorf("RawEntries serviceAddresses = %+v, want string and object values verbatim", serviceAddresses)
 	}
 }
 
@@ -648,9 +655,10 @@ func TestRawEntriesReturnsNilOnReadFailureOrMalformedHuJSON(t *testing.T) {
 	t.Parallel()
 
 	// Missing file
-	siteIDs, subnetPools := registry.RawEntries("/nonexistent/path/to/file.hujson")
-	if siteIDs != nil || subnetPools != nil {
-		t.Errorf("RawEntries on missing file = (%v, %v), want (nil, nil)", siteIDs, subnetPools)
+	siteIDs, subnetPools, serviceAddresses := registry.RawEntries("/nonexistent/path/to/file.hujson")
+	if siteIDs != nil || subnetPools != nil || serviceAddresses != nil {
+		t.Errorf("RawEntries on missing file = (%v, %v, %v), want all nil",
+			siteIDs, subnetPools, serviceAddresses)
 	}
 
 	// Malformed HuJSON
@@ -658,9 +666,10 @@ func TestRawEntriesReturnsNilOnReadFailureOrMalformedHuJSON(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{invalid json}`), 0o644); err != nil {
 		t.Fatalf("seeding fixture: %v", err)
 	}
-	siteIDs, subnetPools = registry.RawEntries(path)
-	if siteIDs != nil || subnetPools != nil {
-		t.Errorf("RawEntries on malformed HuJSON = (%v, %v), want (nil, nil)", siteIDs, subnetPools)
+	siteIDs, subnetPools, serviceAddresses = registry.RawEntries(path)
+	if siteIDs != nil || subnetPools != nil || serviceAddresses != nil {
+		t.Errorf("RawEntries on malformed HuJSON = (%v, %v, %v), want all nil",
+			siteIDs, subnetPools, serviceAddresses)
 	}
 }
 

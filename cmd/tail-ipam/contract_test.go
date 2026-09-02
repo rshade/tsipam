@@ -137,6 +137,7 @@ func assertSchemaCatalog(t *testing.T, document struct {
 		commandDevices, commandDevicesList, commandSiteID,
 		commandSiteIDList, commandSiteIDRelease, commandSiteIDReserve,
 		commandSubnet, commandSubnetList, commandSubnetRelease, commandSubnetReserve,
+		commandService, commandServiceList, commandServiceRelease, commandServiceReserve,
 		commandCalc, commandCalcSplit, commandCalcInfo,
 	}
 	for _, want := range wantCommands {
@@ -146,7 +147,8 @@ func assertSchemaCatalog(t *testing.T, document struct {
 	}
 	for _, command := range document.Commands {
 		if !strings.HasPrefix(command.Name, commandSiteID+" ") &&
-			!strings.HasPrefix(command.Name, commandSubnet+" ") {
+			!strings.HasPrefix(command.Name, commandSubnet+" ") &&
+			!strings.HasPrefix(command.Name, commandService+" ") {
 			continue
 		}
 		for _, want := range []string{"registry-dir", "tailnet"} {
@@ -390,8 +392,8 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 
 	if missing := sanitize.UnhandledFields[outputEnvelope](
 		"SchemaVersion", "Tool", "Sanitization", "Command", "Status", "Message", "Tailnet",
-		"Changed", "ID", "CIDR", "Site", "SiteIDs", "SubnetPools", "Devices", "Subnets",
-		"BlockInfo",
+		"Changed", "ID", "CIDR", "Address", "Site", "Service", "SiteIDs", "SubnetPools",
+		"ServiceAddresses", "Devices", "Subnets", "BlockInfo",
 	); len(missing) != 0 {
 		t.Errorf("outputEnvelope fields without an explicit sanitization decision: %v", missing)
 	}
@@ -401,15 +403,18 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 	if missing := sanitize.UnhandledFields[subnetPoolOutput]("CIDR", "Site"); len(missing) != 0 {
 		t.Errorf("subnetPoolOutput fields without an explicit sanitization decision: %v", missing)
 	}
+	if missing := sanitize.UnhandledFields[serviceAddressOutput]("Address", "Service"); len(missing) != 0 {
+		t.Errorf("serviceAddressOutput fields without an explicit sanitization decision: %v", missing)
+	}
 	if missing := sanitize.UnhandledFields[blockInfoOutput](
 		"Prefix", "Network", "Broadcast", "FirstUsable", "LastUsable", "UsableHosts",
 	); len(missing) != 0 {
 		t.Errorf("blockInfoOutput fields without an explicit sanitization decision: %v", missing)
 	}
 	// reservationMetadataOutput is embedded (anonymously) into outputEnvelope,
-	// siteIDOutput, and subnetPoolOutput above. UnhandledFields skips an
-	// anonymous field whose type name is unexported -- reservationMetadataOutput
-	// starts lowercase -- so its own fields never surface through those three
+	// siteIDOutput, subnetPoolOutput, and serviceAddressOutput above. UnhandledFields
+	// skips an anonymous field whose type name is unexported -- reservationMetadataOutput
+	// starts lowercase -- so its own fields never surface through those four
 	// checks; asserted directly here so a fifth metadata field still can't reach
 	// output without an explicit sanitization decision (see sanitizeMetadata).
 	if missing := sanitize.UnhandledFields[reservationMetadataOutput](
@@ -421,6 +426,113 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 		"Name", "Addresses", "AdvertisedRoutes",
 	); len(missing) != 0 {
 		t.Errorf("deviceRecord fields without an explicit sanitization decision: %v", missing)
+	}
+}
+
+func TestServiceAddressOutputContract(t *testing.T) {
+	t.Parallel()
+	entries := []serviceAddressOutput{
+		{
+			Address: "100.100.100.8", Service: "svc:dashboard",
+			reservationMetadataOutput: reservationMetadataOutput{
+				Owner: "network-team", Ticket: "NET-237", Description: "internal dashboard",
+				ReservedAt: "2026-08-31T12:00:00Z",
+			},
+		},
+		{Address: "100.100.100.20", Service: "svc:metrics"},
+	}
+	result := newOutput(commandServiceList, statusOK, "listed 2 service-address reservation(s)", "acme")
+	result.Address = "100.100.100.8"
+	result.Service = "svc:dashboard"
+	result.ServiceAddresses = &entries
+
+	var human bytes.Buffer
+	if err := renderOutput(&human, formatHuman, result); err != nil {
+		t.Fatalf("render human: %v", err)
+	}
+	wantHuman := "100.100.100.8\tsvc:dashboard\t" +
+		"owner=network-team ticket=NET-237 description=internal dashboard reserved=2026-08-31T12:00:00Z\n" +
+		"100.100.100.20\tsvc:metrics\n"
+	if human.String() != wantHuman {
+		t.Errorf("human service-address output = %q, want %q", human.String(), wantHuman)
+	}
+
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal output: %v", err)
+	}
+	for _, fragment := range []string{
+		`"address":"100.100.100.8"`,
+		`"service":"svc:dashboard"`,
+		`"service_addresses":[`,
+		`"reserved_at":"2026-08-31T12:00:00Z"`,
+	} {
+		if !bytes.Contains(encoded, []byte(fragment)) {
+			t.Errorf("JSON output %s omits %s", encoded, fragment)
+		}
+	}
+}
+
+func TestServiceAddressOutputDistinguishesEmptyListFromAbsentField(t *testing.T) {
+	t.Parallel()
+	empty := []serviceAddressOutput{}
+	listed := newOutput(commandServiceList, statusOK, "listed 0 service-address reservation(s)", "acme")
+	listed.ServiceAddresses = &empty
+	listedJSON, err := json.Marshal(listed)
+	if err != nil {
+		t.Fatalf("marshal list: %v", err)
+	}
+	if !bytes.Contains(listedJSON, []byte(`"service_addresses":[]`)) {
+		t.Errorf("empty list JSON = %s, want service_addresses:[]", listedJSON)
+	}
+
+	reserve := newOutput(commandServiceReserve, statusOK, "reserved", "acme")
+	reserveJSON, err := json.Marshal(reserve)
+	if err != nil {
+		t.Fatalf("marshal reserve: %v", err)
+	}
+	if bytes.Contains(reserveJSON, []byte(`"service_addresses"`)) {
+		t.Errorf("non-list JSON = %s, want service_addresses omitted", reserveJSON)
+	}
+}
+
+func TestServiceAddressOutputSanitizesEveryIdentity(t *testing.T) {
+	t.Parallel()
+	output, err := sanitize.New(sanitize.Options{
+		Level: sanitize.Identity, Tool: toolName, Tailnet: "example.ts.net",
+		KeyHex: strings.Repeat("cd", 32),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := []serviceAddressOutput{{
+		Address: "100.100.100.8", Service: "svc:dashboard",
+		reservationMetadataOutput: reservationMetadataOutput{Owner: "network-team"},
+	}}
+	input := newOutput(commandServiceReserve, statusOK,
+		`reserved service address 100.100.100.8 for "svc:dashboard"`, "example.ts.net")
+	input.Address = "100.100.100.8"
+	input.Service = "svc:dashboard"
+	input.Owner = "network-team"
+	input.ServiceAddresses = &entries
+
+	got := sanitizeOutput(input, output)
+	rendered, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"100.100.100.8", "svc:dashboard", "network-team", "example.ts.net"} {
+		if bytes.Contains(rendered, []byte(secret)) {
+			t.Errorf("sanitized service-address output leaked %q: %s", secret, rendered)
+		}
+	}
+	if !strings.HasPrefix(got.Address, "ip-") || !strings.HasPrefix(got.Service, "service-") ||
+		!strings.HasPrefix(got.Owner, "owner-") || !strings.HasPrefix(got.Tailnet, "tailnet-") {
+		t.Errorf("sanitized identities have unexpected kinds: %+v", got)
+	}
+	if got.ServiceAddresses == nil || len(*got.ServiceAddresses) != 1 ||
+		(*got.ServiceAddresses)[0].Address != got.Address || (*got.ServiceAddresses)[0].Service != got.Service {
+		t.Errorf("sanitized service-address list is inconsistent: %+v", got.ServiceAddresses)
 	}
 }
 

@@ -48,19 +48,21 @@ func (e *SubnetPoolCollisionError) Error() string {
 // Unlike site IDs, CIDRs are not silently masked or text-normalized: an
 // operator must reserve the network they wrote, so host bits, expanded IPv6,
 // and other non-canonical spellings are rejected with the canonical form in
-// the error.
+// the error. Validation errors are wrapped with invalidInput so they are
+// classified as HTTP 400 caller-input failures on caller-supplied input,
+// and unwrapped by storedStateError on stored-state validation.
 func NormalizeSubnetCIDR(cidr string) (string, error) {
 	cidr = strings.TrimSpace(cidr)
 	if cidr == "" {
-		return "", errors.New("subnet CIDR must not be empty")
+		return "", invalidInput(errors.New("subnet CIDR must not be empty"))
 	}
 	prefix, err := netip.ParsePrefix(cidr)
 	if err != nil {
-		return "", fmt.Errorf("subnet CIDR %q is not a valid prefix: %w", cidr, err)
+		return "", invalidInput(fmt.Errorf("subnet CIDR %q is not a valid prefix: %w", cidr, err))
 	}
 	canonical := prefix.Masked().String()
 	if cidr != canonical {
-		return "", fmt.Errorf("subnet CIDR %q is not canonical; use %q", cidr, canonical)
+		return "", invalidInput(fmt.Errorf("subnet CIDR %q is not canonical; use %q", cidr, canonical))
 	}
 	return canonical, nil
 }
@@ -86,6 +88,10 @@ func canonicalizeSubnetPools(raw map[string]Entry) (map[string]Entry, map[string
 	for _, rawCIDR := range rawCIDRs {
 		cidr, err := NormalizeSubnetCIDR(rawCIDR)
 		if err != nil {
+			// NormalizeSubnetCIDR wraps InvalidInputError; for stored-state
+			// validation, strip the marker so this error is not misclassified
+			// as caller input.
+			err = storedStateError(err)
 			return nil, nil, fmt.Errorf("invalid subnet pool key %q: %w", rawCIDR, err)
 		}
 		if firstRaw, ok := rawKeys[cidr]; ok {
@@ -274,7 +280,8 @@ func ListSubnetPoolsWithLogger(path string, logger diagnostics.Logger) ([]Subnet
 		return nil, mapErr
 	}
 	diagnostics.Debug(logger, "registry loaded",
-		"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools))
+		"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools),
+		"service_address_count", len(reg.ServiceAddresses))
 	return sortedSubnetPoolEntries(reg.SubnetPools), nil
 }
 

@@ -15,23 +15,29 @@ import (
 
 // Client is the "ipam" service client.
 type Client struct {
-	ListSiteIdsEndpoint       goa.Endpoint
-	ReserveSiteIDEndpoint     goa.Endpoint
-	ReleaseSiteIDEndpoint     goa.Endpoint
-	ListSubnetPoolsEndpoint   goa.Endpoint
-	ReserveSubnetPoolEndpoint goa.Endpoint
-	ReleaseSubnetPoolEndpoint goa.Endpoint
+	ListSiteIdsEndpoint           goa.Endpoint
+	ReserveSiteIDEndpoint         goa.Endpoint
+	ReleaseSiteIDEndpoint         goa.Endpoint
+	ListSubnetPoolsEndpoint       goa.Endpoint
+	ReserveSubnetPoolEndpoint     goa.Endpoint
+	ReleaseSubnetPoolEndpoint     goa.Endpoint
+	ListServiceAddressesEndpoint  goa.Endpoint
+	ReserveServiceAddressEndpoint goa.Endpoint
+	ReleaseServiceAddressEndpoint goa.Endpoint
 }
 
 // NewClient initializes a "ipam" service client given the endpoints.
-func NewClient(listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool goa.Endpoint) *Client {
+func NewClient(listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress goa.Endpoint) *Client {
 	return &Client{
-		ListSiteIdsEndpoint:       listSiteIds,
-		ReserveSiteIDEndpoint:     reserveSiteID,
-		ReleaseSiteIDEndpoint:     releaseSiteID,
-		ListSubnetPoolsEndpoint:   listSubnetPools,
-		ReserveSubnetPoolEndpoint: reserveSubnetPool,
-		ReleaseSubnetPoolEndpoint: releaseSubnetPool,
+		ListSiteIdsEndpoint:           listSiteIds,
+		ReserveSiteIDEndpoint:         reserveSiteID,
+		ReleaseSiteIDEndpoint:         releaseSiteID,
+		ListSubnetPoolsEndpoint:       listSubnetPools,
+		ReserveSubnetPoolEndpoint:     reserveSubnetPool,
+		ReleaseSubnetPoolEndpoint:     releaseSubnetPool,
+		ListServiceAddressesEndpoint:  listServiceAddresses,
+		ReserveServiceAddressEndpoint: reserveServiceAddress,
+		ReleaseServiceAddressEndpoint: releaseServiceAddress,
 	}
 }
 
@@ -48,6 +54,7 @@ func (c *Client) ListSiteIds(ctx context.Context, p *ListSiteIdsPayload) (res []
 // ReserveSiteID calls the "reserve_site_id" endpoint of the "ipam" service.
 // ReserveSiteID may return the following errors:
 //   - "collision" (type *goa.ServiceError): id is already reserved for a different site.
+//   - "invalid_input" (type *goa.ServiceError): id, site, or reservation metadata is invalid.
 //   - error: internal error
 func (c *Client) ReserveSiteID(ctx context.Context, p *ReserveSiteIDPayload) (res *ReserveSiteIDResult, err error) {
 	var ires any
@@ -59,6 +66,9 @@ func (c *Client) ReserveSiteID(ctx context.Context, p *ReserveSiteIDPayload) (re
 }
 
 // ReleaseSiteID calls the "release_site_id" endpoint of the "ipam" service.
+// ReleaseSiteID may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): id is not a valid 4via6 site ID.
+//   - error: internal error
 func (c *Client) ReleaseSiteID(ctx context.Context, p *ReleaseSiteIDPayload) (res *ReleaseSiteIDResult, err error) {
 	var ires any
 	ires, err = c.ReleaseSiteIDEndpoint(ctx, p)
@@ -82,6 +92,7 @@ func (c *Client) ListSubnetPools(ctx context.Context, p *ListSubnetPoolsPayload)
 // service.
 // ReserveSubnetPool may return the following errors:
 //   - "collision" (type *goa.ServiceError): cidr overlaps a subnet pool reserved for a different site.
+//   - "invalid_input" (type *goa.ServiceError): cidr, site, or reservation metadata is invalid.
 //   - error: internal error
 func (c *Client) ReserveSubnetPool(ctx context.Context, p *ReserveSubnetPoolPayload) (res *ReserveSubnetPoolResult, err error) {
 	var ires any
@@ -94,6 +105,9 @@ func (c *Client) ReserveSubnetPool(ctx context.Context, p *ReserveSubnetPoolPayl
 
 // ReleaseSubnetPool calls the "release_subnet_pool" endpoint of the "ipam"
 // service.
+// ReleaseSubnetPool may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): cidr is not a valid IPv4 or IPv6 CIDR prefix.
+//   - error: internal error
 func (c *Client) ReleaseSubnetPool(ctx context.Context, p *ReleaseSubnetPoolPayload) (res *ReleaseSubnetPoolResult, err error) {
 	var ires any
 	ires, err = c.ReleaseSubnetPoolEndpoint(ctx, p)
@@ -101,4 +115,44 @@ func (c *Client) ReleaseSubnetPool(ctx context.Context, p *ReleaseSubnetPoolPayl
 		return
 	}
 	return ires.(*ReleaseSubnetPoolResult), nil
+}
+
+// ListServiceAddresses calls the "list_service_addresses" endpoint of the
+// "ipam" service.
+func (c *Client) ListServiceAddresses(ctx context.Context, p *ListServiceAddressesPayload) (res []*ServiceAddressReservation, err error) {
+	var ires any
+	ires, err = c.ListServiceAddressesEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.([]*ServiceAddressReservation), nil
+}
+
+// ReserveServiceAddress calls the "reserve_service_address" endpoint of the
+// "ipam" service.
+// ReserveServiceAddress may return the following errors:
+//   - "collision" (type *goa.ServiceError): address is already reserved for a different service.
+//   - "invalid_input" (type *goa.ServiceError): address, service, or reservation metadata is invalid.
+//   - error: internal error
+func (c *Client) ReserveServiceAddress(ctx context.Context, p *ReserveServiceAddressPayload) (res *ReserveServiceAddressResult, err error) {
+	var ires any
+	ires, err = c.ReserveServiceAddressEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*ReserveServiceAddressResult), nil
+}
+
+// ReleaseServiceAddress calls the "release_service_address" endpoint of the
+// "ipam" service.
+// ReleaseServiceAddress may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): address is not a bare IPv4 host or exact IPv4 /32 prefix.
+//   - error: internal error
+func (c *Client) ReleaseServiceAddress(ctx context.Context, p *ReleaseServiceAddressPayload) (res *ReleaseServiceAddressResult, err error) {
+	var ires any
+	ires, err = c.ReleaseServiceAddressEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*ReleaseServiceAddressResult), nil
 }

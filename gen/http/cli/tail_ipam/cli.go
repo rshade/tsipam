@@ -23,7 +23,7 @@ import (
 //	command (subcommand1|subcommand2|...)
 func UsageCommands() []string {
 	return []string{
-		"ipam (list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool)",
+		"ipam (list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address)",
 	}
 }
 
@@ -66,6 +66,17 @@ func ParseEndpoint(
 		ipamReleaseSubnetPoolFlags       = flag.NewFlagSet("release-subnet-pool", flag.ExitOnError)
 		ipamReleaseSubnetPoolTailnetFlag = ipamReleaseSubnetPoolFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
 		ipamReleaseSubnetPoolCidrFlag    = ipamReleaseSubnetPoolFlags.String("cidr", "REQUIRED", "")
+
+		ipamListServiceAddressesFlags       = flag.NewFlagSet("list-service-addresses", flag.ExitOnError)
+		ipamListServiceAddressesTailnetFlag = ipamListServiceAddressesFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.")
+
+		ipamReserveServiceAddressFlags       = flag.NewFlagSet("reserve-service-address", flag.ExitOnError)
+		ipamReserveServiceAddressBodyFlag    = ipamReserveServiceAddressFlags.String("body", "REQUIRED", "")
+		ipamReserveServiceAddressTailnetFlag = ipamReserveServiceAddressFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
+
+		ipamReleaseServiceAddressFlags       = flag.NewFlagSet("release-service-address", flag.ExitOnError)
+		ipamReleaseServiceAddressTailnetFlag = ipamReleaseServiceAddressFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
+		ipamReleaseServiceAddressAddressFlag = ipamReleaseServiceAddressFlags.String("address", "REQUIRED", "")
 	)
 	ipamFlags.Usage = ipamUsage
 	ipamListSiteIdsFlags.Usage = ipamListSiteIdsUsage
@@ -74,6 +85,9 @@ func ParseEndpoint(
 	ipamListSubnetPoolsFlags.Usage = ipamListSubnetPoolsUsage
 	ipamReserveSubnetPoolFlags.Usage = ipamReserveSubnetPoolUsage
 	ipamReleaseSubnetPoolFlags.Usage = ipamReleaseSubnetPoolUsage
+	ipamListServiceAddressesFlags.Usage = ipamListServiceAddressesUsage
+	ipamReserveServiceAddressFlags.Usage = ipamReserveServiceAddressUsage
+	ipamReleaseServiceAddressFlags.Usage = ipamReleaseServiceAddressUsage
 
 	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
 		return nil, nil, err
@@ -127,6 +141,15 @@ func ParseEndpoint(
 			case "release-subnet-pool":
 				epf = ipamReleaseSubnetPoolFlags
 
+			case "list-service-addresses":
+				epf = ipamListServiceAddressesFlags
+
+			case "reserve-service-address":
+				epf = ipamReserveServiceAddressFlags
+
+			case "release-service-address":
+				epf = ipamReleaseServiceAddressFlags
+
 			}
 
 		}
@@ -170,6 +193,15 @@ func ParseEndpoint(
 			case "release-subnet-pool":
 				endpoint = c.ReleaseSubnetPool()
 				data, err = ipamc.BuildReleaseSubnetPoolPayload(*ipamReleaseSubnetPoolTailnetFlag, *ipamReleaseSubnetPoolCidrFlag)
+			case "list-service-addresses":
+				endpoint = c.ListServiceAddresses()
+				data, err = ipamc.BuildListServiceAddressesPayload(*ipamListServiceAddressesTailnetFlag)
+			case "reserve-service-address":
+				endpoint = c.ReserveServiceAddress()
+				data, err = ipamc.BuildReserveServiceAddressPayload(*ipamReserveServiceAddressBodyFlag, *ipamReserveServiceAddressTailnetFlag)
+			case "release-service-address":
+				endpoint = c.ReleaseServiceAddress()
+				data, err = ipamc.BuildReleaseServiceAddressPayload(*ipamReleaseServiceAddressTailnetFlag, *ipamReleaseServiceAddressAddressFlag)
 			}
 		}
 	}
@@ -191,6 +223,9 @@ func ipamUsage() {
 	fmt.Fprintln(os.Stderr, `    list-subnet-pools: ListSubnetPools implements list_subnet_pools.`)
 	fmt.Fprintln(os.Stderr, `    reserve-subnet-pool: ReserveSubnetPool implements reserve_subnet_pool.`)
 	fmt.Fprintln(os.Stderr, `    release-subnet-pool: ReleaseSubnetPool implements release_subnet_pool.`)
+	fmt.Fprintln(os.Stderr, `    list-service-addresses: ListServiceAddresses implements list_service_addresses.`)
+	fmt.Fprintln(os.Stderr, `    reserve-service-address: ReserveServiceAddress implements reserve_service_address.`)
+	fmt.Fprintln(os.Stderr, `    release-service-address: ReleaseServiceAddress implements release_service_address.`)
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Additional help:")
 	fmt.Fprintf(os.Stderr, "    %s ipam COMMAND --help\n", os.Args[0])
@@ -309,4 +344,62 @@ func ipamReleaseSubnetPoolUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-subnet-pool --tailnet \"Sint consequatur consequuntur.\" --cidr \"Dolores repellendus tempora hic adipisci sapiente cumque.\"")
+}
+
+func ipamListServiceAddressesUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam list-service-addresses", os.Args[0])
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ListServiceAddresses implements list_service_addresses.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam list-service-addresses --tailnet \"Iusto incidunt.\"")
+}
+
+func ipamReserveServiceAddressUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam reserve-service-address", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ReserveServiceAddress implements reserve_service_address.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-service-address --body '{\n      \"address\": \"Dolores repellat aliquam voluptatem quo nesciunt ad.\",\n      \"description\": \"Consectetur cupiditate voluptatem quisquam.\",\n      \"owner\": \"Beatae quia.\",\n      \"reserved_at\": \"1975-09-10T03:22:10Z\",\n      \"service\": \"Esse magnam.\",\n      \"ticket\": \"Fugit a.\"\n   }' --tailnet \"Numquam et eos.\"")
+}
+
+func ipamReleaseServiceAddressUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam release-service-address", os.Args[0])
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprint(os.Stderr, " -address STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ReleaseServiceAddress implements release_service_address.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+	fmt.Fprintln(os.Stderr, `    -address STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-service-address --tailnet \"Illum aspernatur ad repudiandae at quas laborum.\" --address \"Qui nulla dolores est optio.\"")
 }

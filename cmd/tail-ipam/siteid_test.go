@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -182,4 +183,70 @@ func TestSiteIDExitCodeDistinguishesCollisionFromUsageError(t *testing.T) {
 	if got := exitCodeFor(usageErr); got != exitUsage {
 		t.Errorf("exitCodeFor(usage error) = %d, want %d", got, exitUsage)
 	}
+}
+
+// TestSiteIDReserveArgsRegisterForErrorSweep covers round-2 item 1: round 1
+// never registered "site-id reserve"'s own <id>/<site-name> CLI args at all
+// (only the --owner metadata flag, see siteid.go), so a padded/invalid ID or
+// a control-character site name reached stderr with the raw or %q-escaped
+// value intact.
+func TestSiteIDReserveArgsRegisterForErrorSweep(t *testing.T) {
+	t.Parallel()
+
+	// A non-numeric ID (as opposed to a short valid numeric one, which
+	// minSweepValueLength already suppresses from the sweep) is echoed by
+	// registry.NormalizeSiteID's "is not a non-negative integer" error using
+	// the *trimmed* spelling, since NormalizeSiteID trims before formatting
+	// that message.
+	t.Run("padded_non_numeric_id_leaks_trimmed_spelling", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		const trimmedID = "abc123secret"
+
+		var stdout, stderr bytes.Buffer
+		code := runCLI(context.Background(), []string{
+			commandSiteID, "reserve", " " + trimmedID + " ", "sitename",
+			"--registry-dir", dir, "--sanitize", "identity",
+		}, fixedKeyGetenv, &stdout, &stderr, nil)
+		if code == exitOK {
+			t.Fatalf("invalid site ID exit = %d, want non-zero", code)
+		}
+		stderrText := stderr.String()
+		if strings.Contains(stderrText, trimmedID) {
+			t.Errorf("stderr leaks trimmed site ID %q: %s", trimmedID, stderrText)
+		}
+		placeholder := placeholderFor(t, kindSite, trimmedID)
+		if !strings.Contains(stderrText, placeholder) {
+			t.Errorf("stderr = %q, want trimmed-ID placeholder %q", stderrText, placeholder)
+		}
+	})
+
+	// A control character in the site name is rejected by
+	// registry.NormalizeSiteName's rejectControlChars, whose error renders
+	// the (trimmed) name with %q -- escaping the control character rather
+	// than reproducing it byte-for-byte, so only the quoted-form mechanism
+	// (registerQuotedForm, main.go) can close this leak.
+	t.Run("control_char_site_name_leaks_escaped_rendering", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		const site = "sec\tret-site"
+		const siteEscaped = `sec\tret-site`
+
+		var stdout, stderr bytes.Buffer
+		code := runCLI(context.Background(), []string{
+			commandSiteID, "reserve", "1", site,
+			"--registry-dir", dir, "--sanitize", "identity",
+		}, fixedKeyGetenv, &stdout, &stderr, nil)
+		if code == exitOK {
+			t.Fatalf("control-character site name exit = %d, want non-zero", code)
+		}
+		stderrText := stderr.String()
+		if strings.Contains(stderrText, siteEscaped) {
+			t.Errorf("stderr leaks the %%q-escaped site name %q: %s", siteEscaped, stderrText)
+		}
+		placeholder := placeholderFor(t, kindSite, siteEscaped)
+		if !strings.Contains(stderrText, placeholder) {
+			t.Errorf("stderr = %q, want escaped-site-name placeholder %q", stderrText, placeholder)
+		}
+	})
 }

@@ -144,3 +144,68 @@ func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet string, ipamRele
 
 	return v, nil
 }
+
+// BuildListServiceAddressesPayload builds the payload for the ipam
+// list_service_addresses endpoint from CLI flags.
+func BuildListServiceAddressesPayload(ipamListServiceAddressesTailnet string) (*ipam.ListServiceAddressesPayload, error) {
+	var tailnet string
+	{
+		tailnet = ipamListServiceAddressesTailnet
+	}
+	v := &ipam.ListServiceAddressesPayload{}
+	v.Tailnet = tailnet
+
+	return v, nil
+}
+
+// BuildReserveServiceAddressPayload builds the payload for the ipam
+// reserve_service_address endpoint from CLI flags.
+func BuildReserveServiceAddressPayload(ipamReserveServiceAddressBody string, ipamReserveServiceAddressTailnet string) (*ipam.ReserveServiceAddressPayload, error) {
+	var err error
+	var body ReserveServiceAddressRequestBody
+	{
+		err = json.Unmarshal([]byte(ipamReserveServiceAddressBody), &body)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"address\": \"Dolores repellat aliquam voluptatem quo nesciunt ad.\",\n      \"description\": \"Consectetur cupiditate voluptatem quisquam.\",\n      \"owner\": \"Beatae quia.\",\n      \"reserved_at\": \"1975-09-10T03:22:10Z\",\n      \"service\": \"Esse magnam.\",\n      \"ticket\": \"Fugit a.\"\n   }'")
+		}
+		if body.ReservedAt != nil {
+			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tailnet string
+	{
+		tailnet = ipamReserveServiceAddressTailnet
+	}
+	v := &ipam.ReserveServiceAddressPayload{
+		Address:     body.Address,
+		Service:     body.Service,
+		Owner:       body.Owner,
+		Description: body.Description,
+		Ticket:      body.Ticket,
+		ReservedAt:  body.ReservedAt,
+	}
+	v.Tailnet = tailnet
+
+	return v, nil
+}
+
+// BuildReleaseServiceAddressPayload builds the payload for the ipam
+// release_service_address endpoint from CLI flags.
+func BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnet string, ipamReleaseServiceAddressAddress string) (*ipam.ReleaseServiceAddressPayload, error) {
+	var tailnet string
+	{
+		tailnet = ipamReleaseServiceAddressTailnet
+	}
+	var address string
+	{
+		address = ipamReleaseServiceAddressAddress
+	}
+	v := &ipam.ReleaseServiceAddressPayload{}
+	v.Tailnet = tailnet
+	v.Address = address
+
+	return v, nil
+}

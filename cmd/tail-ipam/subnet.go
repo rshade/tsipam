@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/netip"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/rshade/tailscale-utils/policycore/sanitize"
 	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/loopback"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
 
 const subnetReserveArgs = 2
@@ -49,7 +53,7 @@ func newSubnetReserveCommand(state *commandState) *cobra.Command {
 	var metadataFlags reservationMetadataFlags
 	cmd := newSubnetLeafCommand(
 		state, "reserve <cidr> <site-name>", "Reserve a subnet CIDR pool for a site.",
-		cobra.ExactArgs(subnetReserveArgs), 0,
+		cobra.ExactArgs(subnetReserveArgs), 0, &metadataFlags,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			res, err := client.ReserveSubnetPool()(ctx, &ipam.ReserveSubnetPoolPayload{
@@ -81,7 +85,7 @@ func newSubnetReserveCommand(state *commandState) *cobra.Command {
 
 func newSubnetReleaseCommand(state *commandState) *cobra.Command {
 	return newSubnetLeafCommand(
-		state, "release <cidr>", "Release a reserved subnet CIDR pool.", cobra.ExactArgs(1), 0,
+		state, "release <cidr>", "Release a reserved subnet CIDR pool.", cobra.ExactArgs(1), 0, nil,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ReleaseSubnetPool()(ctx, &ipam.ReleaseSubnetPoolPayload{
 				Tailnet: tailnet, CIDR: args[0],
@@ -105,7 +109,7 @@ func newSubnetReleaseCommand(state *commandState) *cobra.Command {
 
 func newSubnetListCommand(state *commandState) *cobra.Command {
 	return newSubnetLeafCommand(
-		state, commandList, "List reserved subnet CIDR pools.", cobra.NoArgs, -1,
+		state, commandList, "List reserved subnet CIDR pools.", cobra.NoArgs, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, _ []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ListSubnetPools()(ctx, &ipam.ListSubnetPoolsPayload{Tailnet: tailnet})
 			if err != nil {
@@ -134,6 +138,24 @@ func newSubnetListCommand(state *commandState) *cobra.Command {
 	)
 }
 
+// registerCanonicalCIDRSuggestion registers, under kindCIDR, the canonical
+// spelling registry.NormalizeSubnetCIDR would suggest for a non-canonical
+// (but otherwise parseable) CIDR. NormalizeSubnetCIDR's own success path
+// never returns this value: a non-canonical prefix is always an error whose
+// text embeds the suggestion via %q ("subnet CIDR %q is not canonical; use
+// %q"), so registerSweepValueWithCanonical's err == nil branch can never
+// reach it -- the suggestion has to be computed independently, with the same
+// TrimSpace + [netip.ParsePrefix] + Masked steps NormalizeSubnetCIDR performs
+// internally. A value that fails to parse at all has no suggestion to
+// register, matching NormalizeSubnetCIDR's own "not a valid prefix" branch.
+func registerCanonicalCIDRSuggestion(sanitizer *sanitize.Sanitizer, value string) {
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(value))
+	if err != nil {
+		return
+	}
+	registerSweepValue(sanitizer, kindCIDR, prefix.Masked().String())
+}
+
 type subnetLeafCall func(
 	context.Context,
 	*ipamclient.Client,
@@ -146,6 +168,7 @@ func newSubnetLeafCommand(
 	use, short string,
 	argsValidator cobra.PositionalArgs,
 	cidrArgIndex int,
+	metadataFlags *reservationMetadataFlags,
 	call subnetLeafCall,
 ) *cobra.Command {
 	var registryDir, tailnetFlag string
@@ -162,7 +185,13 @@ func newSubnetLeafCommand(
 				return err
 			}
 			if cidrArgIndex >= 0 && cidrArgIndex < len(args) {
-				registerSweepValue(outputSanitizer, "cidr", args[cidrArgIndex])
+				registerSweepValueWithCanonical(
+					outputSanitizer, kindCIDR, args[cidrArgIndex], registry.NormalizeSubnetCIDR,
+				)
+				registerCanonicalCIDRSuggestion(outputSanitizer, args[cidrArgIndex])
+			}
+			if metadataFlags != nil && metadataFlags.owner != "" {
+				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)
 			}
 			return loopback.RunWithLogger(
 				cmd.Context(), registryDir, state.logger,

@@ -40,3 +40,18 @@ func ReserveSubnetPoolIpamPath(tailnet string) string {
 func ReleaseSubnetPoolIpamPath(tailnet string) string {
 	return fmt.Sprintf("/tailnet/%v/ipam/subnet-pools", tailnet)
 }
+
+// ListServiceAddressesIpamPath returns the URL path to the ipam service list_service_addresses HTTP endpoint.
+func ListServiceAddressesIpamPath(tailnet string) string {
+	return fmt.Sprintf("/tailnet/%v/ipam/service-addresses", tailnet)
+}
+
+// ReserveServiceAddressIpamPath returns the URL path to the ipam service reserve_service_address HTTP endpoint.
+func ReserveServiceAddressIpamPath(tailnet string) string {
+	return fmt.Sprintf("/tailnet/%v/ipam/service-addresses", tailnet)
+}
+
+// ReleaseServiceAddressIpamPath returns the URL path to the ipam service release_service_address HTTP endpoint.
+func ReleaseServiceAddressIpamPath(tailnet string) string {
+	return fmt.Sprintf("/tailnet/%v/ipam/service-addresses", tailnet)
+}

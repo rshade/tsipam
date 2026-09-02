@@ -15,23 +15,29 @@ import (
 
 // Endpoints wraps the "ipam" service endpoints.
 type Endpoints struct {
-	ListSiteIds       goa.Endpoint
-	ReserveSiteID     goa.Endpoint
-	ReleaseSiteID     goa.Endpoint
-	ListSubnetPools   goa.Endpoint
-	ReserveSubnetPool goa.Endpoint
-	ReleaseSubnetPool goa.Endpoint
+	ListSiteIds           goa.Endpoint
+	ReserveSiteID         goa.Endpoint
+	ReleaseSiteID         goa.Endpoint
+	ListSubnetPools       goa.Endpoint
+	ReserveSubnetPool     goa.Endpoint
+	ReleaseSubnetPool     goa.Endpoint
+	ListServiceAddresses  goa.Endpoint
+	ReserveServiceAddress goa.Endpoint
+	ReleaseServiceAddress goa.Endpoint
 }
 
 // NewEndpoints wraps the methods of the "ipam" service with endpoints.
 func NewEndpoints(s Service) *Endpoints {
 	return &Endpoints{
-		ListSiteIds:       NewListSiteIdsEndpoint(s),
-		ReserveSiteID:     NewReserveSiteIDEndpoint(s),
-		ReleaseSiteID:     NewReleaseSiteIDEndpoint(s),
-		ListSubnetPools:   NewListSubnetPoolsEndpoint(s),
-		ReserveSubnetPool: NewReserveSubnetPoolEndpoint(s),
-		ReleaseSubnetPool: NewReleaseSubnetPoolEndpoint(s),
+		ListSiteIds:           NewListSiteIdsEndpoint(s),
+		ReserveSiteID:         NewReserveSiteIDEndpoint(s),
+		ReleaseSiteID:         NewReleaseSiteIDEndpoint(s),
+		ListSubnetPools:       NewListSubnetPoolsEndpoint(s),
+		ReserveSubnetPool:     NewReserveSubnetPoolEndpoint(s),
+		ReleaseSubnetPool:     NewReleaseSubnetPoolEndpoint(s),
+		ListServiceAddresses:  NewListServiceAddressesEndpoint(s),
+		ReserveServiceAddress: NewReserveServiceAddressEndpoint(s),
+		ReleaseServiceAddress: NewReleaseServiceAddressEndpoint(s),
 	}
 }
 
@@ -43,6 +49,9 @@ func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
 	e.ListSubnetPools = m(e.ListSubnetPools)
 	e.ReserveSubnetPool = m(e.ReserveSubnetPool)
 	e.ReleaseSubnetPool = m(e.ReleaseSubnetPool)
+	e.ListServiceAddresses = m(e.ListServiceAddresses)
+	e.ReserveServiceAddress = m(e.ReserveServiceAddress)
+	e.ReleaseServiceAddress = m(e.ReleaseServiceAddress)
 }
 
 // NewListSiteIdsEndpoint returns an endpoint function that calls the method
@@ -96,5 +105,32 @@ func NewReleaseSubnetPoolEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*ReleaseSubnetPoolPayload)
 		return s.ReleaseSubnetPool(ctx, p)
+	}
+}
+
+// NewListServiceAddressesEndpoint returns an endpoint function that calls the
+// method "list_service_addresses" of service "ipam".
+func NewListServiceAddressesEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*ListServiceAddressesPayload)
+		return s.ListServiceAddresses(ctx, p)
+	}
+}
+
+// NewReserveServiceAddressEndpoint returns an endpoint function that calls the
+// method "reserve_service_address" of service "ipam".
+func NewReserveServiceAddressEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*ReserveServiceAddressPayload)
+		return s.ReserveServiceAddress(ctx, p)
+	}
+}
+
+// NewReleaseServiceAddressEndpoint returns an endpoint function that calls the
+// method "release_service_address" of service "ipam".
+func NewReleaseServiceAddressEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*ReleaseServiceAddressPayload)
+		return s.ReleaseServiceAddress(ctx, p)
 	}
 }

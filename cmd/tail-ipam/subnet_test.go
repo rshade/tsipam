@@ -193,8 +193,11 @@ func TestSubnetReserveRejectsNonCanonicalCIDR(t *testing.T) {
 		t.Fatal("reserve non-canonical CIDR: error = nil, want an error")
 	}
 	errText := err.Error()
-	if !strings.Contains(errText, "invalid response code 500") {
-		t.Errorf("error = %v, want error wrapped by loopback HTTP transport", errText)
+	// A non-canonical CIDR is a designed invalid_input error (HTTP 400), so
+	// the diagnostic arrives clean rather than inside the generic 500 fault
+	// envelope the transport used to wrap it in.
+	if strings.Contains(errText, "invalid response code 500") {
+		t.Errorf("error = %v, want a designed invalid_input error, not a 500 fault envelope", errText)
 	}
 	if !strings.Contains(errText, "not canonical") {
 		t.Errorf("error = %v, want the 'not canonical' diagnostic", errText)

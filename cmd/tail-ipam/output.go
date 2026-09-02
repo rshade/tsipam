@@ -11,22 +11,26 @@ import (
 )
 
 const (
-	commandDevices       = "devices"
-	commandSiteID        = "site-id"
-	commandCalc          = "calc"
-	commandList          = "list"
-	commandDevicesList   = commandDevices + " " + commandList
-	commandSiteIDList    = commandSiteID + " " + commandList
-	commandSiteIDReserve = commandSiteID + " reserve"
-	commandSiteIDRelease = commandSiteID + " release"
-	commandSubnet        = "subnet"
-	commandSubnetList    = commandSubnet + " " + commandList
-	commandSubnetReserve = commandSubnet + " reserve"
-	commandSubnetRelease = commandSubnet + " release"
-	commandCalcSplit     = commandCalc + " split"
-	commandCalcInfo      = commandCalc + " info"
-	statusOK             = "ok"
-	statusNoChanges      = "no_changes"
+	commandDevices        = "devices"
+	commandSiteID         = "site-id"
+	commandCalc           = "calc"
+	commandList           = "list"
+	commandDevicesList    = commandDevices + " " + commandList
+	commandSiteIDList     = commandSiteID + " " + commandList
+	commandSiteIDReserve  = commandSiteID + " reserve"
+	commandSiteIDRelease  = commandSiteID + " release"
+	commandSubnet         = "subnet"
+	commandSubnetList     = commandSubnet + " " + commandList
+	commandSubnetReserve  = commandSubnet + " reserve"
+	commandSubnetRelease  = commandSubnet + " release"
+	commandService        = "service"
+	commandServiceList    = commandService + " " + commandList
+	commandServiceReserve = commandService + " reserve"
+	commandServiceRelease = commandService + " release"
+	commandCalcSplit      = commandCalc + " split"
+	commandCalcInfo       = commandCalc + " info"
+	statusOK              = "ok"
+	statusNoChanges       = "no_changes"
 )
 
 func changedStatus(changed bool) string {
@@ -48,6 +52,13 @@ type subnetPoolOutput struct {
 
 	CIDR string `json:"cidr"`
 	Site string `json:"site"`
+}
+
+type serviceAddressOutput struct {
+	reservationMetadataOutput
+
+	Address string `json:"address"`
+	Service string `json:"service"`
 }
 
 // reservationMetadataOutput is the optional ownership/tracking metadata
@@ -116,27 +127,30 @@ type deviceRecord struct {
 type outputEnvelope struct {
 	reservationMetadataOutput
 
-	SchemaVersion string              `json:"schema_version"`
-	Tool          string              `json:"tool"`
-	Sanitization  *sanitize.Metadata  `json:"sanitization,omitempty"`
-	Command       string              `json:"command"`
-	Status        string              `json:"status"`
-	Message       string              `json:"message"`
-	Tailnet       string              `json:"tailnet,omitempty"`
-	Changed       *bool               `json:"changed,omitempty"`
-	ID            string              `json:"id,omitempty"`
-	CIDR          string              `json:"cidr,omitempty"`
-	Site          string              `json:"site,omitempty"`
-	SiteIDs       *[]siteIDOutput     `json:"site_ids,omitempty"`
-	SubnetPools   *[]subnetPoolOutput `json:"subnet_pools,omitempty"`
-	Devices       *[]deviceRecord     `json:"devices,omitempty"`
-	Subnets       *[]string           `json:"subnets,omitempty"`
-	BlockInfo     *blockInfoOutput    `json:"block_info,omitempty"`
+	SchemaVersion    string                  `json:"schema_version"`
+	Tool             string                  `json:"tool"`
+	Sanitization     *sanitize.Metadata      `json:"sanitization,omitempty"`
+	Command          string                  `json:"command"`
+	Status           string                  `json:"status"`
+	Message          string                  `json:"message"`
+	Tailnet          string                  `json:"tailnet,omitempty"`
+	Changed          *bool                   `json:"changed,omitempty"`
+	ID               string                  `json:"id,omitempty"`
+	CIDR             string                  `json:"cidr,omitempty"`
+	Address          string                  `json:"address,omitempty"`
+	Site             string                  `json:"site,omitempty"`
+	Service          string                  `json:"service,omitempty"`
+	SiteIDs          *[]siteIDOutput         `json:"site_ids,omitempty"`
+	SubnetPools      *[]subnetPoolOutput     `json:"subnet_pools,omitempty"`
+	ServiceAddresses *[]serviceAddressOutput `json:"service_addresses,omitempty"`
+	Devices          *[]deviceRecord         `json:"devices,omitempty"`
+	Subnets          *[]string               `json:"subnets,omitempty"`
+	BlockInfo        *blockInfoOutput        `json:"block_info,omitempty"`
 
 	// messageBuilder, when set, renders Message from this envelope's own
 	// exported fields at emit time instead of Message being pre-formatted
 	// with raw values. emitOutput calls it after any sanitization has run,
-	// so a builder that reads Site/CIDR/ID sees the already-redacted
+	// so a builder that reads Site/Service/CIDR/Address/ID sees the already-redacted
 	// placeholder rather than the original identity -- avoiding the desync
 	// a value-based text sweep risks against a %q-escaped value (see
 	// sanitizeErrorIfNeeded's doc comment in main.go for the same failure
@@ -167,6 +181,9 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 	}
 	if result.SubnetPools != nil {
 		return renderSubnetPools(writer, *result.SubnetPools)
+	}
+	if result.ServiceAddresses != nil {
+		return renderServiceAddresses(writer, *result.ServiceAddresses)
 	}
 	if result.Devices != nil {
 		return renderDevices(writer, *result.Devices)
@@ -199,14 +216,25 @@ func renderSubnetPools(writer io.Writer, entries []subnetPoolOutput) error {
 	return nil
 }
 
+func renderServiceAddresses(writer io.Writer, entries []serviceAddressOutput) error {
+	for _, entry := range entries {
+		if err := renderReservationLine(
+			writer, entry.Address, entry.Service, entry.reservationMetadataOutput,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // renderReservationLine writes one tab-separated human-output line: key,
-// site, and -- only when present -- a third tab-separated field carrying the
+// reservation target, and -- only when present -- a third tab-separated field carrying the
 // reservation's metadata as space-separated key=value pairs. Omitting the
 // third field entirely for a metadata-free reservation, rather than writing
 // an empty one, is what lets existing scripts parsing two tab-separated
 // columns keep working unchanged.
-func renderReservationLine(writer io.Writer, key, site string, metadata reservationMetadataOutput) error {
-	line := key + "\t" + site
+func renderReservationLine(writer io.Writer, key, target string, metadata reservationMetadataOutput) error {
+	line := key + "\t" + target
 	if metadata.hasMetadata() {
 		line += "\t" + metadata.formatMetadata()
 	}
@@ -272,18 +300,20 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		Status:                    input.Status,
 		Message:                   output.Text(input.Message),
 		messageBuilder:            input.messageBuilder,
-		Tailnet:                   output.Value("tailnet", input.Tailnet),
+		Tailnet:                   output.Value(kindTailnet, input.Tailnet),
 		Changed:                   input.Changed,
 		ID:                        input.ID,
-		CIDR:                      output.Value("cidr", input.CIDR),
-		Site:                      output.Value("site", input.Site),
+		CIDR:                      output.Value(kindCIDR, input.CIDR),
+		Address:                   output.Value(kindIP, input.Address),
+		Site:                      output.Value(kindSite, input.Site),
+		Service:                   output.Value(kindService, input.Service),
 		reservationMetadataOutput: sanitizeMetadata(input.reservationMetadataOutput, output),
 	}
 	if input.SiteIDs != nil {
 		entries := make([]siteIDOutput, len(*input.SiteIDs))
 		for index, entry := range *input.SiteIDs {
 			entries[index] = siteIDOutput{
-				ID: entry.ID, Site: output.Value("site", entry.Site),
+				ID: entry.ID, Site: output.Value(kindSite, entry.Site),
 				reservationMetadataOutput: sanitizeMetadata(entry.reservationMetadataOutput, output),
 			}
 		}
@@ -293,18 +323,29 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		entries := make([]subnetPoolOutput, len(*input.SubnetPools))
 		for index, entry := range *input.SubnetPools {
 			entries[index] = subnetPoolOutput{
-				CIDR:                      output.Value("cidr", entry.CIDR),
-				Site:                      output.Value("site", entry.Site),
+				CIDR:                      output.Value(kindCIDR, entry.CIDR),
+				Site:                      output.Value(kindSite, entry.Site),
 				reservationMetadataOutput: sanitizeMetadata(entry.reservationMetadataOutput, output),
 			}
 		}
 		result.SubnetPools = &entries
 	}
+	if input.ServiceAddresses != nil {
+		entries := make([]serviceAddressOutput, len(*input.ServiceAddresses))
+		for index, entry := range *input.ServiceAddresses {
+			entries[index] = serviceAddressOutput{
+				Address:                   output.Value(kindIP, entry.Address),
+				Service:                   output.Value(kindService, entry.Service),
+				reservationMetadataOutput: sanitizeMetadata(entry.reservationMetadataOutput, output),
+			}
+		}
+		result.ServiceAddresses = &entries
+	}
 	if input.Devices != nil {
 		devices := make([]deviceRecord, len(*input.Devices))
 		for index, device := range *input.Devices {
 			devices[index] = deviceRecord{
-				Name:             output.Value("hostname", device.Name),
+				Name:             output.Value(kindHostname, device.Name),
 				Addresses:        sanitizeNetworkValues(device.Addresses, output),
 				AdvertisedRoutes: sanitizeNetworkValues(device.AdvertisedRoutes, output),
 			}
@@ -326,33 +367,42 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 // replacement cannot meaningfully redact, and a timestamp carries no tailnet
 // identity to sweep.
 func sanitizeMetadata(metadata reservationMetadataOutput, output *sanitize.Sanitizer) reservationMetadataOutput {
-	metadata.Owner = output.Value("owner", metadata.Owner)
+	metadata.Owner = output.Value(kindOwner, metadata.Owner)
 	return metadata
 }
 
 func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer) {
-	output.Value("tailnet", input.Tailnet)
-	output.Value("cidr", input.CIDR)
-	output.Value("site", input.Site)
-	output.Value("owner", input.Owner)
+	output.Value(kindTailnet, input.Tailnet)
+	output.Value(kindCIDR, input.CIDR)
+	output.Value(kindIP, input.Address)
+	output.Value(kindSite, input.Site)
+	output.Value(kindService, input.Service)
+	output.Value(kindOwner, input.Owner)
 	if input.SiteIDs != nil {
 		for _, entry := range *input.SiteIDs {
-			output.Value("site", entry.Site)
-			output.Value("owner", entry.Owner)
+			output.Value(kindSite, entry.Site)
+			output.Value(kindOwner, entry.Owner)
 		}
 	}
 	if input.SubnetPools != nil {
 		for _, entry := range *input.SubnetPools {
-			output.Value("cidr", entry.CIDR)
-			output.Value("site", entry.Site)
-			output.Value("owner", entry.Owner)
+			output.Value(kindCIDR, entry.CIDR)
+			output.Value(kindSite, entry.Site)
+			output.Value(kindOwner, entry.Owner)
+		}
+	}
+	if input.ServiceAddresses != nil {
+		for _, entry := range *input.ServiceAddresses {
+			output.Value(kindIP, entry.Address)
+			output.Value(kindService, entry.Service)
+			output.Value(kindOwner, entry.Owner)
 		}
 	}
 	if input.Devices == nil {
 		return
 	}
 	for _, device := range *input.Devices {
-		output.Value("hostname", device.Name)
+		output.Value(kindHostname, device.Name)
 		for _, value := range device.Addresses {
 			output.Value(networkKind(value), value)
 		}

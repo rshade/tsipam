@@ -46,6 +46,23 @@ type ReserveSubnetPoolRequestBody struct {
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
+// ReserveServiceAddressRequestBody is the type of the "ipam" service
+// "reserve_service_address" endpoint HTTP request body.
+type ReserveServiceAddressRequestBody struct {
+	// Bare IPv4 host or exact IPv4 /32 prefix to reserve.
+	Address string `form:"address" json:"address" xml:"address"`
+	// Bare service name or canonical svc:<name> identity.
+	Service string `form:"service" json:"service" xml:"service"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+}
+
 // ReserveSiteIDResponseBody is the type of the "ipam" service
 // "reserve_site_id" endpoint HTTP response body.
 type ReserveSiteIDResponseBody struct {
@@ -102,6 +119,52 @@ type ReleaseSubnetPoolResponseBody struct {
 	Changed *bool `form:"changed,omitempty" json:"changed,omitempty" xml:"changed,omitempty"`
 }
 
+// ReserveServiceAddressResponseBody is the type of the "ipam" service
+// "reserve_service_address" endpoint HTTP response body.
+type ReserveServiceAddressResponseBody struct {
+	// Canonical bare IPv4 host address actually written.
+	Address *string `form:"address,omitempty" json:"address,omitempty" xml:"address,omitempty"`
+	// Canonical svc:<name> service identity actually written.
+	Service *string `form:"service,omitempty" json:"service,omitempty" xml:"service,omitempty"`
+	// False when the exact address, service, and metadata were already reserved.
+	Changed *bool `form:"changed,omitempty" json:"changed,omitempty" xml:"changed,omitempty"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+}
+
+// ReleaseServiceAddressResponseBody is the type of the "ipam" service
+// "release_service_address" endpoint HTTP response body.
+type ReleaseServiceAddressResponseBody struct {
+	// Canonical bare IPv4 host address released.
+	Address *string `form:"address,omitempty" json:"address,omitempty" xml:"address,omitempty"`
+	// False when address was not reserved.
+	Changed *bool `form:"changed,omitempty" json:"changed,omitempty" xml:"changed,omitempty"`
+}
+
+// ReserveSiteIDInvalidInputResponseBody is the type of the "ipam" service
+// "reserve_site_id" endpoint HTTP response body for the "invalid_input" error.
+type ReserveSiteIDInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
 // ReserveSiteIDCollisionResponseBody is the type of the "ipam" service
 // "reserve_site_id" endpoint HTTP response body for the "collision" error.
 type ReserveSiteIDCollisionResponseBody struct {
@@ -120,9 +183,122 @@ type ReserveSiteIDCollisionResponseBody struct {
 	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
 }
 
+// ReleaseSiteIDInvalidInputResponseBody is the type of the "ipam" service
+// "release_site_id" endpoint HTTP response body for the "invalid_input" error.
+type ReleaseSiteIDInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ReserveSubnetPoolInvalidInputResponseBody is the type of the "ipam" service
+// "reserve_subnet_pool" endpoint HTTP response body for the "invalid_input"
+// error.
+type ReserveSubnetPoolInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
 // ReserveSubnetPoolCollisionResponseBody is the type of the "ipam" service
 // "reserve_subnet_pool" endpoint HTTP response body for the "collision" error.
 type ReserveSubnetPoolCollisionResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ReleaseSubnetPoolInvalidInputResponseBody is the type of the "ipam" service
+// "release_subnet_pool" endpoint HTTP response body for the "invalid_input"
+// error.
+type ReleaseSubnetPoolInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ReserveServiceAddressInvalidInputResponseBody is the type of the "ipam"
+// service "reserve_service_address" endpoint HTTP response body for the
+// "invalid_input" error.
+type ReserveServiceAddressInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ReserveServiceAddressCollisionResponseBody is the type of the "ipam" service
+// "reserve_service_address" endpoint HTTP response body for the "collision"
+// error.
+type ReserveServiceAddressCollisionResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ReleaseServiceAddressInvalidInputResponseBody is the type of the "ipam"
+// service "release_service_address" endpoint HTTP response body for the
+// "invalid_input" error.
+type ReleaseServiceAddressInvalidInputResponseBody struct {
 	// Name is the name of this class of errors.
 	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
 	// ID is a unique identifier for this particular occurrence of the problem.
@@ -171,6 +347,23 @@ type SubnetPoolReservationResponse struct {
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
+// ServiceAddressReservationResponse is used to define fields on response body
+// types.
+type ServiceAddressReservationResponse struct {
+	// Canonical bare IPv4 host address.
+	Address *string `form:"address,omitempty" json:"address,omitempty" xml:"address,omitempty"`
+	// Canonical svc:<name> service identity.
+	Service *string `form:"service,omitempty" json:"service,omitempty" xml:"service,omitempty"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+}
+
 // NewReserveSiteIDRequestBody builds the HTTP request body from the payload of
 // the "reserve_site_id" endpoint of the "ipam" service.
 func NewReserveSiteIDRequestBody(p *ipam.ReserveSiteIDPayload) *ReserveSiteIDRequestBody {
@@ -191,6 +384,20 @@ func NewReserveSubnetPoolRequestBody(p *ipam.ReserveSubnetPoolPayload) *ReserveS
 	body := &ReserveSubnetPoolRequestBody{
 		CIDR:        p.CIDR,
 		Site:        p.Site,
+		Owner:       p.Owner,
+		Description: p.Description,
+		Ticket:      p.Ticket,
+		ReservedAt:  p.ReservedAt,
+	}
+	return body
+}
+
+// NewReserveServiceAddressRequestBody builds the HTTP request body from the
+// payload of the "reserve_service_address" endpoint of the "ipam" service.
+func NewReserveServiceAddressRequestBody(p *ipam.ReserveServiceAddressPayload) *ReserveServiceAddressRequestBody {
+	body := &ReserveServiceAddressRequestBody{
+		Address:     p.Address,
+		Service:     p.Service,
 		Owner:       p.Owner,
 		Description: p.Description,
 		Ticket:      p.Ticket,
@@ -230,6 +437,21 @@ func NewReserveSiteIDResultOK(body *ReserveSiteIDResponseBody) *ipam.ReserveSite
 	return v
 }
 
+// NewReserveSiteIDInvalidInput builds a ipam service reserve_site_id endpoint
+// invalid_input error.
+func NewReserveSiteIDInvalidInput(body *ReserveSiteIDInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
 // NewReserveSiteIDCollision builds a ipam service reserve_site_id endpoint
 // collision error.
 func NewReserveSiteIDCollision(body *ReserveSiteIDCollisionResponseBody) *goa.ServiceError {
@@ -251,6 +473,21 @@ func NewReleaseSiteIDResultOK(body *ReleaseSiteIDResponseBody) *ipam.ReleaseSite
 	v := &ipam.ReleaseSiteIDResult{
 		ID:      *body.ID,
 		Changed: *body.Changed,
+	}
+
+	return v
+}
+
+// NewReleaseSiteIDInvalidInput builds a ipam service release_site_id endpoint
+// invalid_input error.
+func NewReleaseSiteIDInvalidInput(body *ReleaseSiteIDInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
 	}
 
 	return v
@@ -287,6 +524,21 @@ func NewReserveSubnetPoolResultOK(body *ReserveSubnetPoolResponseBody) *ipam.Res
 	return v
 }
 
+// NewReserveSubnetPoolInvalidInput builds a ipam service reserve_subnet_pool
+// endpoint invalid_input error.
+func NewReserveSubnetPoolInvalidInput(body *ReserveSubnetPoolInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
 // NewReserveSubnetPoolCollision builds a ipam service reserve_subnet_pool
 // endpoint collision error.
 func NewReserveSubnetPoolCollision(body *ReserveSubnetPoolCollisionResponseBody) *goa.ServiceError {
@@ -308,6 +560,108 @@ func NewReleaseSubnetPoolResultOK(body *ReleaseSubnetPoolResponseBody) *ipam.Rel
 	v := &ipam.ReleaseSubnetPoolResult{
 		CIDR:    *body.CIDR,
 		Changed: *body.Changed,
+	}
+
+	return v
+}
+
+// NewReleaseSubnetPoolInvalidInput builds a ipam service release_subnet_pool
+// endpoint invalid_input error.
+func NewReleaseSubnetPoolInvalidInput(body *ReleaseSubnetPoolInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewListServiceAddressesServiceAddressReservationOK builds a "ipam" service
+// "list_service_addresses" endpoint result from a HTTP "OK" response.
+func NewListServiceAddressesServiceAddressReservationOK(body []*ServiceAddressReservationResponse) []*ipam.ServiceAddressReservation {
+	v := make([]*ipam.ServiceAddressReservation, len(body))
+	for i, val := range body {
+		if val == nil {
+			v[i] = nil
+			continue
+		}
+		v[i] = unmarshalServiceAddressReservationResponseToIpamServiceAddressReservation(val)
+	}
+
+	return v
+}
+
+// NewReserveServiceAddressResultOK builds a "ipam" service
+// "reserve_service_address" endpoint result from a HTTP "OK" response.
+func NewReserveServiceAddressResultOK(body *ReserveServiceAddressResponseBody) *ipam.ReserveServiceAddressResult {
+	v := &ipam.ReserveServiceAddressResult{
+		Address:     *body.Address,
+		Service:     *body.Service,
+		Changed:     *body.Changed,
+		Owner:       body.Owner,
+		Description: body.Description,
+		Ticket:      body.Ticket,
+		ReservedAt:  body.ReservedAt,
+	}
+
+	return v
+}
+
+// NewReserveServiceAddressInvalidInput builds a ipam service
+// reserve_service_address endpoint invalid_input error.
+func NewReserveServiceAddressInvalidInput(body *ReserveServiceAddressInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewReserveServiceAddressCollision builds a ipam service
+// reserve_service_address endpoint collision error.
+func NewReserveServiceAddressCollision(body *ReserveServiceAddressCollisionResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewReleaseServiceAddressResultOK builds a "ipam" service
+// "release_service_address" endpoint result from a HTTP "OK" response.
+func NewReleaseServiceAddressResultOK(body *ReleaseServiceAddressResponseBody) *ipam.ReleaseServiceAddressResult {
+	v := &ipam.ReleaseServiceAddressResult{
+		Address: *body.Address,
+		Changed: *body.Changed,
+	}
+
+	return v
+}
+
+// NewReleaseServiceAddressInvalidInput builds a ipam service
+// release_service_address endpoint invalid_input error.
+func NewReleaseServiceAddressInvalidInput(body *ReleaseServiceAddressInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
 	}
 
 	return v
@@ -373,9 +727,111 @@ func ValidateReleaseSubnetPoolResponseBody(body *ReleaseSubnetPoolResponseBody) 
 	return
 }
 
+// ValidateReserveServiceAddressResponseBody runs the validations defined on
+// reserve_service_address_response_body
+func ValidateReserveServiceAddressResponseBody(body *ReserveServiceAddressResponseBody) (err error) {
+	if body.Address == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("address", "body"))
+	}
+	if body.Service == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("service", "body"))
+	}
+	if body.Changed == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("changed", "body"))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
+// ValidateReleaseServiceAddressResponseBody runs the validations defined on
+// release_service_address_response_body
+func ValidateReleaseServiceAddressResponseBody(body *ReleaseServiceAddressResponseBody) (err error) {
+	if body.Address == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("address", "body"))
+	}
+	if body.Changed == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("changed", "body"))
+	}
+	return
+}
+
+// ValidateReserveSiteIDInvalidInputResponseBody runs the validations defined
+// on reserve_site_id_invalid_input_response_body
+func ValidateReserveSiteIDInvalidInputResponseBody(body *ReserveSiteIDInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
 // ValidateReserveSiteIDCollisionResponseBody runs the validations defined on
 // reserve_site_id_collision_response_body
 func ValidateReserveSiteIDCollisionResponseBody(body *ReserveSiteIDCollisionResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateReleaseSiteIDInvalidInputResponseBody runs the validations defined
+// on release_site_id_invalid_input_response_body
+func ValidateReleaseSiteIDInvalidInputResponseBody(body *ReleaseSiteIDInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateReserveSubnetPoolInvalidInputResponseBody runs the validations
+// defined on reserve_subnet_pool_invalid_input_response_body
+func ValidateReserveSubnetPoolInvalidInputResponseBody(body *ReserveSubnetPoolInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
 	}
@@ -421,6 +877,102 @@ func ValidateReserveSubnetPoolCollisionResponseBody(body *ReserveSubnetPoolColli
 	return
 }
 
+// ValidateReleaseSubnetPoolInvalidInputResponseBody runs the validations
+// defined on release_subnet_pool_invalid_input_response_body
+func ValidateReleaseSubnetPoolInvalidInputResponseBody(body *ReleaseSubnetPoolInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateReserveServiceAddressInvalidInputResponseBody runs the validations
+// defined on reserve_service_address_invalid_input_response_body
+func ValidateReserveServiceAddressInvalidInputResponseBody(body *ReserveServiceAddressInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateReserveServiceAddressCollisionResponseBody runs the validations
+// defined on reserve_service_address_collision_response_body
+func ValidateReserveServiceAddressCollisionResponseBody(body *ReserveServiceAddressCollisionResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateReleaseServiceAddressInvalidInputResponseBody runs the validations
+// defined on release_service_address_invalid_input_response_body
+func ValidateReleaseServiceAddressInvalidInputResponseBody(body *ReleaseServiceAddressInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
 // ValidateSiteIDReservationResponse runs the validations defined on
 // SiteIDReservationResponse
 func ValidateSiteIDReservationResponse(body *SiteIDReservationResponse) (err error) {
@@ -444,6 +996,21 @@ func ValidateSubnetPoolReservationResponse(body *SubnetPoolReservationResponse) 
 	}
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
+// ValidateServiceAddressReservationResponse runs the validations defined on
+// ServiceAddressReservationResponse
+func ValidateServiceAddressReservationResponse(body *ServiceAddressReservationResponse) (err error) {
+	if body.Address == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("address", "body"))
+	}
+	if body.Service == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("service", "body"))
 	}
 	if body.ReservedAt != nil {
 		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))

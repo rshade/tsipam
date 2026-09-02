@@ -1,8 +1,7 @@
 // Package registry provides comment-preserving, HuJSON-backed read/write
 // access to the tail-ipam address-space registry — the declarative source of
 // truth for reserved Tailscale address-space allocations. It supports 4via6
-// site IDs and subnet-CIDR pools; per-service /32 allocation is separately
-// scoped future work (see ROADMAP.md).
+// site IDs, subnet-CIDR pools, and per-service IPv4 address reservations.
 package registry
 
 import (
@@ -27,7 +26,22 @@ const (
 	siteIDsKey = "siteIDs"
 	// subnetPoolsKey is the registry's top-level key for the subnet-pool map.
 	subnetPoolsKey = "subnetPools"
+	// serviceAddressesKey is the registry's top-level key for per-service IPv4
+	// address reservations.
+	serviceAddressesKey = "serviceAddresses"
 )
+
+// storedStateError strips the InvalidInputError marker from an error if present,
+// returning the wrapped inner error. This is used for stored-state validation
+// errors (as opposed to caller-supplied input errors) so they are not
+// misclassified as HTTP 400 bad-input failures.
+func storedStateError(err error) error {
+	var invalidInput *InvalidInputError
+	if errors.As(err, &invalidInput) {
+		return invalidInput.Unwrap()
+	}
+	return err
+}
 
 // maxSiteID is the highest 4via6 site ID Tailscale's control plane accepts:
 // the field is a 16-bit integer.
@@ -45,12 +59,14 @@ const (
 
 // Registry is the tail-ipam address-space allocation ledger, canonicalized by
 // Load. SiteIDs maps a canonical 4via6 site ID (see NormalizeSiteID) to its
-// site, and SubnetPools maps a canonical CIDR (see NormalizeSubnetCIDR) to its
-// site. rawKeys records each site-ID entry's original on-file key spelling
-// (e.g. "01" for canonical "1"); subnetPoolRawKeys does the same for subnet
-// pools. hujson's patch matching is exact and case/format-sensitive, so an
-// edit that addresses an existing entry has to target the spelling the file
-// actually uses.
+// site; SubnetPools maps a canonical CIDR (see NormalizeSubnetCIDR) to its
+// site; and ServiceAddresses maps a canonical IPv4 address (see
+// NormalizeServiceAddress) to a per-service entry. rawKeys records each
+// site-ID entry's original on-file key spelling (e.g. "01" for canonical "1");
+// subnetPoolRawKeys and serviceAddressRawKeys do the same for subnet pools and
+// service addresses. hujson's patch matching is exact and case/format-sensitive,
+// so an edit that addresses an existing entry has to target the spelling the
+// file actually uses.
 //
 // siteIDsPresent records whether the file's top-level "siteIDs" member
 // already exists as an object node (empty or not) -- as opposed to being
@@ -58,21 +74,28 @@ const (
 // being non-nil: an existing-but-empty object and a genuinely absent member
 // both decode to a nil SiteIDs map, yet ReserveSiteID must edit them with
 // different patch strategies (see its doc comment). The same applies to
-// subnetPoolsPresent for the "subnetPools" member.
+// subnetPoolsPresent for the "subnetPools" member and serviceAddressesPresent
+// for the "serviceAddresses" member: a caller that creates a service-address
+// reservation needs to know whether to add a new object or a key into an
+// existing one.
 //
-// siteIDsErr and subnetPoolsErr capture any decode/validate failure scoped to
-// that map only, so a caller that needs only one map is not blocked by a
-// problem confined to the other (e.g., a malformed subnetPools does not
-// prevent site-ID commands from working).
+// siteIDsErr, subnetPoolsErr, and serviceAddressesErr capture any decode/
+// validate failure scoped to that map only, so a caller that needs only one
+// map is not blocked by a problem confined to the other (e.g., a malformed
+// subnetPools does not prevent site-ID commands from working).
 type Registry struct {
-	SiteIDs            map[string]Entry
-	SubnetPools        map[string]Entry
-	rawKeys            map[string]string
-	subnetPoolRawKeys  map[string]string
-	siteIDsPresent     bool
-	subnetPoolsPresent bool
-	siteIDsErr         error
-	subnetPoolsErr     error
+	SiteIDs                 map[string]Entry
+	SubnetPools             map[string]Entry
+	ServiceAddresses        map[string]ServiceEntry
+	rawKeys                 map[string]string
+	subnetPoolRawKeys       map[string]string
+	serviceAddressRawKeys   map[string]string
+	siteIDsPresent          bool
+	subnetPoolsPresent      bool
+	serviceAddressesPresent bool
+	siteIDsErr              error
+	subnetPoolsErr          error
+	serviceAddressesErr     error
 }
 
 // SiteIDEntry is one resolved site-ID reservation, returned by ListSiteIDs.
@@ -98,30 +121,38 @@ func (e *SiteIDCollisionError) Error() string {
 // NormalizeSiteID validates and canonicalizes a 4via6 site ID: a decimal
 // integer in Tailscale's 16-bit site-ID range, 0-65535. Canonicalizing
 // through strconv means "01" and "1" resolve to the same registry key.
+// Validation errors are wrapped with invalidInput so they are classified as
+// HTTP 400 caller-input failures on caller-supplied input, and unwrapped by
+// storedStateError on stored-state validation.
 func NormalizeSiteID(id string) (string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return "", errors.New("site ID must not be empty")
+		return "", invalidInput(errors.New("site ID must not be empty"))
 	}
 	n, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
-		return "", fmt.Errorf("site ID %q is not a non-negative integer: %w", id, err)
+		return "", invalidInput(fmt.Errorf("site ID %q is not a non-negative integer: %w", id, err))
 	}
 	if n > maxSiteID {
-		return "", fmt.Errorf("site ID %d is out of range: Tailscale 4via6 site IDs are 0-%d", n, maxSiteID)
+		return "", invalidInput(fmt.Errorf(
+			"site ID %d is out of range: Tailscale 4via6 site IDs are 0-%d", n, maxSiteID,
+		))
 	}
 	return strconv.FormatUint(n, 10), nil
 }
 
 // NormalizeSiteName validates a site name: non-empty after trimming and
-// containing no control characters (C0 control characters or DEL).
+// containing no control characters (C0 control characters or DEL). Validation
+// errors are wrapped with invalidInput so they are classified as HTTP 400
+// caller-input failures on caller-supplied input, and unwrapped by
+// storedStateError on stored-state validation.
 func NormalizeSiteName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", errors.New("site name must not be empty")
+		return "", invalidInput(errors.New("site name must not be empty"))
 	}
 	if err := rejectControlChars("site name", name); err != nil {
-		return "", err
+		return "", invalidInput(err)
 	}
 	return name, nil
 }
@@ -149,21 +180,23 @@ func NormalizeSiteName(name string) (string, error) {
 // A near-miss top-level spelling (e.g. "siteids") is rejected, as is an
 // ambiguous document with more than one member that case-insensitively
 // matches "siteIDs" -- including two members with the identical exact
-// spelling. The same rules apply to "subnetPools". Any other top-level key
-// loads and round-trips untouched: the registry is documented to grow
-// additional top-level keys (for example per-service /32 allocations) in
-// future versions, so unknown fields are not rejected wholesale. Within the
-// "siteIDs" object itself, an exact-duplicate
-// entry key is rejected for the same first-wins/last-wins reason, and every
-// entry key is canonicalized through NormalizeSiteID: two raw keys that
-// canonicalize to the same ID (e.g. "01" and "1") name both spellings in the
-// returned error, since Load cannot decide which is right. An entry whose
-// value is null or "" is rejected: a reservation must have a genuine
-// non-empty site name. The same rules apply to subnet pools.
+// spelling. The same rules apply to "subnetPools" and "serviceAddresses".
+// Any other top-level key loads and round-trips untouched: the registry is
+// documented to grow additional top-level keys (for example per-service
+// address ranges or next-free allocation pools) in future versions, so
+// unknown fields are not rejected wholesale. Within the "siteIDs" object
+// itself, an exact-duplicate entry key is rejected for the same
+// first-wins/last-wins reason, and every entry key is canonicalized through
+// NormalizeSiteID: two raw keys that canonicalize to the same ID (e.g. "01"
+// and "1") name both spellings in the returned error, since Load cannot
+// decide which is right. An entry whose value is null or "" is rejected: a
+// reservation must have a genuine non-empty site name. The same rules apply
+// to subnet pools and service addresses.
 //
-// Decode/validate failures are scoped to the affected map only (siteIDsErr
-// or subnetPoolsErr): a caller that needs only one map can check mapError
-// for that specific map and proceed even if the other map has an error.
+// Decode/validate failures are scoped to the affected map only (siteIDsErr,
+// subnetPoolsErr, or serviceAddressesErr): a caller that needs only one map
+// can check mapError for that specific map and proceed even if the other maps
+// have errors.
 func Load(path string) (*Registry, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -193,6 +226,7 @@ func Load(path string) (*Registry, error) {
 	reg := &Registry{}
 	reg.loadSiteIDs(object)
 	reg.loadSubnetPools(object)
+	reg.loadServiceAddresses(object)
 	return reg, nil
 }
 
@@ -239,32 +273,62 @@ func (reg *Registry) loadSubnetPools(object *hujson.Object) {
 	}
 }
 
-// mapAccessor bundles one top-level map's canonical entries, raw-key
-// spellings, and scoped decode/validate error, so mapError and registryMap
-// resolve topLevel through the single switch in mapAccessorFor instead of
-// two that could silently drift apart when a third top-level map (e.g. the
-// per-service /32 allocations named as future work above) is added and only
-// one switch is updated for it.
+// loadServiceAddresses populates the serviceAddresses third of reg or records
+// a scoped error without affecting the other registry maps.
+func (reg *Registry) loadServiceAddresses(object *hujson.Object) {
+	entries, present, err := decodeMapMember[ServiceEntry](object, serviceAddressesKey)
+	if err != nil {
+		reg.serviceAddressesErr = fmt.Errorf("decoding registry: %w", err)
+		return
+	}
+	addresses, rawKeys, err := canonicalizeServiceAddresses(entries)
+	reg.ServiceAddresses = addresses
+	reg.serviceAddressRawKeys = rawKeys
+	reg.serviceAddressesPresent = present
+	if err != nil {
+		reg.serviceAddressesErr = fmt.Errorf("decoding registry: %w", err)
+	}
+}
+
+// mapAccessor bundles the type-agnostic questions shared by all top-level
+// maps: canonical key membership, raw-key spelling, and scoped validation
+// error. Concrete reserve/list operations continue to use their typed maps.
+// hasView reports whether the canonical map is non-nil (e.g. reg.SiteIDs != nil);
+// it's false when a map decode/validate failure prevented building a view.
 type mapAccessor struct {
-	entries map[string]Entry
+	hasKey  func(string) bool
 	rawKeys map[string]string
 	err     error
+	hasView bool
 }
 
 func (reg *Registry) mapAccessorFor(topLevel string) (mapAccessor, error) {
 	switch topLevel {
 	case siteIDsKey:
-		return mapAccessor{entries: reg.SiteIDs, rawKeys: reg.rawKeys, err: reg.siteIDsErr}, nil
+		return mapAccessor{
+			hasKey:  func(key string) bool { _, ok := reg.SiteIDs[key]; return ok },
+			rawKeys: reg.rawKeys, err: reg.siteIDsErr,
+			hasView: reg.SiteIDs != nil,
+		}, nil
 	case subnetPoolsKey:
-		return mapAccessor{entries: reg.SubnetPools, rawKeys: reg.subnetPoolRawKeys, err: reg.subnetPoolsErr}, nil
+		return mapAccessor{
+			hasKey:  func(key string) bool { _, ok := reg.SubnetPools[key]; return ok },
+			rawKeys: reg.subnetPoolRawKeys, err: reg.subnetPoolsErr,
+			hasView: reg.SubnetPools != nil,
+		}, nil
+	case serviceAddressesKey:
+		return mapAccessor{
+			hasKey:  func(key string) bool { _, ok := reg.ServiceAddresses[key]; return ok },
+			rawKeys: reg.serviceAddressRawKeys, err: reg.serviceAddressesErr,
+			hasView: reg.ServiceAddresses != nil,
+		}, nil
 	default:
 		return mapAccessor{}, fmt.Errorf("unknown registry map %q", topLevel)
 	}
 }
 
-// mapError returns the scoped decode/validate error for topLevel
-// (siteIDsKey or subnetPoolsKey), so a caller that only needs one map is
-// never blocked by a problem confined to the other.
+// mapError returns the scoped decode/validate error for topLevel, so a caller
+// that only needs one map is never blocked by a problem confined to another.
 func (reg *Registry) mapError(topLevel string) error {
 	acc, err := reg.mapAccessorFor(topLevel)
 	if err != nil {
@@ -383,6 +447,10 @@ func canonicalize(raw map[string]Entry) (*Registry, error) {
 	for _, rawID := range rawIDs {
 		canonicalID, err := NormalizeSiteID(rawID)
 		if err != nil {
+			// NormalizeSiteID wraps InvalidInputError; for stored-state
+			// validation, strip the marker so this error is not misclassified
+			// as caller input.
+			err = storedStateError(err)
 			return nil, fmt.Errorf("invalid site ID key %q: %w", rawID, err)
 		}
 		if firstRaw, ok := rawKeys[canonicalID]; ok {
@@ -396,6 +464,57 @@ func canonicalize(raw map[string]Entry) (*Registry, error) {
 		rawKeys[canonicalID] = rawID
 	}
 	return &Registry{SiteIDs: siteIDs, rawKeys: rawKeys}, nil
+}
+
+// canonicalizeServiceAddresses builds the canonical service-address view.
+// Exact /32 raw keys are accepted as aliases for their bare address, while
+// two raw spellings resolving to one address are rejected as ambiguous.
+func canonicalizeServiceAddresses(
+	raw map[string]ServiceEntry,
+) (map[string]ServiceEntry, map[string]string, error) {
+	if len(raw) == 0 {
+		return nil, nil, nil
+	}
+
+	rawAddresses := make([]string, 0, len(raw))
+	for rawAddress := range raw {
+		rawAddresses = append(rawAddresses, rawAddress)
+	}
+	sort.Strings(rawAddresses)
+
+	addresses := make(map[string]ServiceEntry, len(raw))
+	rawKeys := make(map[string]string, len(raw))
+	for _, rawAddress := range rawAddresses {
+		address, err := NormalizeServiceAddress(rawAddress)
+		if err != nil {
+			// NormalizeServiceAddress wraps InvalidInputError; for stored-state
+			// validation, strip the marker so this error is not misclassified
+			// as caller input.
+			err = storedStateError(err)
+			return nil, nil, fmt.Errorf("invalid service address key %q: %w", rawAddress, err)
+		}
+		if firstRaw, ok := rawKeys[address]; ok {
+			return nil, nil, fmt.Errorf(
+				"service address %s is defined twice, as %q and %q",
+				address,
+				firstRaw,
+				rawAddress,
+			)
+		}
+		entry := raw[rawAddress]
+		service, err := NormalizeServiceName(entry.Service)
+		if err != nil {
+			// NormalizeServiceName wraps InvalidInputError; for stored-state
+			// validation, strip the marker so this error is not misclassified
+			// as caller input, and name the key for context.
+			err = storedStateError(err)
+			return nil, nil, fmt.Errorf("service address %s (key %q): %w", address, rawAddress, err)
+		}
+		entry.Service = service
+		addresses[address] = entry
+		rawKeys[address] = rawAddress
+	}
+	return addresses, rawKeys, nil
 }
 
 // withRegistryLock runs fn while holding an exclusive, cross-process lock on
@@ -455,43 +574,38 @@ func identityFreePathError(err error) error {
 	return err
 }
 
-// RawEntries returns the best-effort, unvalidated site-ID and subnet-pool
-// entries found in the registry file at path: raw key spellings mapped to
-// their raw site values, exactly as decodeStringMapMember would read them
-// before canonicalize/canonicalizeSubnetPools validates them. It never
-// returns an error -- any read, parse, or decode failure at any stage
-// yields a nil map for the affected side (or both) -- because its purpose
-// is to let a caller pre-register every value that MIGHT appear verbatim
-// in a Load error's text for sanitization, even when Load itself would
-// fail on that very file. A returned entry is unnormalized: it is a
-// sweep candidate, not a validated value.
-func RawEntries(path string) (map[string]string, map[string]string) {
+// RawEntries returns best-effort, unvalidated identity values from all three
+// registry maps. It reads both concise string entries and metadata-bearing
+// object entries so a caller can pre-register every value that might surface
+// in a Load error. Returned values are sweep candidates, not validated state.
+// It never returns an error — any read, parse, or decode failure at any stage
+// yields a nil map for the affected side. This preserves sweep candidates even
+// when Load itself would fail on that very file: values must be registrable
+// even in the presence of validation errors.
+func RawEntries(path string) (map[string]string, map[string]string, map[string]string) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	value, err := hujson.Parse(raw)
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	value.Standardize()
 	object, ok := value.Value.(*hujson.Object)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
-	siteIDs := rawMapMember(object, siteIDsKey)
-	subnetPools := rawMapMember(object, subnetPoolsKey)
-	return siteIDs, subnetPools
+	siteIDs := rawReservationMapMember(object, siteIDsKey, "site")
+	subnetPools := rawReservationMapMember(object, subnetPoolsKey, "site")
+	serviceAddresses := rawReservationMapMember(object, serviceAddressesKey, "service")
+	return siteIDs, subnetPools, serviceAddresses
 }
 
-// rawMapMember best-effort decodes key's top-level member as a string map,
-// skipping decodeStringMapMember's validation (near-miss spelling,
-// ambiguous member, duplicate entry key): any such problem yields a nil
-// map rather than an error, since RawEntries must never itself fail. On
-// an ambiguous match (more than one case-insensitively matching member),
-// it uses the last one -- good enough for a sweep-value candidate list,
-// which is the only thing this feeds.
-func rawMapMember(object *hujson.Object, key string) map[string]string {
+// rawReservationMapMember best-effort extracts either a string value or the
+// named subject field from an object value. On an ambiguous top-level match it
+// uses the last member; this is sufficient for a sanitizer candidate list.
+func rawReservationMapMember(object *hujson.Object, key, subjectField string) map[string]string {
 	idx := -1
 	for i := range object.Members {
 		literal, isLiteral := object.Members[i].Name.Value.(hujson.Literal)
@@ -503,9 +617,31 @@ func rawMapMember(object *hujson.Object, key string) map[string]string {
 	if idx < 0 {
 		return nil
 	}
-	var entries map[string]string
-	if err := json.Unmarshal(object.Members[idx].Value.Pack(), &entries); err != nil {
+	entryObject, ok := object.Members[idx].Value.Value.(*hujson.Object)
+	if !ok {
 		return nil
+	}
+	entries := make(map[string]string, len(entryObject.Members))
+	for i := range entryObject.Members {
+		literal, isLiteral := entryObject.Members[i].Name.Value.(hujson.Literal)
+		if !isLiteral {
+			continue
+		}
+		packed := entryObject.Members[i].Value.Pack()
+		var subject string
+		if err := json.Unmarshal(packed, &subject); err == nil {
+			entries[literal.String()] = subject
+			continue
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(packed, &fields); err != nil {
+			continue
+		}
+		rawSubject, present := fields[subjectField]
+		if !present || json.Unmarshal(rawSubject, &subject) != nil {
+			continue
+		}
+		entries[literal.String()] = subject
 	}
 	return entries
 }
@@ -515,8 +651,9 @@ func rawMapMember(object *hujson.Object, key string) map[string]string {
 // caller that also observed the file as absent cannot silently overwrite the
 // first's create: it re-Loads instead, picking up whatever is now on disk.
 // Callers must run this inside withRegistryLock. topLevel selects which map
-// (siteIDsKey or subnetPoolsKey) the caller needs; after a successful load,
-// loadOrCreate checks mapError(topLevel) internally before returning.
+// (siteIDsKey, subnetPoolsKey, or serviceAddressesKey) the caller needs; after
+// a successful load, loadOrCreate checks mapError(topLevel) internally before
+// returning.
 func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, error) {
 	reg, err := Load(path)
 	switch {
@@ -525,7 +662,8 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 			return nil, mapErr
 		}
 		diagnostics.Debug(logger, "registry loaded",
-			"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools))
+			"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools),
+			"service_address_count", len(reg.ServiceAddresses))
 		return reg, nil
 	case !errors.Is(err, os.ErrNotExist):
 		return nil, err
@@ -542,7 +680,8 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 		if closeErr != nil {
 			return nil, fmt.Errorf("creating registry: %w", identityFreePathError(closeErr))
 		}
-		diagnostics.Debug(logger, "registry created", "site_id_count", 0, "subnet_pool_count", 0)
+		diagnostics.Debug(logger, "registry created",
+			"site_id_count", 0, "subnet_pool_count", 0, "service_address_count", 0)
 		return &Registry{}, nil
 	case errors.Is(createErr, os.ErrExist):
 		// Another holder created it between our Load and this attempt; pick
@@ -553,7 +692,8 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 				return nil, mapErr
 			}
 			diagnostics.Debug(logger, "registry loaded",
-				"site_id_count", len(reloaded.SiteIDs), "subnet_pool_count", len(reloaded.SubnetPools))
+				"site_id_count", len(reloaded.SiteIDs), "subnet_pool_count", len(reloaded.SubnetPools),
+				"service_address_count", len(reloaded.ServiceAddresses))
 		}
 		return reloaded, loadErr
 	default:
@@ -685,9 +825,13 @@ func ReleaseSiteIDWithLogger(
 // map-shaped registry allocation primitive. topLevel selects the owned map;
 // displayName and diagnosticName keep user-facing errors and structured event
 // names specific without duplicating the read-decide-patch transaction.
-// Note: releaseRegistryEntry does NOT check mapError for the target map,
-// because release operations need to be able to repair broken maps by removing
-// entries that caused validation errors (e.g., overlapping subnet pools).
+//
+// releaseRegistryEntry does NOT check mapError for the target map when a
+// canonical view exists, because release operations need to be able to repair
+// broken maps by removing entries that caused validation errors (e.g.,
+// overlapping subnet pools). However, if a map has a validation error and no
+// usable view, release fails closed with an error rather than reporting a
+// confident (but untrustworthy) "not reserved" result.
 func releaseRegistryEntry(
 	path, topLevel, key, displayName, diagnosticName string,
 	logger diagnostics.Logger,
@@ -699,16 +843,22 @@ func releaseRegistryEntry(
 			return loadErr
 		}
 		diagnostics.Debug(logger, "registry loaded",
-			"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools))
-		entries, rawKeys, selectErr := registryMap(reg, topLevel)
+			"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools),
+			"service_address_count", len(reg.ServiceAddresses))
+		acc, selectErr := reg.mapAccessorFor(topLevel)
 		if selectErr != nil {
 			return selectErr
 		}
-		if _, ok := entries[key]; !ok {
+		if !acc.hasKey(key) {
+			// If there's an error but no view was built, we cannot reliably
+			// determine whether the key is present or absent, so fail closed.
+			if acc.err != nil && !acc.hasView {
+				return fmt.Errorf("cannot determine whether %s %s is reserved: %w", displayName, key, acc.err)
+			}
 			diagnostics.Debug(logger, diagnosticName+" reservation already absent")
 			return nil
 		}
-		rawKey := rawKeys[key]
+		rawKey := acc.rawKeys[key]
 		if rawKey == "" {
 			rawKey = key
 		}
@@ -722,14 +872,6 @@ func releaseRegistryEntry(
 		return nil
 	})
 	return changed, err
-}
-
-func registryMap(reg *Registry, topLevel string) (map[string]Entry, map[string]string, error) {
-	acc, err := reg.mapAccessorFor(topLevel)
-	if err != nil {
-		return nil, nil, err
-	}
-	return acc.entries, acc.rawKeys, nil
 }
 
 // ListSiteIDsWithLogger returns the registry's site-ID entries at path, sorted
@@ -747,7 +889,8 @@ func ListSiteIDsWithLogger(path string, logger diagnostics.Logger) ([]SiteIDEntr
 		return nil, mapErr
 	}
 	diagnostics.Debug(logger, "registry loaded",
-		"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools))
+		"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools),
+		"service_address_count", len(reg.ServiceAddresses))
 	entries := make([]SiteIDEntry, 0, len(reg.SiteIDs))
 	for id, entry := range reg.SiteIDs {
 		entries = append(entries, SiteIDEntry{ID: id, Site: entry.Site, ReservationMetadata: entry.ReservationMetadata})

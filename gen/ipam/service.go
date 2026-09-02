@@ -28,6 +28,12 @@ type Service interface {
 	ReserveSubnetPool(context.Context, *ReserveSubnetPoolPayload) (res *ReserveSubnetPoolResult, err error)
 	// ReleaseSubnetPool implements release_subnet_pool.
 	ReleaseSubnetPool(context.Context, *ReleaseSubnetPoolPayload) (res *ReleaseSubnetPoolResult, err error)
+	// ListServiceAddresses implements list_service_addresses.
+	ListServiceAddresses(context.Context, *ListServiceAddressesPayload) (res []*ServiceAddressReservation, err error)
+	// ReserveServiceAddress implements reserve_service_address.
+	ReserveServiceAddress(context.Context, *ReserveServiceAddressPayload) (res *ReserveServiceAddressResult, err error)
+	// ReleaseServiceAddress implements release_service_address.
+	ReleaseServiceAddress(context.Context, *ReleaseServiceAddressPayload) (res *ReleaseServiceAddressResult, err error)
 }
 
 // APIName is the name of the API as defined in the design.
@@ -44,7 +50,15 @@ const ServiceName = "ipam"
 // MethodNames lists the service method names as defined in the design. These
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
-var MethodNames = [6]string{"list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool"}
+var MethodNames = [9]string{"list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address"}
+
+// ListServiceAddressesPayload is the payload type of the ipam service
+// list_service_addresses method.
+type ListServiceAddressesPayload struct {
+	// Routing/storage key for the registry. May be a synthetic alias, not
+	// necessarily the live Tailscale tailnet name.
+	Tailnet string
+}
 
 // ListSiteIdsPayload is the payload type of the ipam service list_site_ids
 // method.
@@ -60,6 +74,24 @@ type ListSubnetPoolsPayload struct {
 	// Routing/storage key for the registry. May be a synthetic alias, not
 	// necessarily the live Tailscale tailnet name.
 	Tailnet string
+}
+
+// ReleaseServiceAddressPayload is the payload type of the ipam service
+// release_service_address method.
+type ReleaseServiceAddressPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Bare IPv4 host or exact IPv4 /32 prefix to release.
+	Address string
+}
+
+// ReleaseServiceAddressResult is the result type of the ipam service
+// release_service_address method.
+type ReleaseServiceAddressResult struct {
+	// Canonical bare IPv4 host address released.
+	Address string
+	// False when address was not reserved.
+	Changed bool
 }
 
 // ReleaseSiteIDPayload is the payload type of the ipam service release_site_id
@@ -96,6 +128,44 @@ type ReleaseSubnetPoolResult struct {
 	CIDR string
 	// False when cidr was not reserved.
 	Changed bool
+}
+
+// ReserveServiceAddressPayload is the payload type of the ipam service
+// reserve_service_address method.
+type ReserveServiceAddressPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Bare IPv4 host or exact IPv4 /32 prefix to reserve.
+	Address string
+	// Bare service name or canonical svc:<name> identity.
+	Service string
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
+}
+
+// ReserveServiceAddressResult is the result type of the ipam service
+// reserve_service_address method.
+type ReserveServiceAddressResult struct {
+	// Canonical bare IPv4 host address actually written.
+	Address string
+	// Canonical svc:<name> service identity actually written.
+	Service string
+	// False when the exact address, service, and metadata were already reserved.
+	Changed bool
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
 }
 
 // ReserveSiteIDPayload is the payload type of the ipam service reserve_site_id
@@ -174,6 +244,22 @@ type ReserveSubnetPoolResult struct {
 	ReservedAt *string
 }
 
+// An IPv4 host address reserved for a Tailscale Service.
+type ServiceAddressReservation struct {
+	// Canonical bare IPv4 host address.
+	Address string
+	// Canonical svc:<name> service identity.
+	Service string
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
+}
+
 // A reserved 4via6 site ID.
 type SiteIDReservation struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -209,4 +295,9 @@ type SubnetPoolReservation struct {
 // MakeCollision builds a goa.ServiceError from an error.
 func MakeCollision(err error) *goa.ServiceError {
 	return goa.NewServiceError(err, "collision", false, false, false)
+}
+
+// MakeInvalidInput builds a goa.ServiceError from an error.
+func MakeInvalidInput(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "invalid_input", false, false, false)
 }

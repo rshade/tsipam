@@ -41,6 +41,18 @@ type Client struct {
 	// release_subnet_pool endpoint.
 	ReleaseSubnetPoolDoer goahttp.Doer
 
+	// ListServiceAddresses Doer is the HTTP client used to make requests to the
+	// list_service_addresses endpoint.
+	ListServiceAddressesDoer goahttp.Doer
+
+	// ReserveServiceAddress Doer is the HTTP client used to make requests to the
+	// reserve_service_address endpoint.
+	ReserveServiceAddressDoer goahttp.Doer
+
+	// ReleaseServiceAddress Doer is the HTTP client used to make requests to the
+	// release_service_address endpoint.
+	ReleaseServiceAddressDoer goahttp.Doer
+
 	// RestoreResponseBody controls whether the response bodies are reset after
 	// decoding so they can be read again.
 	RestoreResponseBody bool
@@ -61,17 +73,20 @@ func NewClient(
 	restoreBody bool,
 ) *Client {
 	return &Client{
-		ListSiteIdsDoer:       doer,
-		ReserveSiteIDDoer:     doer,
-		ReleaseSiteIDDoer:     doer,
-		ListSubnetPoolsDoer:   doer,
-		ReserveSubnetPoolDoer: doer,
-		ReleaseSubnetPoolDoer: doer,
-		RestoreResponseBody:   restoreBody,
-		scheme:                scheme,
-		host:                  host,
-		decoder:               dec,
-		encoder:               enc,
+		ListSiteIdsDoer:           doer,
+		ReserveSiteIDDoer:         doer,
+		ReleaseSiteIDDoer:         doer,
+		ListSubnetPoolsDoer:       doer,
+		ReserveSubnetPoolDoer:     doer,
+		ReleaseSubnetPoolDoer:     doer,
+		ListServiceAddressesDoer:  doer,
+		ReserveServiceAddressDoer: doer,
+		ReleaseServiceAddressDoer: doer,
+		RestoreResponseBody:       restoreBody,
+		scheme:                    scheme,
+		host:                      host,
+		decoder:                   dec,
+		encoder:                   enc,
 	}
 }
 
@@ -199,6 +214,73 @@ func (c *Client) ReleaseSubnetPool() goa.Endpoint {
 		resp, err := c.ReleaseSubnetPoolDoer.Do(req)
 		if err != nil {
 			return nil, goahttp.ErrRequestError("ipam", "release_subnet_pool", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ListServiceAddresses returns an endpoint that makes HTTP requests to the
+// ipam service list_service_addresses server.
+func (c *Client) ListServiceAddresses() goa.Endpoint {
+	var (
+		decodeResponse = DecodeListServiceAddressesResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildListServiceAddressesRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ListServiceAddressesDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "list_service_addresses", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ReserveServiceAddress returns an endpoint that makes HTTP requests to the
+// ipam service reserve_service_address server.
+func (c *Client) ReserveServiceAddress() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeReserveServiceAddressRequest(c.encoder)
+		decodeResponse = DecodeReserveServiceAddressResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildReserveServiceAddressRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ReserveServiceAddressDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "reserve_service_address", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ReleaseServiceAddress returns an endpoint that makes HTTP requests to the
+// ipam service release_service_address server.
+func (c *Client) ReleaseServiceAddress() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeReleaseServiceAddressRequest(c.encoder)
+		decodeResponse = DecodeReleaseServiceAddressResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildReleaseServiceAddressRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ReleaseServiceAddressDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "release_service_address", err)
 		}
 		return decodeResponse(resp)
 	}

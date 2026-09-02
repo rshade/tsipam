@@ -1,13 +1,161 @@
 openapi: 3.2.0
 info:
     title: tail-ipam address-space registry API
-    description: Plans and allocates Tailscale address space through 4via6 site IDs and subnet CIDR pools. Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own control-plane API convention.
+    description: Plans and allocates Tailscale address space through 4via6 site IDs, subnet CIDR pools, and per-service IPv4 addresses. Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own control-plane API convention.
     version: 0.0.1
 servers:
     - url: http://localhost:80
       name: tail-ipam
       description: Default server for tail-ipam
 paths:
+    /tailnet/{tailnet}/ipam/service-addresses:
+        delete:
+            tags:
+                - ipam
+            summary: release_service_address ipam
+            operationId: ipam#release_service_address
+            parameters:
+                - name: address
+                  in: query
+                  description: Bare IPv4 host or exact IPv4 /32 prefix to release.
+                  allowEmptyValue: true
+                  required: true
+                  schema:
+                    type: string
+                    description: Bare IPv4 host or exact IPv4 /32 prefix to release.
+                    example: Qui nulla dolores est optio.
+                  example: Nam sunt dicta molestias.
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry.
+                    example: Illum aspernatur ad repudiandae at quas laborum.
+                  example: Aut consectetur.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReleaseServiceAddressResponseBody'
+                            example:
+                                address: Ut hic.
+                                changed: true
+                "400":
+                    description: 'invalid_input: address is not a bare IPv4 host or exact IPv4 /32 prefix.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+        get:
+            tags:
+                - ipam
+            summary: list_service_addresses ipam
+            operationId: ipam#list_service_addresses
+            parameters:
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.
+                    example: Iusto incidunt.
+                  example: Omnis possimus quia fugiat enim.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/ServiceAddressReservation'
+                                example:
+                                    - address: Ut temporibus vero sit.
+                                      description: Officiis qui et.
+                                      owner: Aut est.
+                                      reserved_at: "1981-10-01T11:36:06Z"
+                                      service: Totam voluptates nulla voluptates.
+                                      ticket: Necessitatibus vero quisquam rerum sunt nulla.
+                                    - address: Ut temporibus vero sit.
+                                      description: Officiis qui et.
+                                      owner: Aut est.
+                                      reserved_at: "1981-10-01T11:36:06Z"
+                                      service: Totam voluptates nulla voluptates.
+                                      ticket: Necessitatibus vero quisquam rerum sunt nulla.
+                            example:
+                                - address: Ut temporibus vero sit.
+                                  description: Officiis qui et.
+                                  owner: Aut est.
+                                  reserved_at: "1981-10-01T11:36:06Z"
+                                  service: Totam voluptates nulla voluptates.
+                                  ticket: Necessitatibus vero quisquam rerum sunt nulla.
+                                - address: Ut temporibus vero sit.
+                                  description: Officiis qui et.
+                                  owner: Aut est.
+                                  reserved_at: "1981-10-01T11:36:06Z"
+                                  service: Totam voluptates nulla voluptates.
+                                  ticket: Necessitatibus vero quisquam rerum sunt nulla.
+        post:
+            tags:
+                - ipam
+            summary: reserve_service_address ipam
+            operationId: ipam#reserve_service_address
+            parameters:
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry.
+                    example: Numquam et eos.
+                  example: Perspiciatis voluptates minima et iusto.
+            requestBody:
+                description: Request body for reserve_service_address.
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ServiceAddressReservation'
+                        example:
+                            address: Dolores repellat aliquam voluptatem quo nesciunt ad.
+                            description: Consectetur cupiditate voluptatem quisquam.
+                            owner: Beatae quia.
+                            reserved_at: "1975-09-10T03:22:10Z"
+                            service: Esse magnam.
+                            ticket: Fugit a.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReserveServiceAddressResponseBody'
+                            example:
+                                address: Iusto reiciendis dolore.
+                                changed: true
+                                description: Sed et doloremque nobis ut.
+                                owner: Vitae maiores cupiditate.
+                                reserved_at: "1976-10-27T10:47:04Z"
+                                service: Ea dolor ex dolor libero quia.
+                                ticket: Dicta earum.
+                "400":
+                    description: 'invalid_input: address, service, or reservation metadata is invalid.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "409":
+                    description: 'collision: address is already reserved for a different service.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
     /tailnet/{tailnet}/ipam/site-ids:
         get:
             tags:
@@ -115,6 +263,12 @@ paths:
                                 reserved_at: "1976-01-14T22:54:54Z"
                                 site: Quod qui autem.
                                 ticket: Voluptatem sed quo corporis asperiores corrupti.
+                "400":
+                    description: 'invalid_input: id, site, or reservation metadata is invalid.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
                 "409":
                     description: 'collision: id is already reserved for a different site.'
                     content:
@@ -156,6 +310,12 @@ paths:
                             example:
                                 changed: false
                                 id: Cupiditate doloremque unde in.
+                "400":
+                    description: 'invalid_input: id is not a valid 4via6 site ID.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
     /tailnet/{tailnet}/ipam/subnet-pools:
         delete:
             tags:
@@ -192,6 +352,12 @@ paths:
                             example:
                                 changed: true
                                 cidr: Veniam eius ut illum pariatur.
+                "400":
+                    description: 'invalid_input: cidr is not a valid IPv4 or IPv6 CIDR prefix.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
         get:
             tags:
                 - ipam
@@ -286,6 +452,12 @@ paths:
                                 reserved_at: "2009-01-30T14:45:12Z"
                                 site: Et voluptatem sit iusto.
                                 ticket: Necessitatibus impedit ducimus facere quas.
+                "400":
+                    description: 'invalid_input: cidr, site, or reservation metadata is invalid.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
                 "409":
                     description: 'collision: cidr overlaps a subnet pool reserved for a different site.'
                     content:
@@ -321,7 +493,7 @@ components:
                     type: boolean
                     description: Is the error a timeout?
                     example: false
-            description: id is already reserved for a different site.
+            description: id, site, or reservation metadata is invalid.
             example:
                 fault: true
                 id: 123abc
@@ -336,6 +508,23 @@ components:
                 - temporary
                 - timeout
                 - fault
+        ReleaseServiceAddressResponseBody:
+            type: object
+            properties:
+                address:
+                    type: string
+                    description: Canonical bare IPv4 host address released.
+                    example: Ut hic.
+                changed:
+                    type: boolean
+                    description: False when address was not reserved.
+                    example: true
+            example:
+                address: Ut hic.
+                changed: true
+            required:
+                - address
+                - changed
         ReleaseSiteIDResponseBody:
             type: object
             properties:
@@ -369,6 +558,50 @@ components:
                 cidr: Veniam eius ut illum pariatur.
             required:
                 - cidr
+                - changed
+        ReserveServiceAddressResponseBody:
+            type: object
+            properties:
+                address:
+                    type: string
+                    description: Canonical bare IPv4 host address actually written.
+                    example: Iusto reiciendis dolore.
+                changed:
+                    type: boolean
+                    description: False when the exact address, service, and metadata were already reserved.
+                    example: true
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Sed et doloremque nobis ut.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Vitae maiores cupiditate.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "1976-10-27T10:47:04Z"
+                    format: date-time
+                service:
+                    type: string
+                    description: Canonical svc:<name> service identity actually written.
+                    example: Ea dolor ex dolor libero quia.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Dicta earum.
+            example:
+                address: Iusto reiciendis dolore.
+                changed: true
+                description: Sed et doloremque nobis ut.
+                owner: Vitae maiores cupiditate.
+                reserved_at: "1976-10-27T10:47:04Z"
+                service: Ea dolor ex dolor libero quia.
+                ticket: Dicta earum.
+            required:
+                - address
+                - service
                 - changed
         ReserveSiteIDResponseBody:
             type: object
@@ -458,6 +691,45 @@ components:
                 - cidr
                 - site
                 - changed
+        ServiceAddressReservation:
+            type: object
+            properties:
+                address:
+                    type: string
+                    description: Canonical bare IPv4 host address.
+                    example: Ut temporibus vero sit.
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Officiis qui et.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Aut est.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "1981-10-01T11:36:06Z"
+                    format: date-time
+                service:
+                    type: string
+                    description: Canonical svc:<name> service identity.
+                    example: Totam voluptates nulla voluptates.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Necessitatibus vero quisquam rerum sunt nulla.
+            description: An IPv4 host address reserved for a Tailscale Service.
+            example:
+                address: Ut temporibus vero sit.
+                description: Officiis qui et.
+                owner: Aut est.
+                reserved_at: "1981-10-01T11:36:06Z"
+                service: Totam voluptates nulla voluptates.
+                ticket: Necessitatibus vero quisquam rerum sunt nulla.
+            required:
+                - address
+                - service
         SiteIDReservation:
             type: object
             properties:

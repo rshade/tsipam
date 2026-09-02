@@ -31,12 +31,12 @@ func fixedKeyGetenv(key string) string {
 }
 
 // placeholderFor computes the placeholder the CLI's own sanitizer produces
-// for a "site" value, using the same tool name, tailnet, and key a
+// for a value under kind, using the same tool name, tailnet, and key a
 // default-tailnet ("local") invocation resolves. Sanitizer.Value is a pure
 // function of (tool, scope, tailnet, kind, value), so this reference
 // sanitizer's output equals production's without needing to inspect the
 // CLI's internal state.
-func placeholderFor(t *testing.T, value string) string {
+func placeholderFor(t *testing.T, kind, value string) string {
 	t.Helper()
 	s, err := sanitize.New(sanitize.Options{
 		Level: sanitize.Identity, Tool: toolName, Tailnet: localTailnet, KeyHex: testSanitizeKey,
@@ -44,7 +44,7 @@ func placeholderFor(t *testing.T, value string) string {
 	if err != nil {
 		t.Fatalf("constructing reference sanitizer: %v", err)
 	}
-	return s.Value("site", value)
+	return s.Value(kind, value)
 }
 
 // assertNoLeak fails the test if haystack contains value verbatim, or
@@ -176,11 +176,11 @@ func assertCollisionSanitized(t *testing.T, stderrText, existing, wanted string,
 		t.Errorf("stderr = %q, want the collision message frame intact", stderrText)
 	}
 
-	existingQuoted := `"` + placeholderFor(t, existing) + `"`
+	existingQuoted := `"` + placeholderFor(t, kindSite, existing) + `"`
 	if !strings.Contains(stderrText, existingQuoted) {
 		t.Errorf("stderr = %q, want the quoted existing-site placeholder %q", stderrText, existingQuoted)
 	}
-	wantedQuoted := `"` + placeholderFor(t, wanted) + `"`
+	wantedQuoted := `"` + placeholderFor(t, kindSite, wanted) + `"`
 	if !strings.Contains(stderrText, wantedQuoted) {
 		t.Errorf("stderr = %q, want the quoted wanted-site placeholder %q", stderrText, wantedQuoted)
 	}
@@ -765,12 +765,282 @@ func testSubnetPoolExactCollision(t *testing.T, existingSite, wantedSite string)
 	assertNoQuotedLeak(t, stderrText, existingSite)
 	assertNoQuotedLeak(t, stderrText, wantedSite)
 
-	existingPlaceholder := `"` + placeholderFor(t, existingSite) + `"`
+	existingPlaceholder := `"` + placeholderFor(t, kindSite, existingSite) + `"`
 	if !strings.Contains(stderrText, existingPlaceholder) {
 		t.Errorf("stderr = %q, want existing-site placeholder %q", stderrText, existingPlaceholder)
 	}
-	wantedPlaceholder := `"` + placeholderFor(t, wantedSite) + `"`
+	wantedPlaceholder := `"` + placeholderFor(t, kindSite, wantedSite) + `"`
 	if !strings.Contains(stderrText, wantedPlaceholder) {
 		t.Errorf("stderr = %q, want wanted-site placeholder %q", stderrText, wantedPlaceholder)
+	}
+}
+
+// helperMarkerServiceUnexpectedSuccess is the service-reserve counterpart of
+// helperMarkerUnexpectedSuccess above, kept as a separate constant so the two
+// subprocess helpers' skip markers can never be confused with each other.
+const helperMarkerServiceUnexpectedSuccess = "HELPER_RESULT: service-unexpected-success"
+
+// TestServiceReserveWriteFailureCanonicalAddressOmitsBareIP is the review's
+// T3: the original finding's literal frame -- serviceaddress.go's
+// "reserving service address %s: %w" -- which is reached only after Load
+// succeeds and ReserveServiceAddressWithLogger's hujsonedit.WritePatch call
+// fails. It reuses TestLoadOrCreateWriteFailureOmitsRegistryPath's
+// RLIMIT_FSIZE subprocess injection (same ulimit/trap/exec shell wrapper,
+// same re-exec-the-test-binary pattern), but pre-creates a valid "{}\n"
+// registry file in the parent first, so the child's Load succeeds and the injected
+// EFBIG lands in hujsonedit.WriteRaw instead. That distinction is what makes
+// this test different from every prior-round injection (see the doc comments
+// on TestServiceReserveWithSlashThirtytwoAliasSanitizesCanonicalAddress and
+// TestServiceReserveBareSanitizationAndServiceNameAliases in
+// service_test.go): a Load-level failure -- a missing directory, or a
+// registry path that is itself a directory -- returns a bare, identity-free
+// errno string (see identityFreePathError) before the
+// "reserving service address %s:" frame is ever built, so it cannot exercise
+// the canonicalized-address registration fix under test here. This test
+// drives the failure through runCLI via a real subprocess (not a direct
+// registry.ReserveServiceAddressWithLogger call, unlike
+// TestHelperTriggerRegistryWriteFailure above) so both the RunE
+// canonical-registration fix (service.go) and sanitizeErrorIfNeeded's
+// free-text sweep (main.go) run exactly as they do in production.
+func TestServiceReserveWriteFailureCanonicalAddressOmitsBareIP(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("ulimit-based write-failure injection needs a POSIX shell")
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no POSIX shell available to inject the write failure")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, localTailnet+".ipam.hujson")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("pre-create valid registry: %v", err)
+	}
+
+	const script = `ulimit -f 0 && trap '' XFSZ && exec "$0" "$@"`
+	cmd := exec.Command("sh", "-c", script, os.Args[0], "-test.run=^TestHelperTriggerServiceReserveWriteFailure$")
+	cmd.Env = append(os.Environ(),
+		"TAILIPAM_SERVICE_WRITE_FAILURE_HELPER=1",
+		"TAILIPAM_SERVICE_WRITE_FAILURE_DIR="+dir,
+	)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	_ = cmd.Run()
+
+	output := out.String()
+	if strings.Contains(output, helperMarkerServiceUnexpectedSuccess) {
+		t.Skip("environment does not enforce RLIMIT_FSIZE; cannot exercise the write-failure branch here")
+	}
+	if !strings.Contains(output, "reserving service address ") {
+		t.Fatalf("helper output = %q, want the %q frame", output, "reserving service address ")
+	}
+
+	const canonical = "100.100.100.9"
+	if strings.Contains(output, canonical) {
+		t.Errorf("write-failure error leaks the canonical address %q: %s", canonical, output)
+	}
+	placeholder := placeholderFor(t, kindIP, canonical)
+	if !strings.Contains(output, placeholder) {
+		t.Errorf("helper output = %q, want the canonical-address placeholder %q", output, placeholder)
+	}
+}
+
+// TestHelperTriggerServiceReserveWriteFailure is not a real test: it is
+// exec'd as a subprocess by
+// TestServiceReserveWriteFailureCanonicalAddressOmitsBareIP, which sets
+// RLIMIT_FSIZE to zero and pre-creates a valid registry file before it
+// starts. Unlike TestHelperTriggerRegistryWriteFailure, this helper drives
+// runCLI so the RunE registration fix and sanitizeErrorIfNeeded both run.
+// Guarded by an env var so a plain `go test` run never executes its body.
+func TestHelperTriggerServiceReserveWriteFailure(t *testing.T) {
+	t.Parallel()
+	if os.Getenv("TAILIPAM_SERVICE_WRITE_FAILURE_HELPER") != "1" {
+		t.Skip("only runs as TestServiceReserveWriteFailureCanonicalAddressOmitsBareIP's subprocess helper")
+	}
+
+	registryDir := os.Getenv("TAILIPAM_SERVICE_WRITE_FAILURE_DIR")
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandService, "reserve", "100.100.100.9/32", "web",
+		"--registry-dir", registryDir, "--sanitize", string(sanitize.Identity),
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code == exitOK {
+		fmt.Fprintln(os.Stdout, helperMarkerServiceUnexpectedSuccess)
+		os.Exit(1)
+	}
+	fmt.Fprint(os.Stdout, stderr.String())
+	os.Exit(1)
+}
+
+// TestServiceAddressPaddedArgRegistersTrimmingSpelling covers Issue 1: when a
+// service address arg has leading/trailing whitespace around an invalid
+// address, NormalizeServiceAddress trims it before validation, and error
+// messages echo the trimmed form. The fix registers both the raw padded value
+// and its trimmed equivalent so the error's trimmed spelling is swept during
+// sanitization.
+func TestServiceAddressPaddedArgRegistersTrimmingSpelling(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	paddedAddr := " secret-host.example "
+	trimmedAddr := "secret-host.example"
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandService, "reserve", paddedAddr, "dashboard",
+		"--registry-dir", dir, "--sanitize", string(sanitize.Identity),
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code == exitOK {
+		t.Fatalf("invalid address exit = %d, want non-zero", code)
+	}
+	stderrText := stderr.String()
+	if strings.Contains(stderrText, trimmedAddr) {
+		t.Errorf("stderr leaks trimmed address %q: %s", trimmedAddr, stderrText)
+	}
+	trimmedPlaceholder := placeholderFor(t, kindIP, trimmedAddr)
+	if !strings.Contains(stderrText, trimmedPlaceholder) {
+		t.Errorf("stderr = %q, want trimmed-address placeholder %q", stderrText, trimmedPlaceholder)
+	}
+}
+
+// TestServiceNamePaddedArgRegistersTrimmingSpelling covers Issue 1 with a
+// genuine, non-svc: invalid service name. The original version of this test
+// reserved only " svc: " (the literal grammar token svcSelectorToken), which
+// registerSweepValue deliberately never registers -- see
+// TestServiceNameSvcSelectorNotOverRedacted -- so the padded/escaped value
+// never appeared in the error text either way, and the assertion (checking
+// only that the literal word "svc:" survives) passed identically with the
+// round-2 fix reverted. This drives a real control-character service name
+// (not the svc: token) through the same %q-escape closure as
+// TestOwnerMetadataRegistersForErrorPath: NormalizeServiceName trims before
+// rejectControlChars runs, so the error's %q rendering is of the *trimmed*
+// value, and the interior control character is escaped rather than
+// byte-identical to what registerSweepValueWithCanonical registers raw.
+func TestServiceNamePaddedArgRegistersTrimmingSpelling(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const paddedName = " sec\tret-svc "
+	const trimmedEscaped = `sec\tret-svc`
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandService, "reserve", "100.100.100.8", paddedName,
+		"--registry-dir", dir, "--sanitize", string(sanitize.Identity),
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code == exitOK {
+		t.Fatalf("invalid service exit = %d, want non-zero", code)
+	}
+	stderrText := stderr.String()
+	if strings.Contains(stderrText, trimmedEscaped) {
+		t.Errorf("stderr leaks the %%q-escaped service name %q: %s", trimmedEscaped, stderrText)
+	}
+	placeholder := placeholderFor(t, kindService, trimmedEscaped)
+	if !strings.Contains(stderrText, placeholder) {
+		t.Errorf("stderr = %q, want service-name placeholder %q", stderrText, placeholder)
+	}
+}
+
+// TestSubnetCIDRCanonicalSuggestionRegistersForErrorSweep replaces the
+// vacuous TestSubnetCIDRPaddedArgRegistersTrimmingSpelling (verifier-proven
+// to pass with the round-2 fix reverted: it asserted only that the padded
+// raw CIDR arg does not leak, which round 1's registerSweepValueWithCanonical
+// call already guaranteed). NormalizeSubnetCIDR's "not canonical" error
+// embeds a masked canonical *suggestion* the CLI never received as input
+// (subnet.go's registerCanonicalCIDRSuggestion computes it independently),
+// so this is the item-2 leak case: a non-canonical CIDR whose suggestion is a
+// distinct value from anything registerSweepValueWithCanonical's own
+// raw/trimmed/canonical(err==nil) branches ever see, since NormalizeSubnetCIDR
+// treats "not canonical" as an error, never a successful canonicalization.
+func TestSubnetCIDRCanonicalSuggestionRegistersForErrorSweep(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const nonCanonical = "10.20.30.45/24"
+	const canonicalSuggestion = "10.20.30.0/24"
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandSubnet, "reserve", nonCanonical, "test-site",
+		"--registry-dir", dir, "--sanitize", "identity",
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code == exitOK {
+		t.Fatalf("non-canonical CIDR exit = %d, want non-zero", code)
+	}
+	stderrText := stderr.String()
+	if strings.Contains(stderrText, canonicalSuggestion) {
+		t.Errorf("stderr leaks the canonical CIDR suggestion %q: %s", canonicalSuggestion, stderrText)
+	}
+	placeholder := placeholderFor(t, kindCIDR, canonicalSuggestion)
+	if !strings.Contains(stderrText, placeholder) {
+		t.Errorf("stderr = %q, want the canonical-suggestion placeholder %q", stderrText, placeholder)
+	}
+	if !strings.Contains(stderrText, "not canonical") {
+		t.Errorf("stderr = %q, want the 'not canonical' message frame intact", stderrText)
+	}
+}
+
+// TestOwnerMetadataRegistersForErrorPath replaces the vacuous original
+// (verifier-proven to pass with the round-2 fix reverted: it seeded and
+// re-reserved with two *distinct plain* owner values and asserted only the
+// collision message frame, never anything owner-specific -- so it passed
+// whether or not the owner value was registered for the sweep at all). This
+// drives the real --owner control-character 400 path
+// (normalizeMetadata -> rejectControlChars, internal/registry/entry.go) and
+// asserts the anti-vacuity trio: the %q-escaped owner rendering is absent,
+// the exact kindOwner placeholder for that escaped rendering is present, and
+// the message frame survives intact.
+func TestOwnerMetadataRegistersForErrorPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const owner = "ow\tner"
+	const ownerEscaped = `ow\tner`
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandService, "reserve", "100.100.100.8", "dashboard",
+		"--registry-dir", dir, "--sanitize", string(sanitize.Identity),
+		"--owner", owner,
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code == exitOK {
+		t.Fatalf("control-character owner exit = %d, want non-zero", code)
+	}
+	stderrText := stderr.String()
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty on error", stdout.String())
+	}
+	if strings.Contains(stderrText, ownerEscaped) {
+		t.Errorf("stderr leaks the %%q-escaped owner %q: %s", ownerEscaped, stderrText)
+	}
+	placeholder := placeholderFor(t, kindOwner, ownerEscaped)
+	if !strings.Contains(stderrText, placeholder) {
+		t.Errorf("stderr = %q, want owner placeholder %q", stderrText, placeholder)
+	}
+	if !strings.Contains(stderrText, "must not contain control characters") {
+		t.Errorf("stderr = %q, want the control-character message frame intact", stderrText)
+	}
+}
+
+// TestServiceNameSvcSelectorNotOverRedacted covers Issue 3: the literal
+// string "svc:" is grammar (a policy selector token), not an identity, so it
+// should not be registered for sweep. When someone reserves with name "svc:",
+// the error message must contain the literal template words unchanged for
+// readability.
+func TestServiceNameSvcSelectorNotOverRedacted(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandService, "reserve", "100.100.100.8", "svc:",
+		"--registry-dir", dir, "--sanitize", string(sanitize.Identity),
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code == exitOK {
+		t.Fatalf("invalid service-name exit = %d, want non-zero", code)
+	}
+	stderrText := stderr.String()
+	if !strings.Contains(stderrText, "svc:") {
+		t.Errorf("stderr = %q, want literal 'svc:' in error message (not over-redacted)", stderrText)
+	}
+	if !strings.Contains(stderrText, "service name must not be") {
+		t.Errorf("stderr = %q, want readable error message frame", stderrText)
 	}
 }

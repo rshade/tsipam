@@ -163,6 +163,55 @@ tail-ipam subnet list
 tail-ipam subnet list --registry-dir /etc/tail-ipam --tailnet production
 ```
 
+#### `service reserve <address> <service-name>`
+
+Reserves one IPv4 host address for a Tailscale Service. The address may be a
+bare IPv4 host or an exact `/32`; both forms are stored and returned as the
+canonical bare address. A wider prefix is rejected rather than silently
+truncated, and native IPv6 and IPv4-mapped IPv6 inputs are rejected. The
+service may be written as either `dashboard` or `svc:dashboard`; both forms
+are stored and returned as exactly `svc:dashboard`.
+
+```bash
+tail-ipam service reserve 100.100.100.8 dashboard
+tail-ipam service reserve 100.100.100.9/32 svc:metrics \
+  --owner network-team --ticket NET-237 --format json
+```
+
+The same canonical address and service is an idempotent no-op. Reserving an
+address already held by a different service is a collision (exit code 1),
+while one service may intentionally hold multiple addresses. The command
+accepts the same `--owner`, `--description`, `--ticket`, and `--reserved-at`
+metadata flags and amend semantics as the other reservation primitives.
+
+This is explicit-address bookkeeping only. There is no parent service pool,
+pool-membership validation, next-free allocation, or exhaustion calculation;
+declaring and allocating from bounded pools is separate future work. The
+command also does not query or create a live Tailscale Service.
+
+#### `service release <address>`
+
+Releases the canonical reservation selected by a bare IPv4 address or exact
+`/32`. An absent reservation is a successful no-op; a missing registry file is
+an error.
+
+```bash
+tail-ipam service release 100.100.100.8
+tail-ipam service release 100.100.100.9/32 --format json
+```
+
+#### `service list`
+
+Lists service-address reservations in numeric address order. Human output is
+tab-separated (bare address, canonical `svc:` identity), with the optional
+metadata third field used by the other registry lists. JSON output carries a
+`service_addresses` array with `address`, `service`, and any set metadata.
+
+```bash
+tail-ipam service list
+tail-ipam service list --format json
+```
+
 #### `calc split`
 
 Stateless IPv4 and IPv6 CIDR splitting: divides a parent CIDR into equal-sized
@@ -278,6 +327,17 @@ straightforward:
     "10.20.0.0/16": "hq-vpc",
     "2001:db8:20::/48": "branch-office",
   },
+
+  // Per-service IPv4 host reservations
+  "serviceAddresses": {
+    "100.100.100.8": "svc:dashboard",
+    "100.100.100.9": {
+      "service": "svc:metrics",
+      "owner": "network-team",
+      "ticket": "NET-237",
+      "reservedAt": "2026-08-31T12:00:00Z",
+    },
+  },
 }
 ```
 
@@ -289,12 +349,13 @@ indentation character: it is shown here with spaces because this repository's
 markdown lint config forbids hard tabs in a fenced code block, but the tool
 itself always writes tabs.
 
-An entry is either a bare string (the site name, and the only shape `reserve`
-writes when no metadata flags are given) or an object carrying `site` plus
-whatever optional `owner`, `description`, `ticket`, and `reservedAt` fields
-were attached — see `site-id reserve`/`subnet reserve` above. A registry with
-only bare-string entries loads and re-saves byte-for-byte unchanged; the two
-shapes freely coexist in one file, as `"1"` and `"2"` do above.
+An entry is either a bare string (the reservation target, and the only shape
+`reserve` writes when no metadata flags are given) or an object carrying that
+target plus whatever optional `owner`, `description`, `ticket`, and
+`reservedAt` fields were attached. Site-ID and subnet-pool objects use `site`;
+service-address objects use `service`. A registry with only bare-string
+entries loads and re-saves byte-for-byte unchanged; the two shapes freely
+coexist in one map, as `"1"` and `"2"` do above.
 
 Site IDs are canonicalized as decimal integers from 0 to 65535 (Tailscale's
 16-bit site-ID field): `"01"` and `"1"` map to the same key. This is a
@@ -309,6 +370,13 @@ members, empty site names, and overlaps owned by different sites. CIDR overlap
 semantics come from the shared `policycore/addrspace` primitive used by the
 repository's policy and audit tools rather than from a registry-specific
 comparison.
+
+Service-address keys are canonicalized from bare IPv4 hosts or exact `/32`
+prefixes to bare IPv4 addresses. Registry load rejects wider prefixes, native
+or mapped IPv6, duplicate aliases that resolve to the same address, and
+invalid service identities. A bare service value is canonicalized with one
+`svc:` prefix. Collision checks are exact-address checks only; they do not
+cross-reference subnet pools or live service state.
 
 A comment attached directly to a released entry (i.e. immediately above it)
 is removed along with that entry — this is standard `hujson` behavior, not a
@@ -334,9 +402,10 @@ top-level contract as the repository's other action-oriented CLI output:
 }
 ```
 
-`site-id list` carries `site_ids`, `subnet list` carries `subnet_pools`, and
-`devices list` carries `devices`. Reserve/release results carry the applicable
-`changed`, `id`, `cidr`, and `site` fields, plus `owner`, `description`,
+`site-id list` carries `site_ids`, `subnet list` carries `subnet_pools`,
+`service list` carries `service_addresses`, and `devices list` carries
+`devices`. Reserve/release results carry the applicable `changed`, `id`,
+`cidr`, `address`, `site`, and `service` fields, plus `owner`, `description`,
 `ticket`, and `reserved_at` when the reservation carries that metadata (a
 reserve echoes back what was actually written, including any auto-stamped
 `reserved_at`). Empty list results remain JSON arrays. Treat field names and
@@ -353,20 +422,23 @@ transport, registry loading/creation, and lock acquisition. Diagnostics stay
 on stderr, so stdout remains parse-clean under `-format json`.
 
 `TAILSCALE_SANITIZE=identity` or `strict` replaces device names, addresses,
-routes, tailnet routing keys, site names, reservation owners, and reserved
-subnet CIDRs after the real operation has completed. `description`, `ticket`,
-and `reserved_at` are left unredacted: they are free-form operator text and a
-timestamp, not tailnet-derived identities the sanitizer's exact-token
-replacement can meaningfully sweep. A non-`off` environment value overrides
-`--sanitize` and is announced on stderr. `calc` output (stateless arithmetic
-over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived
-data. Placeholders for other commands are scoped to the artifact's routing/storage
-key (the `--tailnet` alias for registry commands, or the live tailnet from
-`TAILSCALE_TAILNET` for `devices` commands), so passing an explicit `--tailnet`
-alias to a registry command intentionally creates a separate pseudonym domain
-from `devices list` output for the same real tailnet. Set `TAILSCALE_SANITIZE_KEY`
-to exactly 64 hexadecimal characters for stable tailnet-scoped placeholders;
-without it placeholders are artifact-scoped.
+routes, tailnet routing keys, site names, service identities, reservation
+owners, reserved subnet CIDRs, and reserved service addresses after the real
+operation has completed. Collision errors receive the same treatment on
+stderr, including service names whose quoted representation contains escapes.
+`description`, `ticket`, and `reserved_at` are left unredacted: they are
+free-form operator text and a timestamp, not tailnet-derived identities the
+sanitizer's exact-token replacement can meaningfully sweep. A non-`off`
+environment value overrides `--sanitize` and is announced on stderr. `calc`
+output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because
+it contains no tailnet-derived data. Placeholders for other commands are
+scoped to the artifact's routing/storage key (the `--tailnet` alias for
+registry commands, or the live tailnet from `TAILSCALE_TAILNET` for `devices`
+commands), so passing an explicit `--tailnet` alias to a registry command
+intentionally creates a separate pseudonym domain from `devices list` output
+for the same real tailnet. Set `TAILSCALE_SANITIZE_KEY` to exactly 64
+hexadecimal characters for stable tailnet-scoped placeholders; without it
+placeholders are artifact-scoped.
 
 ### Not yet implemented
 
@@ -375,7 +447,6 @@ The following commands and features are planned future work per
 
 - `allocate` and `plan` commands for address-space planning against live state
 - `check` command for validating the registry against live tailnet usage
-- Per-service `/32` reservations for Tailscale Services
 - On-prem CIDR planning (address space not yet advertised as live routes)
 
 ## Build
