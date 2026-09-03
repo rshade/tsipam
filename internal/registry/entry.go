@@ -155,6 +155,32 @@ func normalizeReservedAt(value string) (string, error) {
 	return t.UTC().Format(time.RFC3339), nil
 }
 
+// validateStoredReservationMetadata validates metadata decoded from the
+// registry. It is the load-path counterpart to normalizeMetadata: caller input
+// is normalized before a reserve, but a hand-edited value reaches
+// Entry/ServiceEntry through UnmarshalJSON unchanged. Stored values are not
+// trimmed or rewritten here; validation rejects control characters before they
+// can reach human output and rejects a malformed ReservedAt before it can make
+// the generated HTTP client reject an otherwise successful list or reserve
+// response.
+func validateStoredReservationMetadata(m ReservationMetadata) error {
+	if err := rejectControlChars("owner", m.Owner); err != nil {
+		return err
+	}
+	if err := rejectControlChars("description", m.Description); err != nil {
+		return err
+	}
+	if err := rejectControlChars("ticket", m.Ticket); err != nil {
+		return err
+	}
+	if m.ReservedAt != "" {
+		if _, err := time.Parse(time.RFC3339, m.ReservedAt); err != nil {
+			return fmt.Errorf("reserved-at %q is not a valid RFC 3339 timestamp: %w", m.ReservedAt, err)
+		}
+	}
+	return nil
+}
+
 // mergeMetadataInto overlays requested onto existing: a field requested
 // leaves blank keeps existing's value, and a field requested sets replaces
 // it. It never stamps ReservedAt -- see stampReservedAt -- so a caller that

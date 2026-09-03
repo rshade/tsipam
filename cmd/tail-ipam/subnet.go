@@ -53,7 +53,7 @@ func newSubnetReserveCommand(state *commandState) *cobra.Command {
 	var metadataFlags reservationMetadataFlags
 	cmd := newSubnetLeafCommand(
 		state, "reserve <cidr> <site-name>", "Reserve a subnet CIDR pool for a site.",
-		cobra.ExactArgs(subnetReserveArgs), 0, &metadataFlags,
+		cobra.ExactArgs(subnetReserveArgs), 0, 1, &metadataFlags,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			res, err := client.ReserveSubnetPool()(ctx, &ipam.ReserveSubnetPoolPayload{
@@ -85,7 +85,7 @@ func newSubnetReserveCommand(state *commandState) *cobra.Command {
 
 func newSubnetReleaseCommand(state *commandState) *cobra.Command {
 	return newSubnetLeafCommand(
-		state, "release <cidr>", "Release a reserved subnet CIDR pool.", cobra.ExactArgs(1), 0, nil,
+		state, "release <cidr>", "Release a reserved subnet CIDR pool.", cobra.ExactArgs(1), 0, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ReleaseSubnetPool()(ctx, &ipam.ReleaseSubnetPoolPayload{
 				Tailnet: tailnet, CIDR: args[0],
@@ -107,9 +107,15 @@ func newSubnetReleaseCommand(state *commandState) *cobra.Command {
 	)
 }
 
+// newSubnetListCommand structurally mirrors newServiceListCommand (service.go)
+// by design: each lists its own registry entry shape through the shared
+// leaf-command plumbing, and unifying them would need a generic beyond this
+// file's scope.
+//
+//nolint:dupl // mirrors newServiceListCommand (service.go) by design; unifying needs a generic beyond this file's scope
 func newSubnetListCommand(state *commandState) *cobra.Command {
 	return newSubnetLeafCommand(
-		state, commandList, "List reserved subnet CIDR pools.", cobra.NoArgs, -1, nil,
+		state, commandList, "List reserved subnet CIDR pools.", cobra.NoArgs, -1, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, _ []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ListSubnetPools()(ctx, &ipam.ListSubnetPoolsPayload{Tailnet: tailnet})
 			if err != nil {
@@ -167,7 +173,7 @@ func newSubnetLeafCommand(
 	state *commandState,
 	use, short string,
 	argsValidator cobra.PositionalArgs,
-	cidrArgIndex int,
+	cidrArgIndex, siteArgIndex int,
 	metadataFlags *reservationMetadataFlags,
 	call subnetLeafCall,
 ) *cobra.Command {
@@ -189,6 +195,11 @@ func newSubnetLeafCommand(
 					outputSanitizer, kindCIDR, args[cidrArgIndex], registry.NormalizeSubnetCIDR,
 				)
 				registerCanonicalCIDRSuggestion(outputSanitizer, args[cidrArgIndex])
+			}
+			if siteArgIndex >= 0 && siteArgIndex < len(args) {
+				registerSweepValueWithCanonical(
+					outputSanitizer, kindSite, args[siteArgIndex], registry.NormalizeSiteName,
+				)
 			}
 			if metadataFlags != nil && metadataFlags.owner != "" {
 				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)

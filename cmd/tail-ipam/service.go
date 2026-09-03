@@ -102,6 +102,7 @@ func newServiceReleaseCommand(state *commandState) *cobra.Command {
 	)
 }
 
+//nolint:dupl // mirrors newSubnetListCommand (subnet.go) by design; unifying needs a generic beyond this file's scope
 func newServiceListCommand(state *commandState) *cobra.Command {
 	return newServiceLeafCommand(
 		state, commandList, "List reserved service addresses.", cobra.NoArgs, -1, -1, nil,
@@ -140,6 +141,10 @@ type serviceLeafCall func(
 	string,
 ) (*outputEnvelope, error)
 
+// newServiceLeafCommand mirrors newSiteIDLeafCommand (siteid.go) by design;
+// see its doc comment for why the two share a shape rather than a generic.
+//
+//nolint:dupl // mirrors newSiteIDLeafCommand (siteid.go) by design; see its doc comment
 func newServiceLeafCommand(
 	state *commandState,
 	use, short string,

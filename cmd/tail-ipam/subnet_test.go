@@ -276,6 +276,35 @@ func TestSubnetOverlapCollisionErrorFormatMatchesAnchoredSanitizerPattern(t *tes
 	}
 }
 
+// TestSubnetReserveSiteArgRegistersForErrorSweep covers issue 1: unlike
+// site-id reserve and service reserve, newSubnetLeafCommand never registered
+// "subnet reserve"'s <site-name> argument for sanitizeErrorIfNeeded's
+// free-text sweep, so a control character in the site name reached stderr via
+// registry.NormalizeSiteName's %q-escaped rejection message unredacted.
+func TestSubnetReserveSiteArgRegistersForErrorSweep(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const site = "sec\tret-site"
+	const siteEscaped = `sec\tret-site`
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandSubnet, "reserve", "10.0.0.0/24", site,
+		"--registry-dir", dir, "--sanitize", "identity",
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code == exitOK {
+		t.Fatalf("control-character site name exit = %d, want non-zero", code)
+	}
+	stderrText := stderr.String()
+	if strings.Contains(stderrText, siteEscaped) {
+		t.Errorf("stderr leaks the %%q-escaped site name %q: %s", siteEscaped, stderrText)
+	}
+	placeholder := placeholderFor(t, kindSite, siteEscaped)
+	if !strings.Contains(stderrText, placeholder) {
+		t.Errorf("stderr = %q, want escaped-site-name placeholder %q", stderrText, placeholder)
+	}
+}
+
 func TestSubnetExactCollisionErrorFormatMatchesAnchoredSanitizerPattern(t *testing.T) {
 	t.Parallel()
 	err := (&registry.SubnetPoolCollisionError{

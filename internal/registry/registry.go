@@ -202,6 +202,18 @@ func Load(path string) (*Registry, error) {
 	if err != nil {
 		return nil, identityFreePathError(err)
 	}
+	return loadBytes(raw)
+}
+
+// loadBytes decodes an in-memory registry document, applying every rule Load
+// documents; Load is [os.ReadFile] followed by loadBytes.
+//
+// It is separate so a candidate document -- one a caller has patched in
+// memory but has not written and may yet decide to discard -- can be judged
+// against exactly the rules the next Load will apply, without the candidate
+// ever reaching the filesystem. See repairMalformedMap, which is the reason
+// this split exists.
+func loadBytes(raw []byte) (*Registry, error) {
 	// The UTF-8 byte-order mark (U+FEFF). hujson.Parse already fails on a
 	// BOM-prefixed document with an "invalid character" error, but that
 	// message gives no indication of the cause; checking for it directly
@@ -291,15 +303,20 @@ func (reg *Registry) loadServiceAddresses(object *hujson.Object) {
 }
 
 // mapAccessor bundles the type-agnostic questions shared by all top-level
-// maps: canonical key membership, raw-key spelling, and scoped validation
-// error. Concrete reserve/list operations continue to use their typed maps.
+// maps: canonical key membership, raw-key spelling, on-file presence of the
+// containing block, and scoped validation error. Concrete reserve/list
+// operations continue to use their typed maps.
 // hasView reports whether the canonical map is non-nil (e.g. reg.SiteIDs != nil);
 // it's false when a map decode/validate failure prevented building a view.
+// present carries the map's *Present flag (see Registry's doc comment), so
+// reservePatchOp reads it off the registry rather than taking it as an
+// argument a fourth map could pass wrongly or forget entirely.
 type mapAccessor struct {
 	hasKey  func(string) bool
 	rawKeys map[string]string
 	err     error
 	hasView bool
+	present bool
 }
 
 func (reg *Registry) mapAccessorFor(topLevel string) (mapAccessor, error) {
@@ -309,18 +326,21 @@ func (reg *Registry) mapAccessorFor(topLevel string) (mapAccessor, error) {
 			hasKey:  func(key string) bool { _, ok := reg.SiteIDs[key]; return ok },
 			rawKeys: reg.rawKeys, err: reg.siteIDsErr,
 			hasView: reg.SiteIDs != nil,
+			present: reg.siteIDsPresent,
 		}, nil
 	case subnetPoolsKey:
 		return mapAccessor{
 			hasKey:  func(key string) bool { _, ok := reg.SubnetPools[key]; return ok },
 			rawKeys: reg.subnetPoolRawKeys, err: reg.subnetPoolsErr,
 			hasView: reg.SubnetPools != nil,
+			present: reg.subnetPoolsPresent,
 		}, nil
 	case serviceAddressesKey:
 		return mapAccessor{
 			hasKey:  func(key string) bool { _, ok := reg.ServiceAddresses[key]; return ok },
 			rawKeys: reg.serviceAddressRawKeys, err: reg.serviceAddressesErr,
 			hasView: reg.ServiceAddresses != nil,
+			present: reg.serviceAddressesPresent,
 		}, nil
 	default:
 		return mapAccessor{}, fmt.Errorf("unknown registry map %q", topLevel)
@@ -460,6 +480,9 @@ func canonicalize(raw map[string]Entry) (*Registry, error) {
 		if entry.Site == "" {
 			return nil, fmt.Errorf("site ID %s (key %q) has an empty or null site name", canonicalID, rawID)
 		}
+		if metaErr := validateStoredReservationMetadata(entry.ReservationMetadata); metaErr != nil {
+			return nil, fmt.Errorf("site ID %s (key %q): %w", canonicalID, rawID, storedStateError(metaErr))
+		}
 		siteIDs[canonicalID] = entry
 		rawKeys[canonicalID] = rawID
 	}
@@ -511,6 +534,11 @@ func canonicalizeServiceAddresses(
 			return nil, nil, fmt.Errorf("service address %s (key %q): %w", address, rawAddress, err)
 		}
 		entry.Service = service
+		if metaErr := validateStoredReservationMetadata(entry.ReservationMetadata); metaErr != nil {
+			return nil, nil, fmt.Errorf(
+				"service address %s (key %q): %w", address, rawAddress, storedStateError(metaErr),
+			)
+		}
 		addresses[address] = entry
 		rawKeys[address] = rawAddress
 	}
@@ -605,6 +633,12 @@ func RawEntries(path string) (map[string]string, map[string]string, map[string]s
 // rawReservationMapMember best-effort extracts either a string value or the
 // named subject field from an object value. On an ambiguous top-level match it
 // uses the last member; this is sufficient for a sanitizer candidate list.
+//
+// Every entry key is returned unconditionally -- with whatever subject
+// string was extractable, or "" when the entry is an object missing
+// subjectField or carrying a non-string value for it -- regardless of
+// whether the value validated; it is each caller's choice whether that key
+// is itself an identity value worth registering as a sweep candidate.
 func rawReservationMapMember(object *hujson.Object, key, subjectField string) map[string]string {
 	idx := -1
 	for i := range object.Members {
@@ -627,21 +661,20 @@ func rawReservationMapMember(object *hujson.Object, key, subjectField string) ma
 		if !isLiteral {
 			continue
 		}
+		entryKey := literal.String()
 		packed := entryObject.Members[i].Value.Pack()
 		var subject string
 		if err := json.Unmarshal(packed, &subject); err == nil {
-			entries[literal.String()] = subject
+			entries[entryKey] = subject
 			continue
 		}
 		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(packed, &fields); err != nil {
-			continue
+		if err := json.Unmarshal(packed, &fields); err == nil {
+			if rawSubject, present := fields[subjectField]; present {
+				_ = json.Unmarshal(rawSubject, &subject)
+			}
 		}
-		rawSubject, present := fields[subjectField]
-		if !present || json.Unmarshal(rawSubject, &subject) != nil {
-			continue
-		}
-		entries[literal.String()] = subject
+		entries[entryKey] = subject
 	}
 	return entries
 }
@@ -701,6 +734,56 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 	}
 }
 
+// reservePatchOp decides the hujsonedit.PatchOperation a reserve call should
+// apply to install newValue under key in topLevel. Whether the containing
+// block already exists as an object node (see the *Present fields' doc
+// comment on Registry) decides the strategy: when it does not, a single
+// whole-object add both creates the block and installs the entry, safe to
+// use unconditionally because the caller holds the registry lock across this
+// decision. Presence is the *Present flag and must NOT be re-derived from
+// the canonical map being nil: an existing-but-empty "siteIDs" object also
+// decodes to a nil map, and a whole-object add there would silently destroy
+// anything else attached to that node -- e.g. a hand-written comment inside
+// "siteIDs": {} -- by replacing the node instead of adding a key into it.
+//
+// When the block does exist, the add must target whichever raw
+// on-file spelling the registry already recorded for key -- hujson's patch
+// matching is exact and format-sensitive (see Registry's doc comment), so
+// amending an entry whose raw spelling differs from its canonical form (e.g.
+// "01" for site ID "1") by targeting the canonical spelling instead lands as
+// a second, duplicate member rather than replacing the first. Shared by
+// ReserveSiteIDWithLogger, ReserveServiceAddressWithLogger, and
+// ReserveSubnetPoolWithLogger so this decision cannot drift between the
+// three maps that need it: NormalizeSubnetCIDR trims surrounding whitespace
+// before comparing against the canonical form, so a whitespace-padded
+// subnetPools raw key loads successfully with rawKey != canonicalKey just
+// like a non-canonical siteIDs or serviceAddresses key does.
+//
+// Every input except newValue is read off reg through mapAccessorFor rather
+// than passed in. That is deliberate and structural: a hand-passed presence
+// flag and raw-key map are what let ReserveSubnetPoolWithLogger once write
+// its own patch branch, asserting in prose that it was equivalent when it
+// was not. Naming topLevel now selects the presence flag, the raw-key
+// spellings, and the membership test together, so a fourth map cannot pair
+// one map's key with another's state, and an unknown topLevel is a returned
+// error rather than a silently empty accessor.
+func reservePatchOp[V any](
+	reg *Registry, topLevel, key string, newValue V,
+) (hujsonedit.PatchOperation, error) {
+	acc, err := reg.mapAccessorFor(topLevel)
+	if err != nil {
+		return hujsonedit.PatchOperation{}, err
+	}
+	if !acc.present {
+		return hujsonedit.PatchAdd(map[string]V{key: newValue}, topLevel), nil
+	}
+	rawKey := key
+	if acc.hasKey(key) && acc.rawKeys[key] != "" {
+		rawKey = acc.rawKeys[key]
+	}
+	return hujsonedit.PatchAdd(newValue, topLevel, rawKey), nil
+}
+
 // ReserveSiteIDWithLogger reserves id for site in the registry at path, creating the
 // file (as "{}\n") if it does not exist yet. Reserving the same id+site pair
 // again with no metadata is a no-op — changed reports false, err is nil — so
@@ -728,6 +811,13 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 // need to re-derive what NormalizeSiteID/NormalizeSiteName already computed,
 // plus the metadata actually stored after the merge and any auto-stamp.
 // logger receives identity-free I/O diagnostics; nil is quiet.
+//
+// It mirrors ReserveServiceAddressWithLogger's locked read-decide-write
+// transaction by necessity, not copy-paste: both reservation primitives share
+// the same normalize/lock/collide/resolve/patch shape, and reservePatchOp
+// already factors out the one piece that was genuinely identical logic.
+//
+//nolint:dupl // mirrors ReserveServiceAddressWithLogger's normalize/lock/collide/resolve/patch shape; unifying needs a generic that costs more than it saves
 func ReserveSiteIDWithLogger(
 	path, id, site string,
 	metadata ReservationMetadata,
@@ -765,23 +855,9 @@ func ReserveSiteIDWithLogger(
 			return nil
 		}
 
-		var op hujsonedit.PatchOperation
-		if !reg.siteIDsPresent {
-			// The siteIDs member itself is absent (or present but null): one
-			// add creates it with this entry, mirroring tail-acl's
-			// AddDefinition for an absent map. Safe to use the whole-object
-			// add unconditionally here because the lock guarantees no
-			// concurrent writer can have raced this decision.
-			//
-			// This must NOT be reg.SiteIDs == nil: an existing-but-empty
-			// siteIDs object also decodes to a nil map, and a whole-object
-			// add there would silently destroy anything else attached to
-			// that node -- e.g. a hand-written comment inside "siteIDs": {}
-			// -- by replacing the node instead of adding a key into it. See
-			// siteIDsPresent's doc comment.
-			op = hujsonedit.PatchAdd(map[string]Entry{id: newEntry}, siteIDsKey)
-		} else {
-			op = hujsonedit.PatchAdd(newEntry, siteIDsKey, id)
+		op, opErr := reservePatchOp(reg, siteIDsKey, id, newEntry)
+		if opErr != nil {
+			return opErr
 		}
 		if patchErr := hujsonedit.WritePatch(path, nil, op); patchErr != nil {
 			return fmt.Errorf("reserving site ID %s: %w", id, patchErr)
@@ -829,9 +905,17 @@ func ReleaseSiteIDWithLogger(
 // releaseRegistryEntry does NOT check mapError for the target map when a
 // canonical view exists, because release operations need to be able to repair
 // broken maps by removing entries that caused validation errors (e.g.,
-// overlapping subnet pools). However, if a map has a validation error and no
-// usable view, release fails closed with an error rather than reporting a
-// confident (but untrustworthy) "not reserved" result.
+// overlapping subnet pools). When a map has a validation error and no usable
+// view at all, release still attempts a best-effort repair via
+// repairMalformedMap: key has already been normalized by the caller, so it
+// finds raw on-file keys that normalize to it, tries removing each exact raw
+// spelling, and keeps a removal only when the resulting document demonstrably
+// fixes topLevel's view -- see repairMalformedMap and
+// repairCandidateFixesMap for the predicate and why it takes two conditions
+// rather than one. When the repair does not qualify, the file is left
+// byte-for-byte as it was (it is never written; the candidate is judged in
+// memory) and release fails closed with an error rather than reporting a
+// confident but untrustworthy "not reserved" result.
 func releaseRegistryEntry(
 	path, topLevel, key, displayName, diagnosticName string,
 	logger diagnostics.Logger,
@@ -850,12 +934,11 @@ func releaseRegistryEntry(
 			return selectErr
 		}
 		if !acc.hasKey(key) {
-			// If there's an error but no view was built, we cannot reliably
-			// determine whether the key is present or absent, so fail closed.
-			if acc.err != nil && !acc.hasView {
-				return fmt.Errorf("cannot determine whether %s %s is reserved: %w", displayName, key, acc.err)
+			repaired, absentErr := releaseAbsentKey(path, topLevel, key, displayName, diagnosticName, acc, logger)
+			if absentErr != nil {
+				return absentErr
 			}
-			diagnostics.Debug(logger, diagnosticName+" reservation already absent")
+			changed = repaired
 			return nil
 		}
 		rawKey := acc.rawKeys[key]
@@ -872,6 +955,149 @@ func releaseRegistryEntry(
 		return nil
 	})
 	return changed, err
+}
+
+// releaseAbsentKey handles releaseRegistryEntry's case where key is absent
+// from topLevel's canonical view: either a genuine no-op (the key was never
+// reserved, or topLevel decoded with no error and simply lacks it), or --
+// when topLevel's view could not be built at all -- a best-effort repair via
+// repairMalformedMap. It reports whether the release changed anything, in the
+// same two-value shape releaseRegistryEntry's closure returns, so the caller
+// can pass its result straight through.
+func releaseAbsentKey(
+	path, topLevel, key, displayName, diagnosticName string,
+	acc mapAccessor,
+	logger diagnostics.Logger,
+) (bool, error) {
+	if acc.err == nil || acc.hasView {
+		diagnostics.Debug(logger, diagnosticName+" reservation already absent")
+		return false, nil
+	}
+	repaired, repairErr := repairMalformedMap(path, topLevel, key)
+	if repairErr != nil {
+		return false, repairErr
+	}
+	if repaired {
+		diagnostics.Debug(logger, diagnosticName+" reservation removed by raw-key repair")
+		return true, nil
+	}
+	return false, fmt.Errorf("cannot determine whether %s %s is reserved: %w", displayName, key, acc.err)
+}
+
+// repairMalformedMap attempts, under the caller's registry lock (see
+// withRegistryLock -- releaseRegistryEntry's caller holds it across this
+// entire span), to remove an on-file spelling that normalizes to key from
+// topLevel when that map's canonical view could not be built at all.
+//
+// The candidate is produced and judged entirely in memory: the file is read
+// once, patched with hujsonedit.PatchBytes, and reloaded through loadBytes.
+// It is written back only once that reload BOTH shows topLevel's view now
+// validates AND shows key absent from the rebuilt view -- see
+// repairCandidateFixesMap for why one without the other proves nothing.
+//
+// Deciding before writing rather than after is what makes the refusal path
+// trivially safe. A repair that writes first has to undo itself, and that
+// undo is a second write that can fail, that opens a window in which the
+// registry holds a rejected repair, and that must not re-serialize the
+// document (this registry is comment-preserving HuJSON, so the only sound
+// restore is the original bytes). None of that exists here: a rejected
+// candidate is simply dropped, and the file is untouched because it was
+// never touched. Reports whether the repair was kept, and an error only if
+// the single write of an already-validated candidate fails.
+func repairMalformedMap(path, topLevel, key string) (bool, error) {
+	original, readErr := os.ReadFile(path)
+	if readErr != nil {
+		//nolint:nilerr // nothing was read, so no repair is even possible; the caller's own "cannot determine" refusal already reports this
+		return false, nil
+	}
+	for _, rawKey := range repairRawKeys(original, topLevel, key) {
+		candidate, patchErr := hujsonedit.PatchBytes(original, nil, hujsonedit.PatchRemove(topLevel, rawKey))
+		if patchErr != nil || !repairCandidateFixesMap(candidate, topLevel, key) {
+			continue
+		}
+		if writeErr := hujsonedit.WriteRaw(path, candidate); writeErr != nil {
+			return false, fmt.Errorf(
+				"repairing %s: removing %q would fix it, but writing the repaired registry failed: %w",
+				topLevel, rawKey, identityFreePathError(writeErr),
+			)
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// repairRawKeys returns every exact on-file member spelling in topLevel that
+// normalizes to key. The map's canonical view is unavailable on this path, so
+// its usual canonical-to-raw index cannot be trusted; walking the HuJSON syntax
+// tree recovers the spelling PatchRemove must target without decoding the bad
+// entry value. Candidates remain in document order so exact duplicate members
+// are tested conservatively one at a time by repairCandidateFixesMap.
+func repairRawKeys(document []byte, topLevel, key string) []string {
+	value, err := hujson.Parse(document)
+	if err != nil {
+		return nil
+	}
+	value.Standardize()
+	object, ok := value.Value.(*hujson.Object)
+	if !ok {
+		return nil
+	}
+	idx, err := registryMemberIndex(object, topLevel)
+	if err != nil || idx < 0 {
+		return nil
+	}
+	entries, ok := object.Members[idx].Value.Value.(*hujson.Object)
+	if !ok {
+		return nil
+	}
+
+	rawKeys := make([]string, 0, 1)
+	for i := range entries.Members {
+		literal, isLiteral := entries.Members[i].Name.Value.(hujson.Literal)
+		if !isLiteral {
+			continue
+		}
+		rawKey := literal.String()
+		canonicalKey, normalizeErr := normalizeRegistryKey(topLevel, rawKey)
+		if normalizeErr == nil && canonicalKey == key {
+			rawKeys = append(rawKeys, rawKey)
+		}
+	}
+	return rawKeys
+}
+
+func normalizeRegistryKey(topLevel, key string) (string, error) {
+	switch topLevel {
+	case siteIDsKey:
+		return NormalizeSiteID(key)
+	case subnetPoolsKey:
+		return NormalizeSubnetCIDR(key)
+	case serviceAddressesKey:
+		return NormalizeServiceAddress(key)
+	default:
+		return "", fmt.Errorf("unknown registry map %q", topLevel)
+	}
+}
+
+// repairCandidateFixesMap reports whether candidate -- the in-memory result
+// of removing key from topLevel -- is worth writing: it must rebuild
+// topLevel's view without error AND leave key absent from that view.
+//
+// Neither condition alone is sufficient. A literal-key match proves nothing
+// about which entry actually caused the failure, so a candidate that still
+// fails to validate means the removed entry was a healthy sibling and the
+// real culprit is elsewhere. And a clean reload proves nothing about whether
+// key is still reserved: a second on-file spelling -- an exact duplicate, a
+// bare/CIDR alias, or a non-canonical numeric spelling like "01" -- can
+// canonicalize to the same key and survive the removal of its twin, since
+// hujson resolves duplicate object members first-wins.
+func repairCandidateFixesMap(candidate []byte, topLevel, key string) bool {
+	reloaded, loadErr := loadBytes(candidate)
+	if loadErr != nil || reloaded.mapError(topLevel) != nil {
+		return false
+	}
+	acc, accErr := reloaded.mapAccessorFor(topLevel)
+	return accErr == nil && !acc.hasKey(key)
 }
 
 // ListSiteIDsWithLogger returns the registry's site-ID entries at path, sorted

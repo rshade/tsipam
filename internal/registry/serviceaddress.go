@@ -40,6 +40,13 @@ func (e *ServiceAddressCollisionError) Error() string {
 // service, creating the registry file if necessary. Address/service aliases
 // normalize before collision and idempotency decisions. Metadata follows the
 // same merge and auto-stamp rules as the existing reservation primitives.
+//
+// It mirrors ReserveSiteIDWithLogger's locked read-decide-write transaction
+// by necessity, not copy-paste: both reservation primitives share the same
+// normalize/lock/collide/resolve/patch shape, and reservePatchOp already
+// factors out the one piece that was genuinely identical logic.
+//
+//nolint:dupl // mirrors ReserveSiteIDWithLogger's normalize/lock/collide/resolve/patch shape; unifying needs a generic that costs more than it saves
 func ReserveServiceAddressWithLogger(
 	path, address, service string,
 	metadata ReservationMetadata,
@@ -55,7 +62,7 @@ func ReserveServiceAddressWithLogger(
 	}
 	metadata, err = normalizeMetadata(metadata)
 	if err != nil {
-		return "", "", ReservationMetadata{}, false, invalidInput(err)
+		return "", "", ReservationMetadata{}, false, err
 	}
 
 	changed := false
@@ -79,15 +86,9 @@ func ReserveServiceAddressWithLogger(
 			return nil
 		}
 
-		var op hujsonedit.PatchOperation
-		if !reg.serviceAddressesPresent {
-			op = hujsonedit.PatchAdd(map[string]ServiceEntry{address: newEntry}, serviceAddressesKey)
-		} else {
-			rawKey := address
-			if exists && reg.serviceAddressRawKeys[address] != "" {
-				rawKey = reg.serviceAddressRawKeys[address]
-			}
-			op = hujsonedit.PatchAdd(newEntry, serviceAddressesKey, rawKey)
+		op, opErr := reservePatchOp(reg, serviceAddressesKey, address, newEntry)
+		if opErr != nil {
+			return opErr
 		}
 		if patchErr := hujsonedit.WritePatch(path, nil, op); patchErr != nil {
 			return fmt.Errorf("reserving service address %s: %w", address, patchErr)

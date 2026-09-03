@@ -1,6 +1,7 @@
 package registry_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -378,6 +379,99 @@ func TestReserveSiteIDCollidesAgainstUnNormalizedFileKey(t *testing.T) {
 	}
 	if collision.Existing != "hq-vpc" {
 		t.Errorf("collision.Existing = %q, want %q", collision.Existing, "hq-vpc")
+	}
+}
+
+// TestReserveSiteIDAmendingUnNormalizedFileKeyDoesNotDuplicate is the
+// regression test for Issue 2: ReserveSiteIDWithLogger used to patch the
+// canonical id ("1") even when the file's raw key was a different, valid
+// spelling ("01"). hujson's patch matching is exact (see Registry's doc
+// comment), so that add landed as a second, duplicate member rather than
+// updating the first -- corrupting the registry file while still reporting
+// success.
+func TestReserveSiteIDAmendingUnNormalizedFileKeyDoesNotDuplicate(t *testing.T) {
+	t.Parallel()
+	path := regPath(t)
+	if err := os.WriteFile(path, []byte(`{"siteIDs":{"01":"hq"}}`+"\n"), 0o644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	id, site, _, changed, err := registry.ReserveSiteIDWithLogger(
+		path, "1", "hq", registry.ReservationMetadata{Owner: "ops"}, nil,
+	)
+	if err != nil {
+		t.Fatalf("ReserveSiteID: %v", err)
+	}
+	if id != "1" || site != "hq" || !changed {
+		t.Errorf("ReserveSiteID = (%q, %q, %t), want (1, hq, true)", id, site, changed)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+	var decoded struct {
+		SiteIDs map[string]json.RawMessage `json:"siteIDs"`
+	}
+	if unmarshalErr := json.Unmarshal(got, &decoded); unmarshalErr != nil {
+		t.Fatalf("decoding registry after reserve: %v", unmarshalErr)
+	}
+	if len(decoded.SiteIDs) != 1 {
+		t.Errorf("registry after amending an un-normalized key = %s, want exactly one siteIDs member, got %d",
+			got, len(decoded.SiteIDs))
+	}
+
+	if _, loadErr := registry.ListSiteIDsWithLogger(path, nil); loadErr != nil {
+		t.Errorf("ListSiteIDs after amending an un-normalized key: %v, want the registry to remain loadable", loadErr)
+	}
+}
+
+// TestRawEntriesAlwaysReturnsTheMapKey is the regression test for Issue 1:
+// rawReservationMapMember used to silently drop a map key when the entry
+// object either lacked its subject field or carried a non-string value for
+// it -- exactly the shape RawEntries feeds into the sanitizer's identity
+// inventory (see registerKnownIdentityInventory in cmd/tail-ipam/main.go), so
+// a dropped key meant the value it named was never registered as a sweep
+// candidate even though Load's own error text names it regardless.
+func TestRawEntriesAlwaysReturnsTheMapKey(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		entryJSON   string
+		wantSubject string
+	}{
+		{name: "string entry", entryJSON: `"svc:payments"`, wantSubject: "svc:payments"},
+		{
+			name:        "object entry with subject field",
+			entryJSON:   `{"service":"svc:payments","owner":"ops"}`,
+			wantSubject: "svc:payments",
+		},
+		{name: "object entry without subject field", entryJSON: `{"owner":"ops"}`, wantSubject: ""},
+		{
+			name:        "object entry with non-string subject field",
+			entryJSON:   `{"service":42,"owner":"ops"}`,
+			wantSubject: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := regPath(t)
+			content := fmt.Sprintf(`{"serviceAddresses":{"100.100.100.7":%s}}`, tc.entryJSON)
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatalf("seeding fixture: %v", err)
+			}
+
+			_, _, serviceAddresses := registry.RawEntries(path)
+			subject, ok := serviceAddresses["100.100.100.7"]
+			if !ok {
+				t.Fatalf("RawEntries serviceAddresses = %+v, want key %q present", serviceAddresses, "100.100.100.7")
+			}
+			if subject != tc.wantSubject {
+				t.Errorf("RawEntries serviceAddresses[%q] = %q, want %q", "100.100.100.7", subject, tc.wantSubject)
+			}
+		})
 	}
 }
 

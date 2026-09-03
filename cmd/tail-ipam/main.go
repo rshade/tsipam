@@ -280,7 +280,10 @@ func runCLI(
 // character, or invalid UTF-8 -- exactly the values %q exists to escape.
 // Capture groups: 1 = the site ID (never sanitized, see resolved decision
 // D2 -- IDs are not identity), 2 = the %q-quoted existing site including its
-// surrounding quotes, 3 = the %q-quoted wanted site, ditto.
+// surrounding quotes, 3 = the %q-quoted wanted site, ditto. D2 governs only
+// this collision splice and the output envelope's id field; the reserve
+// path's own validation errors do sweep the raw ID argument, under its own
+// kindSiteID (see siteid.go).
 var collisionErrorPattern = regexp.MustCompile(
 	`^site ID (\S+) is already reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
 )
@@ -344,6 +347,7 @@ type collisionSegment struct {
 
 const (
 	kindSite     = "site"
+	kindSiteID   = "site-id"
 	kindCIDR     = "cidr"
 	kindIP       = "ip"
 	kindService  = "service"

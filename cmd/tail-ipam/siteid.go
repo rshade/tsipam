@@ -74,71 +74,135 @@ func addRegistryFlags(cmd *cobra.Command, registryDir, tailnet *string) {
 }
 
 func newSiteIDReserveCommand(state *commandState) *cobra.Command {
-	var registryDir, tailnetFlag string
 	var metadataFlags reservationMetadataFlags
-	cmd := &cobra.Command{
-		Use:           "reserve <id> <site-name>",
-		Short:         "Reserve a 4via6 site ID for a site.",
-		Args:          cobra.ExactArgs(siteIDReserveArgs),
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
-			outputSanitizer, err := state.outputSanitizer(tailnet)
-			if err != nil {
-				return err
-			}
-			// The site-name and ID args must be registered before the
-			// reserve call can fail: NormalizeSiteName/NormalizeSiteID
-			// validation errors echo the trimmed spelling (and, for a
-			// control character or a non-numeric ID, its %q-escaped
-			// rendering -- see registerQuotedForm) before the loopback
-			// client is ever invoked.
-			registerSweepValueWithCanonical(outputSanitizer, kindSite, args[1], registry.NormalizeSiteName)
-			registerSweepValueWithCanonical(outputSanitizer, kindSite, args[0], registry.NormalizeSiteID)
-			if metadataFlags.owner != "" {
-				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)
-			}
+	cmd := newSiteIDLeafCommand(
+		state, "reserve <id> <site-name>", "Reserve a 4via6 site ID for a site.",
+		cobra.ExactArgs(siteIDReserveArgs), 0, 1, &metadataFlags,
+		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
-			return loopback.RunWithLogger(
-				cmd.Context(), registryDir, state.logger,
-				func(ctx context.Context, client *ipamclient.Client) error {
-					res, callErr := client.ReserveSiteID()(ctx, &ipam.ReserveSiteIDPayload{
-						Tailnet: tailnet, ID: args[0], Site: args[1],
-						Owner: owner, Description: description, Ticket: ticket, ReservedAt: reservedAt,
-					})
-					if callErr != nil {
-						return callErr
-					}
-					result, ok := res.(*ipam.ReserveSiteIDResult)
-					if !ok {
-						return fmt.Errorf("unexpected reserve_site_id result type %T", res)
-					}
-					status := changedStatus(result.Changed)
-					output := newOutput(commandSiteIDReserve, status, "", tailnet)
-					output.Changed = &result.Changed
-					output.ID = result.ID
-					output.Site = result.Site
-					output.reservationMetadataOutput = metadataOutputFrom(
-						result.Owner, result.Description, result.Ticket, result.ReservedAt,
-					)
-					output.messageBuilder = siteIDReserveMessage
-					return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
-				},
+			res, err := client.ReserveSiteID()(ctx, &ipam.ReserveSiteIDPayload{
+				Tailnet: tailnet, ID: args[0], Site: args[1],
+				Owner: owner, Description: description, Ticket: ticket, ReservedAt: reservedAt,
+			})
+			if err != nil {
+				return nil, err
+			}
+			result, ok := res.(*ipam.ReserveSiteIDResult)
+			if !ok {
+				return nil, fmt.Errorf("unexpected reserve_site_id result type %T", res)
+			}
+			status := changedStatus(result.Changed)
+			output := newOutput(commandSiteIDReserve, status, "", tailnet)
+			output.Changed = &result.Changed
+			output.ID = result.ID
+			output.Site = result.Site
+			output.reservationMetadataOutput = metadataOutputFrom(
+				result.Owner, result.Description, result.Ticket, result.ReservedAt,
 			)
+			output.messageBuilder = siteIDReserveMessage
+			return output, nil
 		},
-	}
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	)
 	addMetadataFlags(cmd, &metadataFlags)
 	return cmd
 }
 
 func newSiteIDReleaseCommand(state *commandState) *cobra.Command {
+	return newSiteIDLeafCommand(
+		state, "release <id>", "Release a reserved 4via6 site ID.", cobra.ExactArgs(1), 0, -1, nil,
+		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
+			res, err := client.ReleaseSiteID()(
+				ctx, &ipam.ReleaseSiteIDPayload{Tailnet: tailnet, ID: args[0]},
+			)
+			if err != nil {
+				return nil, err
+			}
+			result, ok := res.(*ipam.ReleaseSiteIDResult)
+			if !ok {
+				return nil, fmt.Errorf("unexpected release_site_id result type %T", res)
+			}
+			status := changedStatus(result.Changed)
+			output := newOutput(commandSiteIDRelease, status, "", tailnet)
+			output.Changed = &result.Changed
+			output.ID = result.ID
+			output.messageBuilder = siteIDReleaseMessage
+			return output, nil
+		},
+	)
+}
+
+// newSiteIDListCommand structurally mirrors newSubnetListCommand (subnet.go)
+// and newServiceListCommand (service.go) by design: each lists its own
+// registry entry shape through the shared leaf-command plumbing, and
+// unifying them would need a generic beyond this file's scope.
+//
+//nolint:dupl // mirrors newSubnetListCommand (subnet.go) and newServiceListCommand (service.go) by design; unifying needs a generic beyond this file's scope
+func newSiteIDListCommand(state *commandState) *cobra.Command {
+	return newSiteIDLeafCommand(
+		state, commandList, "List reserved 4via6 site IDs.", cobra.NoArgs, -1, -1, nil,
+		func(ctx context.Context, client *ipamclient.Client, _ []string, tailnet string) (*outputEnvelope, error) {
+			res, err := client.ListSiteIds()(ctx, &ipam.ListSiteIdsPayload{Tailnet: tailnet})
+			if err != nil {
+				return nil, err
+			}
+			entries, ok := res.([]*ipam.SiteIDReservation)
+			if !ok {
+				return nil, fmt.Errorf("unexpected list_site_ids result type %T", res)
+			}
+			outputEntries := make([]siteIDOutput, len(entries))
+			for index, entry := range entries {
+				outputEntries[index] = siteIDOutput{
+					ID: entry.ID, Site: entry.Site,
+					reservationMetadataOutput: metadataOutputFrom(
+						entry.Owner, entry.Description, entry.Ticket, entry.ReservedAt,
+					),
+				}
+			}
+			output := newOutput(
+				commandSiteIDList, statusOK,
+				fmt.Sprintf("listed %d site-ID reservation(s)", len(entries)), tailnet,
+			)
+			output.SiteIDs = &outputEntries
+			return output, nil
+		},
+	)
+}
+
+type siteIDLeafCall func(
+	context.Context,
+	*ipamclient.Client,
+	[]string,
+	string,
+) (*outputEnvelope, error)
+
+// newSiteIDLeafCommand is the site-id analogue of subnet.go's
+// newSubnetLeafCommand and service.go's newServiceLeafCommand: one shared
+// RunE registers the ID/site-name positional args for the error sanitizer's
+// free-text sweep before invoking call, so reserve, release, and list -- any
+// site-id leaf that takes an ID or site-name argument -- agree on what gets
+// swept instead of each command registering (or forgetting to register) its
+// own args independently.
+//
+// It mirrors newServiceLeafCommand (service.go) by design: site-id has no
+// third per-leaf canonicalization step (unlike newSubnetLeafCommand's
+// CIDR-suggestion call), so its RunE body is structurally identical to
+// service's two-arg-index sweep-then-call shape. Unifying the three needs a
+// generic beyond this file's scope.
+//
+//nolint:dupl // mirrors newServiceLeafCommand by design; see the doc comment above
+func newSiteIDLeafCommand(
+	state *commandState,
+	use, short string,
+	argsValidator cobra.PositionalArgs,
+	idArgIndex, siteArgIndex int,
+	metadataFlags *reservationMetadataFlags,
+	call siteIDLeafCall,
+) *cobra.Command {
 	var registryDir, tailnetFlag string
 	cmd := &cobra.Command{
-		Use:           "release <id>",
-		Short:         "Release a reserved 4via6 site ID.",
-		Args:          cobra.ExactArgs(1),
+		Use:           use,
+		Short:         short,
+		Args:          argsValidator,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -147,72 +211,32 @@ func newSiteIDReleaseCommand(state *commandState) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return loopback.RunWithLogger(
-				cmd.Context(), registryDir, state.logger,
-				func(ctx context.Context, client *ipamclient.Client) error {
-					res, callErr := client.ReleaseSiteID()(
-						ctx, &ipam.ReleaseSiteIDPayload{Tailnet: tailnet, ID: args[0]},
-					)
-					if callErr != nil {
-						return callErr
-					}
-					result, ok := res.(*ipam.ReleaseSiteIDResult)
-					if !ok {
-						return fmt.Errorf("unexpected release_site_id result type %T", res)
-					}
-					status := changedStatus(result.Changed)
-					output := newOutput(commandSiteIDRelease, status, "", tailnet)
-					output.Changed = &result.Changed
-					output.ID = result.ID
-					output.messageBuilder = siteIDReleaseMessage
-					return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
-				},
-			)
-		},
-	}
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
-	return cmd
-}
-
-func newSiteIDListCommand(state *commandState) *cobra.Command {
-	var registryDir, tailnetFlag string
-	cmd := &cobra.Command{
-		Use:           commandList,
-		Short:         "List reserved 4via6 site IDs.",
-		Args:          cobra.NoArgs,
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
-			outputSanitizer, err := state.outputSanitizer(tailnet)
-			if err != nil {
-				return err
+			// The site-name and ID args must be registered before call can
+			// fail: NormalizeSiteName/NormalizeSiteID validation errors echo
+			// the trimmed spelling (and, for a control character or a
+			// non-numeric ID, its %q-escaped rendering -- see
+			// registerQuotedForm) before the loopback client is ever
+			// invoked.
+			if siteArgIndex >= 0 && siteArgIndex < len(args) {
+				registerSweepValueWithCanonical(
+					outputSanitizer, kindSite, args[siteArgIndex], registry.NormalizeSiteName,
+				)
+			}
+			if idArgIndex >= 0 && idArgIndex < len(args) {
+				registerSweepValueWithCanonical(
+					outputSanitizer, kindSiteID, args[idArgIndex], registry.NormalizeSiteID,
+				)
+			}
+			if metadataFlags != nil && metadataFlags.owner != "" {
+				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)
 			}
 			return loopback.RunWithLogger(
 				cmd.Context(), registryDir, state.logger,
 				func(ctx context.Context, client *ipamclient.Client) error {
-					res, callErr := client.ListSiteIds()(ctx, &ipam.ListSiteIdsPayload{Tailnet: tailnet})
+					output, callErr := call(ctx, client, args, tailnet)
 					if callErr != nil {
 						return callErr
 					}
-					entries, ok := res.([]*ipam.SiteIDReservation)
-					if !ok {
-						return fmt.Errorf("unexpected list_site_ids result type %T", res)
-					}
-					outputEntries := make([]siteIDOutput, len(entries))
-					for index, entry := range entries {
-						outputEntries[index] = siteIDOutput{
-							ID: entry.ID, Site: entry.Site,
-							reservationMetadataOutput: metadataOutputFrom(
-								entry.Owner, entry.Description, entry.Ticket, entry.ReservedAt,
-							),
-						}
-					}
-					output := newOutput(
-						commandSiteIDList, statusOK,
-						fmt.Sprintf("listed %d site-ID reservation(s)", len(entries)), tailnet,
-					)
-					output.SiteIDs = &outputEntries
 					return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
 				},
 			)

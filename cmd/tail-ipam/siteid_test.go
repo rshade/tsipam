@@ -215,9 +215,12 @@ func TestSiteIDReserveArgsRegisterForErrorSweep(t *testing.T) {
 		if strings.Contains(stderrText, trimmedID) {
 			t.Errorf("stderr leaks trimmed site ID %q: %s", trimmedID, stderrText)
 		}
-		placeholder := placeholderFor(t, kindSite, trimmedID)
+		placeholder := placeholderFor(t, kindSiteID, trimmedID)
 		if !strings.Contains(stderrText, placeholder) {
 			t.Errorf("stderr = %q, want trimmed-ID placeholder %q", stderrText, placeholder)
+		}
+		if !strings.HasPrefix(placeholder, "site-id-") {
+			t.Errorf("placeholder = %q, want the %q prefix, not the site-name namespace", placeholder, "site-id-")
 		}
 	})
 
@@ -249,4 +252,41 @@ func TestSiteIDReserveArgsRegisterForErrorSweep(t *testing.T) {
 			t.Errorf("stderr = %q, want escaped-site-name placeholder %q", stderrText, placeholder)
 		}
 	})
+}
+
+// TestSiteIDReleaseArgRegistersForErrorSweep is the release-side counterpart
+// of TestSiteIDReserveArgsRegisterForErrorSweep: "site-id release" takes the
+// same <id> positional argument as "reserve" and fails through the same
+// NormalizeSiteID validation, but (before this fix) never registered it for
+// the error sanitizer's free-text sweep, so a malformed ID leaked verbatim on
+// release while reserve already redacted it. A raw TAB byte (as opposed to
+// mere padding) is used so the sweep is actually exercised rather than
+// vacuously passing: NormalizeSiteID's error %q-escapes the id it embeds, so
+// (like the control_char_site_name subtest above) the placeholder that
+// appears is for the escaped rendering, not the raw bytes.
+func TestSiteIDReleaseArgRegistersForErrorSweep(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const rawID = "se\tcret-id"
+	const escapedID = `se\tcret-id`
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(), []string{
+		commandSiteID, "release", rawID,
+		"--registry-dir", dir, "--sanitize", "identity",
+	}, fixedKeyGetenv, &stdout, &stderr, nil)
+	if code == exitOK {
+		t.Fatalf("invalid site ID exit = %d, want non-zero", code)
+	}
+	stderrText := stderr.String()
+	if strings.Contains(stderrText, escapedID) {
+		t.Errorf("stderr leaks the %%q-escaped site ID %q: %s", escapedID, stderrText)
+	}
+	placeholder := placeholderFor(t, kindSiteID, escapedID)
+	if !strings.Contains(stderrText, placeholder) {
+		t.Errorf("stderr = %q, want site-ID placeholder %q", stderrText, placeholder)
+	}
+	if !strings.HasPrefix(placeholder, "site-id-") {
+		t.Errorf("placeholder = %q, want the %q prefix, not the site-name namespace", placeholder, "site-id-")
+	}
 }

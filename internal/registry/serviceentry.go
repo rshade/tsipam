@@ -112,11 +112,18 @@ type serviceEntryJSON struct {
 }
 
 // MarshalJSON keeps metadata-free entries concise and uses the truthful
-// service object field when metadata is present.
+// service object field when metadata is present. Re-running the service name
+// through NormalizeServiceName is load-bearing here (unlike Entry.MarshalJSON,
+// which does no validation): it canonicalizes a bare, unprefixed Service value
+// to its svc:-prefixed spelling on write. Every production caller already
+// stores a canonicalized Service (canonicalizeServiceAddresses on the load
+// path, ReserveServiceAddressWithLogger on the write path), so a failure here
+// would mean stored-state corruption rather than caller input -- hence
+// storedStateError rather than returning the *InvalidInputError verbatim.
 func (e ServiceEntry) MarshalJSON() ([]byte, error) {
 	service, err := NormalizeServiceName(e.Service)
 	if err != nil {
-		return nil, err
+		return nil, storedStateError(err)
 	}
 	if e.ReservationMetadata.isZero() {
 		return json.Marshal(service)

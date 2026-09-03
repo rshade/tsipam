@@ -247,6 +247,55 @@ func TestReleaseSubnetPoolRemovesEntryAndAbsentIsNoop(t *testing.T) {
 	}
 }
 
+// TestReserveSubnetPoolAmendingWhitespacePaddedFileKeyDoesNotDuplicate is the
+// regression test mirroring
+// TestReserveSiteIDAmendingUnNormalizedFileKeyDoesNotDuplicate
+// (registry_test.go) for subnet pools: ReserveSubnetPoolWithLogger used to
+// patch the canonical CIDR even when the file's raw key was a different,
+// valid spelling (here, whitespace-padded -- NormalizeSubnetCIDR trims
+// surrounding whitespace before comparing against the canonical form, so a
+// padded raw key loads successfully with rawKey != canonicalKey). hujson's
+// patch matching is exact (see Registry's doc comment), so that add landed
+// as a second, duplicate member rather than updating the first -- corrupting
+// the registry file while still reporting success.
+func TestReserveSubnetPoolAmendingWhitespacePaddedFileKeyDoesNotDuplicate(t *testing.T) {
+	t.Parallel()
+	path := regPath(t)
+	if err := os.WriteFile(path, []byte(`{"subnetPools":{" 10.0.0.0/24":"hq"}}`+"\n"), 0o644); err != nil {
+		t.Fatalf("seeding fixture: %v", err)
+	}
+
+	cidr, site, _, changed, err := registry.ReserveSubnetPoolWithLogger(
+		path, "10.0.0.0/24", "hq", registry.ReservationMetadata{Owner: "ops"}, nil,
+	)
+	if err != nil {
+		t.Fatalf("ReserveSubnetPool: %v", err)
+	}
+	if cidr != "10.0.0.0/24" || site != "hq" || !changed {
+		t.Errorf("ReserveSubnetPool = (%q, %q, %t), want (10.0.0.0/24, hq, true)", cidr, site, changed)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+	var decoded struct {
+		SubnetPools map[string]json.RawMessage `json:"subnetPools"`
+	}
+	if unmarshalErr := json.Unmarshal(got, &decoded); unmarshalErr != nil {
+		t.Fatalf("decoding registry after reserve: %v", unmarshalErr)
+	}
+	if len(decoded.SubnetPools) != 1 {
+		t.Errorf("registry after amending a whitespace-padded key = %s, want exactly one subnetPools member, got %d",
+			got, len(decoded.SubnetPools))
+	}
+
+	if _, loadErr := registry.ListSubnetPoolsWithLogger(path, nil); loadErr != nil {
+		t.Errorf("ListSubnetPools after amending a whitespace-padded key: %v, want the registry to remain loadable",
+			loadErr)
+	}
+}
+
 func TestReserveSubnetPoolPreservesHandWrittenCommentOnAnotherEntry(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)

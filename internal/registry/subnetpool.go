@@ -101,6 +101,9 @@ func canonicalizeSubnetPools(raw map[string]Entry) (map[string]Entry, map[string
 		if entry.Site == "" {
 			return nil, nil, fmt.Errorf("subnet CIDR %s (key %q) has an empty or null site name", cidr, rawCIDR)
 		}
+		if metaErr := validateStoredReservationMetadata(entry.ReservationMetadata); metaErr != nil {
+			return nil, nil, fmt.Errorf("subnet CIDR %s (key %q): %w", cidr, rawCIDR, storedStateError(metaErr))
+		}
 		pools[cidr] = entry
 		rawKeys[cidr] = rawCIDR
 		canonicalCIDRs = append(canonicalCIDRs, cidr)
@@ -188,11 +191,9 @@ func ReserveSubnetPoolWithLogger(
 			return nil
 		}
 
-		var op hujsonedit.PatchOperation
-		if !reg.subnetPoolsPresent {
-			op = hujsonedit.PatchAdd(map[string]Entry{cidr: newEntry}, subnetPoolsKey)
-		} else {
-			op = hujsonedit.PatchAdd(newEntry, subnetPoolsKey, cidr)
+		op, opErr := reservePatchOp(reg, subnetPoolsKey, cidr, newEntry)
+		if opErr != nil {
+			return opErr
 		}
 		if patchErr := hujsonedit.WritePatch(path, nil, op); patchErr != nil {
 			return fmt.Errorf("reserving subnet CIDR %s: %w", cidr, patchErr)

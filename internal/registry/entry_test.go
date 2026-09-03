@@ -10,6 +10,68 @@ import (
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
 
+// TestLoadRejectsControlCharactersInStoredMetadata is the regression test for
+// Issue 5: a control character embedded in a stored owner/description/ticket
+// field used to reach human-readable output completely unvalidated -- only
+// the site/service name went through NormalizeSiteName/NormalizeServiceName's
+// rejectControlChars call. The error is also asserted to not be an
+// *InvalidInputError: this is stored-state corruption, not caller input.
+func TestLoadRejectsControlCharactersInStoredMetadata(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		content string
+		list    func(path string) error
+	}{
+		{
+			name:    "site ID owner",
+			content: `{"siteIDs":{"1":{"site":"hq","owner":"bad\u0007owner"}}}` + "\n",
+			list: func(path string) error {
+				_, err := registry.ListSiteIDsWithLogger(path, nil)
+				return err
+			},
+		},
+		{
+			name:    "subnet pool description",
+			content: `{"subnetPools":{"10.0.0.0/24":{"site":"hq","description":"bad\u0007desc"}}}` + "\n",
+			list: func(path string) error {
+				_, err := registry.ListSubnetPoolsWithLogger(path, nil)
+				return err
+			},
+		},
+		{
+			name:    "service address ticket",
+			content: `{"serviceAddresses":{"100.100.100.7":{"service":"svc:payments","ticket":"OPS\u00071"}}}` + "\n",
+			list: func(path string) error {
+				_, err := registry.ListServiceAddressesWithLogger(path, nil)
+				return err
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := regPath(t)
+			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
+				t.Fatalf("seeding fixture: %v", err)
+			}
+
+			err := tc.list(path)
+			if err == nil {
+				t.Fatal("error = nil, want control-character rejection")
+			}
+			if !strings.Contains(err.Error(), "control characters") {
+				t.Errorf("error = %v, want it to mention control characters", err)
+			}
+			var invalid *registry.InvalidInputError
+			if errors.As(err, &invalid) {
+				t.Error("error chain contains *InvalidInputError, but stored-state should strip the marker")
+			}
+		})
+	}
+}
+
 func TestReserveSiteIDWithoutMetadataStaysBareString(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)

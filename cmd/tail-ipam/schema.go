@@ -85,7 +85,8 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 			"comment-preserving registry and read-only control-plane inventory.",
 		Sanitization: "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; " +
 			"a non-off environment value overrides --sanitize. Device names, addresses, and routes; " +
-			"tailnet routing keys; site names; and reserved subnet CIDRs are replaced. strict is accepted for cross-tool " +
+			"tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; " +
+			"and reserved service addresses are replaced. strict is accepted for cross-tool " +
 			"flag compatibility and is currently equivalent to identity for tail-ipam. " +
 			"calc output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data. " +
 			"Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; " +
