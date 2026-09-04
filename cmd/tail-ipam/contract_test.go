@@ -437,10 +437,8 @@ func TestServiceAddressOutputContract(t *testing.T) {
 	entries := []serviceAddressOutput{
 		{
 			Address: "100.100.100.8", Service: "svc:dashboard",
-			reservationMetadataOutput: reservationMetadataOutput{
-				Owner: "network-team", Ticket: "NET-237", Description: "internal dashboard",
-				ReservedAt: "2026-08-31T12:00:00Z",
-			},
+			Owner: "network-team", Ticket: "NET-237", Description: "internal dashboard",
+			ReservedAt: "2026-08-31T12:00:00Z",
 		},
 		{Address: "100.100.100.20", Service: "svc:metrics"},
 	}
@@ -586,7 +584,7 @@ func TestServiceAddressOutputSanitizesEveryIdentity(t *testing.T) {
 	}
 	entries := []serviceAddressOutput{{
 		Address: "100.100.100.8", Service: "svc:dashboard",
-		reservationMetadataOutput: reservationMetadataOutput{Owner: "network-team"},
+		Owner: "network-team",
 	}}
 	input := newOutput(commandServiceReserve, statusOK,
 		`reserved service address 100.100.100.8 for "svc:dashboard"`, "example.ts.net")

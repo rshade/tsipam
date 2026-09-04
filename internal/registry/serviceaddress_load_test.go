@@ -716,8 +716,7 @@ func TestServiceAddressLoadValidationErrorsHaveProperContext(t *testing.T) {
 			if !strings.Contains(err.Error(), "decoding registry") {
 				t.Errorf("error = %q, want 'decoding registry' context frame", err)
 			}
-			var invalidErr *InvalidInputError
-			if errors.As(err, &invalidErr) {
+			if _, ok := errors.AsType[*InvalidInputError](err); ok {
 				t.Error("error chain contains *InvalidInputError, but stored-state should strip the marker")
 			}
 		})

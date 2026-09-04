@@ -40,8 +40,7 @@ const (
 // errors (as opposed to caller-supplied input errors) so they are not
 // misclassified as HTTP 400 bad-input failures.
 func storedStateError(err error) error {
-	var invalidInput *InvalidInputError
-	if errors.As(err, &invalidInput) {
+	if invalidInput, ok := errors.AsType[*InvalidInputError](err); ok {
 		return invalidInput.Unwrap()
 	}
 	return err
@@ -607,8 +606,7 @@ func withRegistryLock(path string, logger diagnostics.Logger, fn func() error) e
 // filenames contain the tailnet routing key and must not reappear in verbose
 // output when TAILSCALE_SANITIZE is active.
 func identityFreePathError(err error) error {
-	var pathError *os.PathError
-	if errors.As(err, &pathError) {
+	if pathError, ok := errors.AsType[*os.PathError](err); ok {
 		return pathError.Err
 	}
 	return err

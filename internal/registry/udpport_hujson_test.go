@@ -178,8 +178,7 @@ func TestUDPPortOperationsTargetNoncanonicalRawKeys(t *testing.T) {
 	}
 
 	_, _, _, _, err = registry.ReserveUDPPortWithLogger(path, "branch", "41642", "other", nil)
-	var collision *registry.UDPPortCollisionError
-	if !errors.As(err, &collision) {
+	if _, ok := errors.AsType[*registry.UDPPortCollisionError](err); !ok {
 		t.Fatalf("collision against raw key error = %v, want *UDPPortCollisionError", err)
 	}
 

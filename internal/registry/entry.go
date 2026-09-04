@@ -78,13 +78,11 @@ func (e *Entry) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("registry entry must be a string or an object: %w", err)
 	}
 	*e = Entry{
-		Site: obj.Site,
-		ReservationMetadata: ReservationMetadata{
-			Owner:       obj.Owner,
-			Description: obj.Description,
-			Ticket:      obj.Ticket,
-			ReservedAt:  obj.ReservedAt,
-		},
+		Site:        obj.Site,
+		Owner:       obj.Owner,
+		Description: obj.Description,
+		Ticket:      obj.Ticket,
+		ReservedAt:  obj.ReservedAt,
 	}
 	return nil
 }

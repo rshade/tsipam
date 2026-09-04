@@ -157,9 +157,7 @@ func (e *ServiceEntry) UnmarshalJSON(data []byte) error {
 		}
 		*e = ServiceEntry{
 			Service: obj.Service,
-			ReservationMetadata: ReservationMetadata{
-				Owner: obj.Owner, Description: obj.Description, Ticket: obj.Ticket, ReservedAt: obj.ReservedAt,
-			},
+			Owner:   obj.Owner, Description: obj.Description, Ticket: obj.Ticket, ReservedAt: obj.ReservedAt,
 		}
 		return nil
 

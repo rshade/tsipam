@@ -270,48 +270,40 @@ func (s *Service) ReleaseUDPPort(
 }
 
 func translateUDPPortError(err error) error {
-	var collision *registry.UDPPortCollisionError
-	if errors.As(err, &collision) {
+	if collision, ok := errors.AsType[*registry.UDPPortCollisionError](err); ok {
 		return ipam.MakeCollision(collision)
 	}
-	var invalidInput *registry.InvalidInputError
-	if errors.As(err, &invalidInput) {
+	if _, ok := errors.AsType[*registry.InvalidInputError](err); ok {
 		return ipam.MakeInvalidInput(err)
 	}
 	return err
 }
 
 func translateServiceAddressError(err error) error {
-	var collision *registry.ServiceAddressCollisionError
-	if errors.As(err, &collision) {
+	if collision, ok := errors.AsType[*registry.ServiceAddressCollisionError](err); ok {
 		return ipam.MakeCollision(collision)
 	}
-	var invalidInput *registry.InvalidInputError
-	if errors.As(err, &invalidInput) {
+	if _, ok := errors.AsType[*registry.InvalidInputError](err); ok {
 		return ipam.MakeInvalidInput(err)
 	}
 	return err
 }
 
 func translateSiteIDError(err error) error {
-	var collision *registry.SiteIDCollisionError
-	if errors.As(err, &collision) {
+	if collision, ok := errors.AsType[*registry.SiteIDCollisionError](err); ok {
 		return ipam.MakeCollision(collision)
 	}
-	var invalidInput *registry.InvalidInputError
-	if errors.As(err, &invalidInput) {
+	if _, ok := errors.AsType[*registry.InvalidInputError](err); ok {
 		return ipam.MakeInvalidInput(err)
 	}
 	return err
 }
 
 func translateSubnetPoolError(err error) error {
-	var collision *registry.SubnetPoolCollisionError
-	if errors.As(err, &collision) {
+	if collision, ok := errors.AsType[*registry.SubnetPoolCollisionError](err); ok {
 		return ipam.MakeCollision(collision)
 	}
-	var invalidInput *registry.InvalidInputError
-	if errors.As(err, &invalidInput) {
+	if _, ok := errors.AsType[*registry.InvalidInputError](err); ok {
 		return ipam.MakeInvalidInput(err)
 	}
 	return err

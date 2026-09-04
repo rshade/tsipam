@@ -251,8 +251,7 @@ func TestCollisionErrorDoesNotSurviveTheLoopbackTransport(t *testing.T) {
 		t.Fatal("reserving a colliding ID: want an error, got nil")
 	}
 
-	var collision *registry.SiteIDCollisionError
-	if errors.As(err, &collision) {
+	if _, ok := errors.AsType[*registry.SiteIDCollisionError](err); ok {
 		t.Fatalf("errors.As(err, &registry.SiteIDCollisionError) = true for %v (%T); "+
 			"the concrete registry error survived the loopback transport, so the deleted "+
 			"errors.As branch in sanitizeErrorIfNeeded was live, not dead", err, err)

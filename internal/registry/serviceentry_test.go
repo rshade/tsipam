@@ -28,10 +28,8 @@ func TestServiceEntryMarshalJSON(t *testing.T) {
 		t.Parallel()
 		entry := registry.ServiceEntry{
 			Service: "svc:payments",
-			ReservationMetadata: registry.ReservationMetadata{
-				Owner: "platform", Description: "payments VIP", Ticket: "NET-237",
-				ReservedAt: "2026-08-31T12:00:00Z",
-			},
+			Owner:   "platform", Description: "payments VIP", Ticket: "NET-237",
+			ReservedAt: "2026-08-31T12:00:00Z",
 		}
 		got, err := json.Marshal(entry)
 		if err != nil {
@@ -220,8 +218,7 @@ func TestServiceNormalizersReturnTypedInvalidInputErrors(t *testing.T) {
 		func() error { _, err := registry.NormalizeServiceName("svc:"); return err },
 	} {
 		err := normalize()
-		var invalid *registry.InvalidInputError
-		if !errors.As(err, &invalid) {
+		if _, ok := errors.AsType[*registry.InvalidInputError](err); !ok {
 			t.Errorf("normalizer error = %v (%T), want *registry.InvalidInputError", err, err)
 		}
 	}

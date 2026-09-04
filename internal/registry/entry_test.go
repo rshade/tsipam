@@ -64,8 +64,7 @@ func TestLoadRejectsControlCharactersInStoredMetadata(t *testing.T) {
 			if !strings.Contains(err.Error(), "control characters") {
 				t.Errorf("error = %v, want it to mention control characters", err)
 			}
-			var invalid *registry.InvalidInputError
-			if errors.As(err, &invalid) {
+			if _, ok := errors.AsType[*registry.InvalidInputError](err); ok {
 				t.Error("error chain contains *InvalidInputError, but stored-state should strip the marker")
 			}
 		})
@@ -245,8 +244,7 @@ func TestReserveSiteIDRefusesCollisionRegardlessOfMetadata(t *testing.T) {
 	_, _, _, _, err := registry.ReserveSiteIDWithLogger(
 		path, "1", "branch-office", registry.ReservationMetadata{Owner: "alice"}, nil,
 	)
-	var collision *registry.SiteIDCollisionError
-	if !errors.As(err, &collision) {
+	if _, ok := errors.AsType[*registry.SiteIDCollisionError](err); !ok {
 		t.Fatalf("ReserveSiteID error = %v, want *SiteIDCollisionError even with metadata attached", err)
 	}
 }

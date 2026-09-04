@@ -560,20 +560,16 @@ func exitCodeFor(err error) int {
 	if errors.As(err, &svcErr) && svcErr.Name == collisionErrorName {
 		return exitFailure
 	}
-	var collision *registry.SiteIDCollisionError
-	if errors.As(err, &collision) {
+	if _, ok := errors.AsType[*registry.SiteIDCollisionError](err); ok {
 		return exitFailure
 	}
-	var subnetCollision *registry.SubnetPoolCollisionError
-	if errors.As(err, &subnetCollision) {
+	if _, ok := errors.AsType[*registry.SubnetPoolCollisionError](err); ok {
 		return exitFailure
 	}
-	var serviceAddressCollision *registry.ServiceAddressCollisionError
-	if errors.As(err, &serviceAddressCollision) {
+	if _, ok := errors.AsType[*registry.ServiceAddressCollisionError](err); ok {
 		return exitFailure
 	}
-	var udpPortCollision *registry.UDPPortCollisionError
-	if errors.As(err, &udpPortCollision) {
+	if _, ok := errors.AsType[*registry.UDPPortCollisionError](err); ok {
 		return exitFailure
 	}
 	if errors.Is(err, ipcalc.ErrTooManyChildren) {

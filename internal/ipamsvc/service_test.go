@@ -258,8 +258,7 @@ func TestServiceAddressRegistryFailureIsNotMisclassified(t *testing.T) {
 	if err == nil {
 		t.Fatal("ListServiceAddresses error = nil, want registry I/O failure")
 	}
-	var serviceError *goa.ServiceError
-	if errors.As(err, &serviceError) {
+	if _, ok := errors.AsType[*goa.ServiceError](err); ok {
 		t.Fatalf("ListServiceAddresses error = %v, want unclassified registry failure", err)
 	}
 }

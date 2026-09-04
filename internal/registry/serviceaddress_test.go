@@ -279,8 +279,7 @@ func TestReserveServiceAddressRejectsInvalidInputWithoutCreatingFile(t *testing.
 			t.Parallel()
 			path := regPath(t)
 			_, _, _, _, err := registry.ReserveServiceAddressWithLogger(path, tc.address, tc.service, tc.meta, nil)
-			var invalid *registry.InvalidInputError
-			if !errors.As(err, &invalid) {
+			if _, ok := errors.AsType[*registry.InvalidInputError](err); !ok {
 				t.Fatalf("ReserveServiceAddress error = %v, want *InvalidInputError", err)
 			}
 			if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
