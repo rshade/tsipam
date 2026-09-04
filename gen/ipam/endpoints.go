@@ -24,6 +24,9 @@ type Endpoints struct {
 	ListServiceAddresses  goa.Endpoint
 	ReserveServiceAddress goa.Endpoint
 	ReleaseServiceAddress goa.Endpoint
+	ListUDPPorts          goa.Endpoint
+	ReserveUDPPort        goa.Endpoint
+	ReleaseUDPPort        goa.Endpoint
 }
 
 // NewEndpoints wraps the methods of the "ipam" service with endpoints.
@@ -38,6 +41,9 @@ func NewEndpoints(s Service) *Endpoints {
 		ListServiceAddresses:  NewListServiceAddressesEndpoint(s),
 		ReserveServiceAddress: NewReserveServiceAddressEndpoint(s),
 		ReleaseServiceAddress: NewReleaseServiceAddressEndpoint(s),
+		ListUDPPorts:          NewListUDPPortsEndpoint(s),
+		ReserveUDPPort:        NewReserveUDPPortEndpoint(s),
+		ReleaseUDPPort:        NewReleaseUDPPortEndpoint(s),
 	}
 }
 
@@ -52,6 +58,9 @@ func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
 	e.ListServiceAddresses = m(e.ListServiceAddresses)
 	e.ReserveServiceAddress = m(e.ReserveServiceAddress)
 	e.ReleaseServiceAddress = m(e.ReleaseServiceAddress)
+	e.ListUDPPorts = m(e.ListUDPPorts)
+	e.ReserveUDPPort = m(e.ReserveUDPPort)
+	e.ReleaseUDPPort = m(e.ReleaseUDPPort)
 }
 
 // NewListSiteIdsEndpoint returns an endpoint function that calls the method
@@ -132,5 +141,32 @@ func NewReleaseServiceAddressEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*ReleaseServiceAddressPayload)
 		return s.ReleaseServiceAddress(ctx, p)
+	}
+}
+
+// NewListUDPPortsEndpoint returns an endpoint function that calls the method
+// "list_udp_ports" of service "ipam".
+func NewListUDPPortsEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*ListUDPPortsPayload)
+		return s.ListUDPPorts(ctx, p)
+	}
+}
+
+// NewReserveUDPPortEndpoint returns an endpoint function that calls the method
+// "reserve_udp_port" of service "ipam".
+func NewReserveUDPPortEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*ReserveUDPPortPayload)
+		return s.ReserveUDPPort(ctx, p)
+	}
+}
+
+// NewReleaseUDPPortEndpoint returns an endpoint function that calls the method
+// "release_udp_port" of service "ipam".
+func NewReleaseUDPPortEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*ReleaseUDPPortPayload)
+		return s.ReleaseUDPPort(ctx, p)
 	}
 }

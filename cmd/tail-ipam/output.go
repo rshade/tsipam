@@ -27,6 +27,10 @@ const (
 	commandServiceList    = commandService + " " + commandList
 	commandServiceReserve = commandService + " reserve"
 	commandServiceRelease = commandService + " release"
+	commandPort           = "port"
+	commandPortList       = commandPort + " " + commandList
+	commandPortReserve    = commandPort + " reserve"
+	commandPortRelease    = commandPort + " release"
 	commandCalcSplit      = commandCalc + " split"
 	commandCalcInfo       = commandCalc + " info"
 	statusOK              = "ok"
@@ -59,6 +63,12 @@ type serviceAddressOutput struct {
 
 	Address string `json:"address"`
 	Service string `json:"service"`
+}
+
+type udpPortOutput struct {
+	Site   string `json:"site"`
+	Port   string `json:"port"`
+	Device string `json:"device"`
 }
 
 // reservationMetadataOutput is the optional ownership/tracking metadata
@@ -140,9 +150,12 @@ type outputEnvelope struct {
 	Address          string                  `json:"address,omitempty"`
 	Site             string                  `json:"site,omitempty"`
 	Service          string                  `json:"service,omitempty"`
+	Port             string                  `json:"port,omitempty"`
+	Device           string                  `json:"device,omitempty"`
 	SiteIDs          *[]siteIDOutput         `json:"site_ids,omitempty"`
 	SubnetPools      *[]subnetPoolOutput     `json:"subnet_pools,omitempty"`
 	ServiceAddresses *[]serviceAddressOutput `json:"service_addresses,omitempty"`
+	UDPPorts         *[]udpPortOutput        `json:"udp_ports,omitempty"`
 	Devices          *[]deviceRecord         `json:"devices,omitempty"`
 	Subnets          *[]string               `json:"subnets,omitempty"`
 	BlockInfo        *blockInfoOutput        `json:"block_info,omitempty"`
@@ -185,6 +198,9 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 	if result.ServiceAddresses != nil {
 		return renderServiceAddresses(writer, *result.ServiceAddresses)
 	}
+	if result.UDPPorts != nil {
+		return renderUDPPorts(writer, *result.UDPPorts)
+	}
 	if result.Devices != nil {
 		return renderDevices(writer, *result.Devices)
 	}
@@ -221,6 +237,15 @@ func renderServiceAddresses(writer io.Writer, entries []serviceAddressOutput) er
 		if err := renderReservationLine(
 			writer, entry.Address, entry.Service, entry.reservationMetadataOutput,
 		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func renderUDPPorts(writer io.Writer, entries []udpPortOutput) error {
+	for _, entry := range entries {
+		if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", entry.Site, entry.Port, entry.Device); err != nil {
 			return err
 		}
 	}
@@ -307,6 +332,8 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		Address:                   output.Value(kindIP, input.Address),
 		Site:                      output.Value(kindSite, input.Site),
 		Service:                   output.Value(kindService, input.Service),
+		Port:                      input.Port,
+		Device:                    output.Value(kindHostname, input.Device),
 		reservationMetadataOutput: sanitizeMetadata(input.reservationMetadataOutput, output),
 	}
 	if input.SiteIDs != nil {
@@ -340,6 +367,16 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 			}
 		}
 		result.ServiceAddresses = &entries
+	}
+	if input.UDPPorts != nil {
+		entries := make([]udpPortOutput, len(*input.UDPPorts))
+		for index, entry := range *input.UDPPorts {
+			entries[index] = udpPortOutput{
+				Site: output.Value(kindSite, entry.Site), Port: entry.Port,
+				Device: output.Value(kindHostname, entry.Device),
+			}
+		}
+		result.UDPPorts = &entries
 	}
 	if input.Devices != nil {
 		devices := make([]deviceRecord, len(*input.Devices))
@@ -377,6 +414,7 @@ func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer)
 	output.Value(kindIP, input.Address)
 	output.Value(kindSite, input.Site)
 	output.Value(kindService, input.Service)
+	output.Value(kindHostname, input.Device)
 	output.Value(kindOwner, input.Owner)
 	if input.SiteIDs != nil {
 		for _, entry := range *input.SiteIDs {
@@ -396,6 +434,12 @@ func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer)
 			output.Value(kindIP, entry.Address)
 			output.Value(kindService, entry.Service)
 			output.Value(kindOwner, entry.Owner)
+		}
+	}
+	if input.UDPPorts != nil {
+		for _, entry := range *input.UDPPorts {
+			output.Value(kindSite, entry.Site)
+			output.Value(kindHostname, entry.Device)
 		}
 	}
 	if input.Devices == nil {

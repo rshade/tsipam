@@ -11,7 +11,7 @@ import (
 // attributes shared by every reservation payload and result: owner,
 // description, ticket, and reserved_at. Reusing this one function is what
 // keeps the four fields from drifting between SiteIDReservation,
-// SubnetPoolReservation, ServiceAddressReservation, and each reserve method's
+// SubnetPoolReservation, ServiceAddressReservation, and each metadata-bearing reserve method's
 // payload/result -- goa's DSL has no attribute-set inheritance, so a shared
 // helper is the only way to declare the same optional fields in more than one
 // place without hand-typing them apart.
@@ -55,16 +55,25 @@ var ServiceAddressReservation = Type("ServiceAddressReservation", func() {
 	Required("address", "service")
 })
 
+//nolint:gochecknoglobals // goa's DSL requires a package-level var per declared type/service/API; this is design source, not application state.
+var UDPPortReservation = Type("UDPPortReservation", func() {
+	Description("A UDP listen port reserved for a device within one site/firewall boundary.")
+	Attribute("site", String, "Canonical site/firewall-boundary label.")
+	Attribute("port", String, "Canonical decimal UDP listen port, 1024-65535.")
+	Attribute("device", String, "Canonical device label that owns the port within the site.")
+	Required("site", "port", "device")
+})
+
 var _ = API("tail-ipam", func() {
 	Title("tail-ipam address-space registry API")
 	Description("Plans and allocates Tailscale address space through 4via6 site IDs, subnet CIDR pools, " +
-		"and per-service IPv4 addresses. " +
+		"per-service IPv4 addresses, and per-device UDP listen ports. " +
 		"Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own " +
 		"control-plane API convention.")
 })
 
 var _ = Service("ipam", func() {
-	Description("Reserve, release, and list address-space allocations for one tailnet's registry.")
+	Description("Reserve, release, and list address-space and UDP-port allocations for one tailnet's registry.")
 
 	Method("list_site_ids", func() {
 		Payload(func() {
@@ -268,6 +277,81 @@ var _ = Service("ipam", func() {
 			// contains a slash and cannot safely occupy one path segment.
 			DELETE("/tailnet/{tailnet}/ipam/service-addresses")
 			Param("address")
+			Response(StatusOK)
+			Response("invalid_input", StatusBadRequest)
+		})
+	})
+
+	Method("list_udp_ports", func() {
+		Payload(func() {
+			Attribute("tailnet", String,
+				"Routing/storage key for the registry. May be a synthetic alias, not "+
+					"necessarily the live Tailscale tailnet name.")
+			Attribute("site", String, "Optional site/firewall-boundary label to filter. "+
+				"An absent or empty site parameter means no filter: returns reservations from all sites.")
+			Required("tailnet")
+		})
+		Result(ArrayOf(UDPPortReservation))
+		Error("invalid_input", func() {
+			Description("site is not a valid site/firewall-boundary label.")
+		})
+		HTTP(func() {
+			GET("/tailnet/{tailnet}/ipam/udp-ports")
+			Param("site")
+			Response(StatusOK)
+			Response("invalid_input", StatusBadRequest)
+		})
+	})
+
+	Method("reserve_udp_port", func() {
+		Payload(func() {
+			Attribute("tailnet", String, "Routing/storage key for the registry.")
+			Attribute("site", String, "Site/firewall-boundary label for the reservation.")
+			Attribute("port", String, "Decimal UDP listen port to reserve, 1024-65535.")
+			Attribute("device", String, "Device label to reserve the port for.")
+			Required("tailnet", "site", "port", "device")
+		})
+		Result(func() {
+			Attribute("site", String, "Canonical site label actually written.")
+			Attribute("port", String, "Canonical decimal UDP port actually written.")
+			Attribute("device", String, "Canonical device label actually written.")
+			Attribute("changed", Boolean, "False when the exact site, port, and device tuple was already reserved.")
+			Required("site", "port", "device", "changed")
+		})
+		Error("collision", func() {
+			Description("port is already reserved for a different device within the site.")
+		})
+		Error("invalid_input", func() {
+			Description("site, port, or device is invalid.")
+		})
+		HTTP(func() {
+			POST("/tailnet/{tailnet}/ipam/udp-ports")
+			Response(StatusOK)
+			Response("invalid_input", StatusBadRequest)
+			Response("collision", StatusConflict)
+		})
+	})
+
+	Method("release_udp_port", func() {
+		Payload(func() {
+			Attribute("tailnet", String, "Routing/storage key for the registry.")
+			Attribute("site", String, "Site/firewall-boundary label containing the reservation.")
+			Attribute("port", String, "Decimal UDP listen port to release, 1024-65535.")
+			Required("tailnet", "site", "port")
+		})
+		Result(func() {
+			Attribute("site", String, "Canonical site label containing the released port.")
+			Attribute("port", String, "Canonical decimal UDP port released.")
+			Attribute("changed", Boolean, "False when the site and port were not reserved.")
+			Required("site", "port", "changed")
+		})
+		Error("invalid_input", func() {
+			Description("site or port is invalid.")
+		})
+		HTTP(func() {
+			DELETE("/tailnet/{tailnet}/ipam/udp-ports")
+			Param("site")
+			Param("port")
 			Response(StatusOK)
 			Response("invalid_input", StatusBadRequest)
 		})

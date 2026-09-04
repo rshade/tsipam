@@ -143,8 +143,6 @@ type serviceLeafCall func(
 
 // newServiceLeafCommand mirrors newSiteIDLeafCommand (siteid.go) by design;
 // see its doc comment for why the two share a shape rather than a generic.
-//
-//nolint:dupl // mirrors newSiteIDLeafCommand (siteid.go) by design; see its doc comment
 func newServiceLeafCommand(
 	state *commandState,
 	use, short string,
@@ -172,9 +170,11 @@ func newServiceLeafCommand(
 				)
 			}
 			if serviceArgIndex >= 0 && serviceArgIndex < len(args) {
-				registerSweepValueWithCanonical(
+				if validateErr := registerAndValidate(
 					outputSanitizer, kindService, args[serviceArgIndex], registry.NormalizeServiceName,
-				)
+				); validateErr != nil {
+					return validateErr
+				}
 			}
 			if metadataFlags != nil && metadataFlags.owner != "" {
 				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)

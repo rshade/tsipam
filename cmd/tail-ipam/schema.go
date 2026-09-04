@@ -86,7 +86,8 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 		Sanitization: "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; " +
 			"a non-off environment value overrides --sanitize. Device names, addresses, and routes; " +
 			"tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; " +
-			"and reserved service addresses are replaced. strict is accepted for cross-tool " +
+			"reserved service addresses; and UDP-port site and device labels are replaced. " +
+			"UDP port numbers remain visible. strict is accepted for cross-tool " +
 			"flag compatibility and is currently equivalent to identity for tail-ipam. " +
 			"calc output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data. " +
 			"Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; " +

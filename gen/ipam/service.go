@@ -13,8 +13,8 @@ import (
 	goa "goa.design/goa/v3/pkg"
 )
 
-// Reserve, release, and list address-space allocations for one tailnet's
-// registry.
+// Reserve, release, and list address-space and UDP-port allocations for one
+// tailnet's registry.
 type Service interface {
 	// ListSiteIds implements list_site_ids.
 	ListSiteIds(context.Context, *ListSiteIdsPayload) (res []*SiteIDReservation, err error)
@@ -34,6 +34,12 @@ type Service interface {
 	ReserveServiceAddress(context.Context, *ReserveServiceAddressPayload) (res *ReserveServiceAddressResult, err error)
 	// ReleaseServiceAddress implements release_service_address.
 	ReleaseServiceAddress(context.Context, *ReleaseServiceAddressPayload) (res *ReleaseServiceAddressResult, err error)
+	// ListUDPPorts implements list_udp_ports.
+	ListUDPPorts(context.Context, *ListUDPPortsPayload) (res []*UDPPortReservation, err error)
+	// ReserveUDPPort implements reserve_udp_port.
+	ReserveUDPPort(context.Context, *ReserveUDPPortPayload) (res *ReserveUDPPortResult, err error)
+	// ReleaseUDPPort implements release_udp_port.
+	ReleaseUDPPort(context.Context, *ReleaseUDPPortPayload) (res *ReleaseUDPPortResult, err error)
 }
 
 // APIName is the name of the API as defined in the design.
@@ -50,7 +56,7 @@ const ServiceName = "ipam"
 // MethodNames lists the service method names as defined in the design. These
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
-var MethodNames = [9]string{"list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address"}
+var MethodNames = [12]string{"list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
 
 // ListServiceAddressesPayload is the payload type of the ipam service
 // list_service_addresses method.
@@ -74,6 +80,17 @@ type ListSubnetPoolsPayload struct {
 	// Routing/storage key for the registry. May be a synthetic alias, not
 	// necessarily the live Tailscale tailnet name.
 	Tailnet string
+}
+
+// ListUDPPortsPayload is the payload type of the ipam service list_udp_ports
+// method.
+type ListUDPPortsPayload struct {
+	// Routing/storage key for the registry. May be a synthetic alias, not
+	// necessarily the live Tailscale tailnet name.
+	Tailnet string
+	// Optional site/firewall-boundary label to filter. An absent or empty site
+	// parameter means no filter: returns reservations from all sites.
+	Site *string
 }
 
 // ReleaseServiceAddressPayload is the payload type of the ipam service
@@ -127,6 +144,28 @@ type ReleaseSubnetPoolResult struct {
 	// Canonical subnet CIDR released.
 	CIDR string
 	// False when cidr was not reserved.
+	Changed bool
+}
+
+// ReleaseUDPPortPayload is the payload type of the ipam service
+// release_udp_port method.
+type ReleaseUDPPortPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Site/firewall-boundary label containing the reservation.
+	Site string
+	// Decimal UDP listen port to release, 1024-65535.
+	Port string
+}
+
+// ReleaseUDPPortResult is the result type of the ipam service release_udp_port
+// method.
+type ReleaseUDPPortResult struct {
+	// Canonical site label containing the released port.
+	Site string
+	// Canonical decimal UDP port released.
+	Port string
+	// False when the site and port were not reserved.
 	Changed bool
 }
 
@@ -244,6 +283,32 @@ type ReserveSubnetPoolResult struct {
 	ReservedAt *string
 }
 
+// ReserveUDPPortPayload is the payload type of the ipam service
+// reserve_udp_port method.
+type ReserveUDPPortPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Site/firewall-boundary label for the reservation.
+	Site string
+	// Decimal UDP listen port to reserve, 1024-65535.
+	Port string
+	// Device label to reserve the port for.
+	Device string
+}
+
+// ReserveUDPPortResult is the result type of the ipam service reserve_udp_port
+// method.
+type ReserveUDPPortResult struct {
+	// Canonical site label actually written.
+	Site string
+	// Canonical decimal UDP port actually written.
+	Port string
+	// Canonical device label actually written.
+	Device string
+	// False when the exact site, port, and device tuple was already reserved.
+	Changed bool
+}
+
 // An IPv4 host address reserved for a Tailscale Service.
 type ServiceAddressReservation struct {
 	// Canonical bare IPv4 host address.
@@ -290,6 +355,16 @@ type SubnetPoolReservation struct {
 	Ticket *string
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string
+}
+
+// A UDP listen port reserved for a device within one site/firewall boundary.
+type UDPPortReservation struct {
+	// Canonical site/firewall-boundary label.
+	Site string
+	// Canonical decimal UDP listen port, 1024-65535.
+	Port string
+	// Canonical device label that owns the port within the site.
+	Device string
 }
 
 // MakeCollision builds a goa.ServiceError from an error.

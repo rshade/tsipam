@@ -47,11 +47,18 @@ func placeholderFor(t *testing.T, kind, value string) string {
 	return s.Value(kind, value)
 }
 
-// assertNoLeak fails the test if haystack contains value verbatim, or
-// contains the interior bytes of value's %q rendering. The second check is
-// the regression guard for Round 2's exact failure mode: it searched for the
-// *unescaped* value in the *escaped* error text and never found it, silently
-// leaving the escaped bytes on the page untouched.
+// assertNoLeak fails the test if haystack contains value verbatim, the
+// interior bytes of value's %q rendering, or that rendering's second
+// encoding/json escaping pass. The second check is the regression guard for
+// Round 2's exact failure mode: it searched for the *unescaped* value in the
+// *escaped* error text and never found it, silently leaving the escaped
+// bytes on the page untouched. The third check is the regression guard for
+// Round 2's follow-up failure mode: undeclared goa errors JSON-escape the
+// message a second time (registerQuotedForm, main.go), so a value that needs
+// that second registration can leak in a form neither of the first two
+// checks can ever detect -- [json.Marshal] always doubles every backslash
+// [strconv.Quote] already introduced, so the double-escaped bytes can never
+// contain the raw value or the single-escaped form as a substring.
 func assertNoLeak(t *testing.T, haystack, value string) {
 	t.Helper()
 	if value == "" {
@@ -64,6 +71,12 @@ func assertNoLeak(t *testing.T, haystack, value string) {
 	inner := escaped[1 : len(escaped)-1]
 	if inner != "" && strings.Contains(haystack, inner) {
 		t.Errorf("output leaks the %%q-escaped rendering of %q (escaped form %s): %s", value, escaped, haystack)
+	}
+	if b, err := json.Marshal(inner); err == nil {
+		double := string(b[1 : len(b)-1])
+		if double != "" && double != inner && strings.Contains(haystack, double) {
+			t.Errorf("output leaks the double-escaped rendering of %q (form %s): %s", value, double, haystack)
+		}
 	}
 }
 
@@ -1043,4 +1056,182 @@ func TestServiceNameSvcSelectorNotOverRedacted(t *testing.T) {
 	if !strings.Contains(stderrText, "service name must not be") {
 		t.Errorf("stderr = %q, want readable error message frame", stderrText)
 	}
+}
+
+// TestDoubleEscapeDepthSanitization covers the complete input domain for the
+// escape-depth fix (Batch B Attempt 2): values that undergo both %q escaping
+// (strconv.Quote, used for declared goa errors decoded as ServiceError) and
+// JSON escaping (encoding/json.Marshal, used for undeclared goa errors
+// returned as 500 faults). Each row is embedded as a properly JSON-quoted
+// registry value -- unlike Round 2's unquoted splice, which produced
+// unparseable HuJSON that hujson's own tokenizer rejected before the value
+// ever reached a %q-formatting error, silently passing regardless of whether
+// the fix under test was present or reverted (see the round-3 assignment's
+// "WHY ROUND 2 FAILED" analysis). A valid site name is loaded successfully by
+// registerKnownIdentityInventory (registering both escape depths) and then
+// re-surfaces, %q-formatted, in an unrelated validation failure raised deep
+// in internal/registry -- a genuinely undeclared error that crosses the
+// loopback transport as a JSON-escaped 500 fault. Each row verifies a value's
+// registration at both escape depths covers all its representations on the
+// wire, so sanitizeErrorIfNeeded's Text sweep redacts it regardless of
+// escaping depth. Tests both pre-existing paths (site names, via a subnet-pool
+// overlap) and the new UDP-port path (device names, via a control-character
+// rejection) to verify the fix is general across all identity registration
+// points.
+//
+// The original Round 2 domain additionally carried an "invalid UTF-8 with
+// control character" site row. That row is not reachable through any real
+// validation error in this codebase: NormalizeSiteName and NormalizeDeviceName
+// both check utf8.ValidString before rejectControlChars and, on invalid UTF-8,
+// return a fixed, non-interpolated message ("... must be valid UTF-8") that
+// never echoes the value -- so there is no %q-formatted error for such a value
+// to leak from. It is also impossible to route an invalid byte through a
+// registry *file* fixture at all: hujson/encoding/json's own decode of the
+// fixture (shared by both the pre-registration sweep and the eventual error
+// path) replaces invalid UTF-8 with U+FFFD before either one ever sees it,
+// which would make the row vacuous for a reason unrelated to the fix. That row
+// is therefore dropped rather than replaced with a non-representative stand-in.
+func TestDoubleEscapeDepthSanitization(t *testing.T) {
+	t.Parallel()
+
+	domainTable := []struct {
+		name     string
+		value    string
+		kind     string
+		isDevice bool
+	}{
+		{
+			name:  "control character (row 1)",
+			value: "laptop\x01secret",
+			kind:  kindSite,
+		},
+		{
+			name:  "embedded quote with control character (row 2)",
+			value: "lap\"top\x01secret",
+			kind:  kindSite,
+		},
+		{
+			name:  "backslash with control character (row 3)",
+			value: "back\\slash\x01x",
+			kind:  kindSite,
+		},
+		{
+			name:  "HTML-special < with control character (row 4)",
+			value: "lt<gt\x01x",
+			kind:  kindSite,
+		},
+		{
+			name:  "ampersand with control character (row 5)",
+			value: "amp&and\x01x",
+			kind:  kindSite,
+		},
+		{
+			name:  "tab character with control character (row 6)",
+			value: "tab\tsep\x01x",
+			kind:  kindSite,
+		},
+		{
+			name:     "device name with control character (UDP path)",
+			value:    "device\x01secret",
+			kind:     kindHostname,
+			isDevice: true,
+		},
+		{
+			name:     "device name with embedded quote and control character (UDP path)",
+			value:    "dev\"ice\x01secret",
+			kind:     kindHostname,
+			isDevice: true,
+		},
+	}
+
+	for _, tc := range domainTable {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+
+			if tc.isDevice {
+				testDoubleEscapeDeviceName(t, dir, tc.value)
+			} else {
+				testDoubleEscapeSiteName(t, dir, tc.value)
+			}
+		})
+	}
+}
+
+// testDoubleEscapeSiteName verifies that a site name doesn't leak in either
+// escape form in error messages returned as goa faults. It reserves two
+// overlapping subnet pools under distinct sites, one of them siteName, so
+// canonicalizeSubnetPools' overlap check (internal/registry/subnetpool.go)
+// raises an undeclared, unclassified error that %q-formats siteName directly
+// -- unconditionally, regardless of what characters it contains -- and
+// crosses the loopback transport as a JSON-escaped 500 fault.
+func testDoubleEscapeSiteName(t *testing.T, dir, siteName string) {
+	t.Helper()
+	path := filepath.Join(dir, localTailnet+".ipam.hujson")
+
+	quotedSite, err := json.Marshal(siteName)
+	if err != nil {
+		t.Fatalf("marshaling site name for registry fixture: %v", err)
+	}
+	registryContent := `{
+	"subnetPools": {
+		"10.0.0.0/16": ` + string(quotedSite) + `,
+		"10.0.1.0/24": "plain-other-site"
+	}
+}
+`
+	if writeErr := os.WriteFile(path, []byte(registryContent), 0o644); writeErr != nil {
+		t.Fatalf("writing registry file: %v", writeErr)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(),
+		[]string{commandSubnet, commandList, "--registry-dir", dir, "--sanitize", "identity"},
+		fixedKeyGetenv, &stdout, &stderr, nil,
+	)
+	if code == exitOK {
+		t.Fatalf("want a subnet-pool overlap error, got exit code %d; stdout: %s", code, stdout.String())
+	}
+
+	stderrText := stderr.String()
+	assertNoLeak(t, stderrText, siteName)
+}
+
+// testDoubleEscapeDeviceName verifies that a device name doesn't leak in
+// either escape form in error messages returned as goa faults. deviceName
+// carries a control character, so NormalizeDeviceName
+// (internal/registry/udpport.go) rejects it while decoding the registry,
+// %q-formatting it in an undeclared error that crosses the loopback transport
+// as a JSON-escaped 500 fault.
+func testDoubleEscapeDeviceName(t *testing.T, dir, deviceName string) {
+	t.Helper()
+	path := filepath.Join(dir, localTailnet+".ipam.hujson")
+
+	quotedDevice, err := json.Marshal(deviceName)
+	if err != nil {
+		t.Fatalf("marshaling device name for registry fixture: %v", err)
+	}
+	registryContent := `{
+	"udpPorts": {
+		"test-site": {
+			"41642": ` + string(quotedDevice) + `
+		}
+	}
+}
+`
+	if writeErr := os.WriteFile(path, []byte(registryContent), 0o644); writeErr != nil {
+		t.Fatalf("writing registry file: %v", writeErr)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := runCLI(context.Background(),
+		[]string{commandPort, commandList, "--site", "test-site", "--registry-dir", dir, "--sanitize", "identity"},
+		fixedKeyGetenv, &stdout, &stderr, nil,
+	)
+	if code == exitOK {
+		t.Fatalf("want a device-name control-character error, got exit code %d; stdout: %s", code, stdout.String())
+	}
+
+	stderrText := stderr.String()
+	assertNoLeak(t, stderrText, deviceName)
 }

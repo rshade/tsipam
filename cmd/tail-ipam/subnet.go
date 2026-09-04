@@ -197,9 +197,11 @@ func newSubnetLeafCommand(
 				registerCanonicalCIDRSuggestion(outputSanitizer, args[cidrArgIndex])
 			}
 			if siteArgIndex >= 0 && siteArgIndex < len(args) {
-				registerSweepValueWithCanonical(
+				if validateErr := registerAndValidate(
 					outputSanitizer, kindSite, args[siteArgIndex], registry.NormalizeSiteName,
-				)
+				); validateErr != nil {
+					return validateErr
+				}
 			}
 			if metadataFlags != nil && metadataFlags.owner != "" {
 				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)

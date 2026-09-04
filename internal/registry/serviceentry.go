@@ -74,12 +74,9 @@ func invalidServiceAddress(address string, cause error) error {
 // validates only the invariants this registry owns; live control-plane name
 // grammar and existence checks belong to later plan/check work.
 func NormalizeServiceName(service string) (string, error) {
-	service = strings.TrimSpace(service)
-	if service == "" {
-		return "", invalidInput(errors.New("service name must not be empty"))
-	}
-	if err := rejectControlChars("service name", service); err != nil {
-		return "", invalidInput(err)
+	service, err := normalizeLabel("service name", service)
+	if err != nil {
+		return "", err
 	}
 	if name, ok := strings.CutPrefix(service, serviceSelectorPrefix); ok {
 		service = strings.TrimSpace(name)

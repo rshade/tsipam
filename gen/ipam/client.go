@@ -24,10 +24,13 @@ type Client struct {
 	ListServiceAddressesEndpoint  goa.Endpoint
 	ReserveServiceAddressEndpoint goa.Endpoint
 	ReleaseServiceAddressEndpoint goa.Endpoint
+	ListUDPPortsEndpoint          goa.Endpoint
+	ReserveUDPPortEndpoint        goa.Endpoint
+	ReleaseUDPPortEndpoint        goa.Endpoint
 }
 
 // NewClient initializes a "ipam" service client given the endpoints.
-func NewClient(listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress goa.Endpoint) *Client {
+func NewClient(listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
 	return &Client{
 		ListSiteIdsEndpoint:           listSiteIds,
 		ReserveSiteIDEndpoint:         reserveSiteID,
@@ -38,6 +41,9 @@ func NewClient(listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reser
 		ListServiceAddressesEndpoint:  listServiceAddresses,
 		ReserveServiceAddressEndpoint: reserveServiceAddress,
 		ReleaseServiceAddressEndpoint: releaseServiceAddress,
+		ListUDPPortsEndpoint:          listUDPPorts,
+		ReserveUDPPortEndpoint:        reserveUDPPort,
+		ReleaseUDPPortEndpoint:        releaseUDPPort,
 	}
 }
 
@@ -155,4 +161,44 @@ func (c *Client) ReleaseServiceAddress(ctx context.Context, p *ReleaseServiceAdd
 		return
 	}
 	return ires.(*ReleaseServiceAddressResult), nil
+}
+
+// ListUDPPorts calls the "list_udp_ports" endpoint of the "ipam" service.
+// ListUDPPorts may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): site is not a valid site/firewall-boundary label.
+//   - error: internal error
+func (c *Client) ListUDPPorts(ctx context.Context, p *ListUDPPortsPayload) (res []*UDPPortReservation, err error) {
+	var ires any
+	ires, err = c.ListUDPPortsEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.([]*UDPPortReservation), nil
+}
+
+// ReserveUDPPort calls the "reserve_udp_port" endpoint of the "ipam" service.
+// ReserveUDPPort may return the following errors:
+//   - "collision" (type *goa.ServiceError): port is already reserved for a different device within the site.
+//   - "invalid_input" (type *goa.ServiceError): site, port, or device is invalid.
+//   - error: internal error
+func (c *Client) ReserveUDPPort(ctx context.Context, p *ReserveUDPPortPayload) (res *ReserveUDPPortResult, err error) {
+	var ires any
+	ires, err = c.ReserveUDPPortEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*ReserveUDPPortResult), nil
+}
+
+// ReleaseUDPPort calls the "release_udp_port" endpoint of the "ipam" service.
+// ReleaseUDPPort may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): site or port is invalid.
+//   - error: internal error
+func (c *Client) ReleaseUDPPort(ctx context.Context, p *ReleaseUDPPortPayload) (res *ReleaseUDPPortResult, err error) {
+	var ires any
+	ires, err = c.ReleaseUDPPortEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*ReleaseUDPPortResult), nil
 }

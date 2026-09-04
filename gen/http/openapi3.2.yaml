@@ -1,7 +1,7 @@
 openapi: 3.2.0
 info:
     title: tail-ipam address-space registry API
-    description: Plans and allocates Tailscale address space through 4via6 site IDs, subnet CIDR pools, and per-service IPv4 addresses. Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own control-plane API convention.
+    description: Plans and allocates Tailscale address space through 4via6 site IDs, subnet CIDR pools, per-service IPv4 addresses, and per-device UDP listen ports. Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own control-plane API convention.
     version: 0.0.1
 servers:
     - url: http://localhost:80
@@ -464,6 +464,168 @@ paths:
                         application/vnd.goa.error:
                             schema:
                                 $ref: '#/components/schemas/Error'
+    /tailnet/{tailnet}/ipam/udp-ports:
+        delete:
+            tags:
+                - ipam
+            summary: release_udp_port ipam
+            operationId: ipam#release_udp_port
+            parameters:
+                - name: site
+                  in: query
+                  description: Site/firewall-boundary label containing the reservation.
+                  allowEmptyValue: true
+                  required: true
+                  schema:
+                    type: string
+                    description: Site/firewall-boundary label containing the reservation.
+                    example: Dolorem dolorum explicabo dolores deserunt culpa qui.
+                  example: Reiciendis eaque ad voluptatum dolorum.
+                - name: port
+                  in: query
+                  description: Decimal UDP listen port to release, 1024-65535.
+                  allowEmptyValue: true
+                  required: true
+                  schema:
+                    type: string
+                    description: Decimal UDP listen port to release, 1024-65535.
+                    example: Quidem et.
+                  example: Dignissimos et ad sit.
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry.
+                    example: Velit soluta et sint libero illo non.
+                  example: Quas cupiditate sit.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReleaseUDPPortResponseBody'
+                            example:
+                                changed: false
+                                port: Quam reprehenderit qui.
+                                site: Accusantium quaerat ut vitae est dolore nulla.
+                "400":
+                    description: 'invalid_input: site or port is invalid.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+        get:
+            tags:
+                - ipam
+            summary: list_udp_ports ipam
+            operationId: ipam#list_udp_ports
+            parameters:
+                - name: site
+                  in: query
+                  description: 'Optional site/firewall-boundary label to filter. An absent or empty site parameter means no filter: returns reservations from all sites.'
+                  allowEmptyValue: true
+                  schema:
+                    type: string
+                    description: 'Optional site/firewall-boundary label to filter. An absent or empty site parameter means no filter: returns reservations from all sites.'
+                    example: In commodi voluptatum.
+                  example: Qui magnam eligendi dolores.
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.
+                    example: Autem ea consequatur rerum aperiam est facere.
+                  example: Impedit qui rerum unde iste corporis.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/UDPPortReservation'
+                                example:
+                                    - device: Similique et ut quae.
+                                      port: Ex qui.
+                                      site: Eaque non qui nam atque.
+                                    - device: Similique et ut quae.
+                                      port: Ex qui.
+                                      site: Eaque non qui nam atque.
+                                    - device: Similique et ut quae.
+                                      port: Ex qui.
+                                      site: Eaque non qui nam atque.
+                            example:
+                                - device: Similique et ut quae.
+                                  port: Ex qui.
+                                  site: Eaque non qui nam atque.
+                                - device: Similique et ut quae.
+                                  port: Ex qui.
+                                  site: Eaque non qui nam atque.
+                                - device: Similique et ut quae.
+                                  port: Ex qui.
+                                  site: Eaque non qui nam atque.
+                "400":
+                    description: 'invalid_input: site is not a valid site/firewall-boundary label.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+        post:
+            tags:
+                - ipam
+            summary: reserve_udp_port ipam
+            operationId: ipam#reserve_udp_port
+            parameters:
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry.
+                    example: Atque velit voluptates modi qui.
+                  example: Consectetur vitae facilis harum beatae qui.
+            requestBody:
+                description: Request body for reserve_udp_port.
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UDPPortReservation'
+                        example:
+                            device: Iste ut labore nostrum.
+                            port: Assumenda officiis.
+                            site: Et neque expedita.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReserveUDPPortResponseBody'
+                            example:
+                                changed: true
+                                device: Sed quia ut ex quasi ea.
+                                port: Dolores impedit et.
+                                site: Est est mollitia voluptatibus possimus.
+                "400":
+                    description: 'invalid_input: site, port, or device is invalid.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "409":
+                    description: 'collision: port is already reserved for a different device within the site.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
 components:
     schemas:
         Error:
@@ -558,6 +720,29 @@ components:
                 cidr: Veniam eius ut illum pariatur.
             required:
                 - cidr
+                - changed
+        ReleaseUDPPortResponseBody:
+            type: object
+            properties:
+                changed:
+                    type: boolean
+                    description: False when the site and port were not reserved.
+                    example: false
+                port:
+                    type: string
+                    description: Canonical decimal UDP port released.
+                    example: Quam reprehenderit qui.
+                site:
+                    type: string
+                    description: Canonical site label containing the released port.
+                    example: Accusantium quaerat ut vitae est dolore nulla.
+            example:
+                changed: false
+                port: Quam reprehenderit qui.
+                site: Accusantium quaerat ut vitae est dolore nulla.
+            required:
+                - site
+                - port
                 - changed
         ReserveServiceAddressResponseBody:
             type: object
@@ -691,6 +876,35 @@ components:
                 - cidr
                 - site
                 - changed
+        ReserveUDPPortResponseBody:
+            type: object
+            properties:
+                changed:
+                    type: boolean
+                    description: False when the exact site, port, and device tuple was already reserved.
+                    example: true
+                device:
+                    type: string
+                    description: Canonical device label actually written.
+                    example: Sed quia ut ex quasi ea.
+                port:
+                    type: string
+                    description: Canonical decimal UDP port actually written.
+                    example: Dolores impedit et.
+                site:
+                    type: string
+                    description: Canonical site label actually written.
+                    example: Est est mollitia voluptatibus possimus.
+            example:
+                changed: true
+                device: Sed quia ut ex quasi ea.
+                port: Dolores impedit et.
+                site: Est est mollitia voluptatibus possimus.
+            required:
+                - site
+                - port
+                - device
+                - changed
         ServiceAddressReservation:
             type: object
             properties:
@@ -808,6 +1022,30 @@ components:
             required:
                 - cidr
                 - site
+        UDPPortReservation:
+            type: object
+            properties:
+                device:
+                    type: string
+                    description: Canonical device label that owns the port within the site.
+                    example: Similique et ut quae.
+                port:
+                    type: string
+                    description: Canonical decimal UDP listen port, 1024-65535.
+                    example: Ex qui.
+                site:
+                    type: string
+                    description: Canonical site/firewall-boundary label.
+                    example: Eaque non qui nam atque.
+            description: A UDP listen port reserved for a device within one site/firewall boundary.
+            example:
+                device: Similique et ut quae.
+                port: Ex qui.
+                site: Eaque non qui nam atque.
+            required:
+                - site
+                - port
+                - device
 tags:
     - name: ipam
-      description: Reserve, release, and list address-space allocations for one tailnet's registry.
+      description: Reserve, release, and list address-space and UDP-port allocations for one tailnet's registry.

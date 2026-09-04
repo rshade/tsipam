@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ReservationMetadata is the optional ownership/tracking information a
@@ -94,6 +95,25 @@ func (e *Entry) UnmarshalJSON(data []byte) error {
 // ticket are all held to the same no-embedded-control-character rule (it
 // prevents, for example, a terminal escape sequence smuggled through a
 // registry value from corrupting human-readable output).
+// normalizeLabel applies the validation every free-form registry label
+// shares: trimmed, non-empty, valid UTF-8, and free of control characters.
+// kind names the field in the resulting message. The UTF-8 and empty errors
+// deliberately do not echo the value -- an invalid-UTF-8 label must never
+// reach an error string, where a sanitizer sweep could not match it.
+func normalizeLabel(kind, raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", invalidInput(fmt.Errorf("%s must not be empty", kind))
+	}
+	if !utf8.ValidString(raw) {
+		return "", invalidInput(fmt.Errorf("%s must be valid UTF-8", kind))
+	}
+	if err := rejectControlChars(kind, raw); err != nil {
+		return "", invalidInput(err)
+	}
+	return raw, nil
+}
+
 func rejectControlChars(kind, value string) error {
 	if i := strings.IndexFunc(value, func(r rune) bool { return r < 0x20 || r == 0x7f }); i >= 0 {
 		return fmt.Errorf("%s %q must not contain control characters", kind, value)

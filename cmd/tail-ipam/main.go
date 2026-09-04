@@ -1,10 +1,11 @@
 // Command tail-ipam manages a declarative registry of Tailscale address
-// space -- 4via6 site IDs, subnet CIDR pools, and per-service IPv4 addresses
-// so far -- and will plan/check that
+// space -- 4via6 site IDs, subnet CIDR pools, per-service IPv4 addresses, and
+// per-device UDP listen ports -- and will plan/check that
 // registry against live control-plane state.
 //
-// "site-id reserve/release/list", "subnet reserve/release/list", and
-// "service reserve/release/list" edit and read the local registry file
+// "site-id reserve/release/list", "subnet reserve/release/list",
+// "service reserve/release/list", and "port reserve/release/list" edit and
+// read the local registry file
 // (comment-preserving HuJSON, see
 // internal/registry); "devices list" is a read-only proof that the
 // tscli-backed client construction works. Neither cross-checks the registry
@@ -20,6 +21,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -141,12 +143,43 @@ func registerSweepValue(sanitizer *sanitize.Sanitizer, kind, value string) {
 // correctly delimited by the %q quote marks that surround it in the
 // rendered error text -- verified empirically against a real %q-formatted
 // error (see the round-2 fix report's revert-proof evidence).
+//
+// Additionally registers the second-escaped form that appears in undeclared
+// goa errors (which are returned as 500 faults with JSON-escaped bodies),
+// since such errors apply a second layer of encoding/json escaping to the
+// error message itself.
 func registerQuotedForm(sanitizer *sanitize.Sanitizer, kind, value string) {
 	quoted := strconv.Quote(value)
 	if quoted == `"`+value+`"` {
 		return
 	}
-	sanitizer.Value(kind, quoted[1:len(quoted)-1])
+	innerQuoted := quoted[1 : len(quoted)-1]
+	sanitizer.Value(kind, innerQuoted)
+
+	b, err := json.Marshal(innerQuoted)
+	if err == nil {
+		reescaped := string(b[1 : len(b)-1])
+		if reescaped != innerQuoted {
+			sanitizer.Value(kind, reescaped)
+		}
+	}
+}
+
+// registerAndValidate registers value for the output sweep and then reports
+// whether it is valid caller input. Registration happens first so that a
+// rejection's error text is already sweepable: the raw argv reaches the
+// sanitizer before any error that might echo it is returned.
+//
+// The check runs client-side because the JSON request body is lossy in one
+// direction -- encoding/json rewrites invalid UTF-8 to U+FFFD, which is
+// itself valid -- so once the value crosses the wire the server can no longer
+// tell a mangled label from a legitimate one.
+func registerAndValidate(
+	sanitizer *sanitize.Sanitizer, kind, value string, normalize func(string) (string, error),
+) error {
+	registerSweepValueWithCanonical(sanitizer, kind, value, normalize)
+	_, err := normalize(value)
+	return err
 }
 
 // registerSweepValueWithCanonical registers value under kind, and when
@@ -221,6 +254,10 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 		// canonical forms share one sweep domain.
 		registerSweepValueWithCanonical(state.sanitizer, kindIP, address, registry.NormalizeServiceAddress)
 		registerSweepValueWithCanonical(state.sanitizer, kindService, service, registry.NormalizeServiceName)
+	}
+	for _, entry := range registry.RawUDPPorts(registryPath) {
+		registerSweepValueWithCanonical(state.sanitizer, kindSite, entry.Site, registry.NormalizeSiteName)
+		registerSweepValueWithCanonical(state.sanitizer, kindHostname, entry.Device, registry.NormalizeDeviceName)
 	}
 }
 
@@ -311,6 +348,13 @@ var serviceAddressCollisionErrorPattern = regexp.MustCompile(
 	`^service address (\S+) is already reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
 )
 
+// udpPortCollisionErrorPattern guards UDPPortCollisionError.Error(). Capture
+// groups: 1 = canonical port (not identity and therefore left visible),
+// 2 = site, 3 = existing device, 4 = wanted device.
+var udpPortCollisionErrorPattern = regexp.MustCompile(
+	`^UDP port (\S+) in site ("(?:[^"\\]|\\.)*") is already reserved for ("(?:[^"\\]|\\.)*"), not ("(?:[^"\\]|\\.)*")$`,
+)
+
 const (
 	siteIDCollisionExistingSiteGroup  = 2
 	siteIDCollisionWantedSiteGroup    = 3
@@ -324,6 +368,9 @@ const (
 	serviceCollisionAddressGroup      = 1
 	serviceCollisionExistingGroup     = 2
 	serviceCollisionWantedGroup       = 3
+	udpPortCollisionSiteGroup         = 2
+	udpPortCollisionExistingGroup     = 3
+	udpPortCollisionWantedGroup       = 4
 )
 
 // unprintableIdentityPlaceholder replaces a matched quoted segment that
@@ -387,11 +434,19 @@ var serviceAddressCollisionSegments = []collisionSegment{
 	{group: serviceCollisionWantedGroup, kind: kindService, quoted: true},
 }
 
+//nolint:gochecknoglobals // collision segment specs are data-driven and shared with spliceCollisionSegments
+var udpPortCollisionSegments = []collisionSegment{
+	{group: udpPortCollisionSiteGroup, kind: kindSite, quoted: true},
+	{group: udpPortCollisionExistingGroup, kind: kindHostname, quoted: true},
+	{group: udpPortCollisionWantedGroup, kind: kindHostname, quoted: true},
+}
+
 // sanitizeErrorIfNeeded returns a sanitized rendering of err's text when
 // sanitization is active, or err unchanged otherwise.
 //
-// A genuine site-ID, subnet-pool, or service-address collision is redacted by splicing its
-// known byte ranges out of the *original* text and back in as their
+// A genuine site-ID, subnet-pool, service-address, or UDP-port collision is
+// redacted by splicing its known byte ranges out of the *original* text and
+// back in as their
 // sanitized renderings, using the segments' regex-matched offsets -- never a
 // value-based search-and-replace, so escaping cannot desync the replacement
 // from what's actually on the page. Every other byte of the collision
@@ -424,6 +479,9 @@ func sanitizeErrorIfNeeded(err error, sanitizer *sanitize.Sanitizer) error {
 	}
 	if match := serviceAddressCollisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
 		return errors.New(spliceCollisionSegments(text, match, serviceAddressCollisionSegments, sanitizer))
+	}
+	if match := udpPortCollisionErrorPattern.FindStringSubmatchIndex(text); match != nil {
+		return errors.New(spliceCollisionSegments(text, match, udpPortCollisionSegments, sanitizer))
 	}
 	return errors.New(sanitizer.Text(text))
 }
@@ -514,6 +572,10 @@ func exitCodeFor(err error) int {
 	if errors.As(err, &serviceAddressCollision) {
 		return exitFailure
 	}
+	var udpPortCollision *registry.UDPPortCollisionError
+	if errors.As(err, &udpPortCollision) {
+		return exitFailure
+	}
 	if errors.Is(err, ipcalc.ErrTooManyChildren) {
 		return exitFailure
 	}
@@ -543,6 +605,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 		Example: "  tail-ipam site-id reserve 1 hq-vpc\n" +
 			"  tail-ipam subnet reserve 10.0.0.0/24 hq-vpc\n" +
 			"  tail-ipam service reserve 100.100.100.8 dashboard\n" +
+			"  tail-ipam port reserve 41642 branch-fw01 --site branch-office\n" +
 			"  tail-ipam site-id list -format json\n" +
 			"  tail-ipam devices list -verbose\n" +
 			"  tail-ipam -schema",
@@ -607,6 +670,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	root.AddCommand(newSiteIDCommand(state))
 	root.AddCommand(newSubnetCommand(state))
 	root.AddCommand(newServiceCommand(state))
+	root.AddCommand(newUDPPortCommand(state))
 	root.AddCommand(newCalcCommand(state))
 	root.InitDefaultHelpFlag()
 	return root

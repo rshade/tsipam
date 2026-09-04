@@ -254,6 +254,58 @@ func TestSiteIDReserveArgsRegisterForErrorSweep(t *testing.T) {
 	})
 }
 
+// TestSiteIDReserveRejectsInvalidUTF8SiteNameBeforeWrite covers a client-side
+// pre-check: a JSON POST body silently rewrites invalid UTF-8 to U+FFFD
+// (which is itself valid UTF-8), so a server-side-only check would accept the
+// mangled value with exit 0 and a corrupted registry entry. The site-name
+// argument must be validated against the raw argv before the loopback client
+// ever sends it, mirroring newUDPPortLeafCommand's device-name pre-check
+// (udpport.go).
+func TestSiteIDReserveRejectsInvalidUTF8SiteNameBeforeWrite(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	stdout, _, err := runSiteID(t, dir, "reserve", "1", "branch\xff")
+	if err == nil {
+		t.Fatal("reserve with invalid UTF-8 site name: error = nil, want rejection")
+	}
+	if !strings.Contains(err.Error(), "UTF-8") {
+		t.Errorf("reserve error = %v, want it to mention UTF-8", err)
+	}
+	if exitCodeFor(err) == exitOK {
+		t.Errorf("exitCodeFor(err) = %d, want non-zero", exitCodeFor(err))
+	}
+	if stdout != "" {
+		t.Errorf("reserve stdout = %q, want empty on failure", stdout)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "local.ipam.hujson")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("registry exists after invalid input: %v", statErr)
+	}
+}
+
+// TestSiteIDReserveAcceptsValidMultiByteUTF8SiteName is the accept-path
+// counterpart of the rejection test above: valid multi-byte UTF-8 must keep
+// working end to end through reserve, list, and release.
+func TestSiteIDReserveAcceptsValidMultiByteUTF8SiteName(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const site = "münchen"
+
+	if _, _, err := runSiteID(t, dir, "reserve", "1", site); err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	out, _, err := runSiteID(t, dir, "list")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if !strings.Contains(out, site) {
+		t.Errorf("list stdout = %q, want it to contain %q", out, site)
+	}
+	if _, _, err = runSiteID(t, dir, "release", "1"); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+}
+
 // TestSiteIDReleaseArgRegistersForErrorSweep is the release-side counterpart
 // of TestSiteIDReserveArgsRegisterForErrorSweep: "site-id release" takes the
 // same <id> positional argument as "reserve" and fails through the same

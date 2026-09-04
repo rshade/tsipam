@@ -1,7 +1,7 @@
 swagger: "2.0"
 info:
     title: tail-ipam address-space registry API
-    description: Plans and allocates Tailscale address space through 4via6 site IDs, subnet CIDR pools, and per-service IPv4 addresses. Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own control-plane API convention.
+    description: Plans and allocates Tailscale address space through 4via6 site IDs, subnet CIDR pools, per-service IPv4 addresses, and per-device UDP listen ports. Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own control-plane API convention.
     version: 0.0.1
 host: localhost:80
 consumes:
@@ -281,7 +281,156 @@ paths:
                         $ref: '#/definitions/IpamReleaseSubnetPoolInvalidInputResponseBody'
             schemes:
                 - http
+    /tailnet/{tailnet}/ipam/udp-ports:
+        get:
+            tags:
+                - ipam
+            summary: list_udp_ports ipam
+            operationId: ipam#list_udp_ports
+            parameters:
+                - name: site
+                  in: query
+                  description: 'Optional site/firewall-boundary label to filter. An absent or empty site parameter means no filter: returns reservations from all sites.'
+                  required: false
+                  type: string
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.
+                  required: true
+                  type: string
+            responses:
+                "200":
+                    description: OK response.
+                    schema:
+                        type: array
+                        items:
+                            $ref: '#/definitions/UDPPortReservation'
+                "400":
+                    description: Bad Request response.
+                    schema:
+                        $ref: '#/definitions/IpamListUDPPortsInvalidInputResponseBody'
+            schemes:
+                - http
+        post:
+            tags:
+                - ipam
+            summary: reserve_udp_port ipam
+            operationId: ipam#reserve_udp_port
+            parameters:
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  type: string
+                - name: reserve_udp_port_request_body
+                  in: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/IpamReserveUDPPortRequestBody'
+                    required:
+                        - site
+                        - port
+                        - device
+            responses:
+                "200":
+                    description: OK response.
+                    schema:
+                        $ref: '#/definitions/IpamReserveUDPPortResponseBody'
+                        required:
+                            - site
+                            - port
+                            - device
+                            - changed
+                "400":
+                    description: Bad Request response.
+                    schema:
+                        $ref: '#/definitions/IpamReserveUDPPortInvalidInputResponseBody'
+                "409":
+                    description: Conflict response.
+                    schema:
+                        $ref: '#/definitions/IpamReserveUDPPortCollisionResponseBody'
+            schemes:
+                - http
+        delete:
+            tags:
+                - ipam
+            summary: release_udp_port ipam
+            operationId: ipam#release_udp_port
+            parameters:
+                - name: site
+                  in: query
+                  description: Site/firewall-boundary label containing the reservation.
+                  required: true
+                  type: string
+                - name: port
+                  in: query
+                  description: Decimal UDP listen port to release, 1024-65535.
+                  required: true
+                  type: string
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  type: string
+            responses:
+                "200":
+                    description: OK response.
+                    schema:
+                        $ref: '#/definitions/IpamReleaseUDPPortResponseBody'
+                        required:
+                            - site
+                            - port
+                            - changed
+                "400":
+                    description: Bad Request response.
+                    schema:
+                        $ref: '#/definitions/IpamReleaseUDPPortInvalidInputResponseBody'
+            schemes:
+                - http
 definitions:
+    IpamListUDPPortsInvalidInputResponseBody:
+        title: 'Mediatype identifier: application/vnd.goa.error; view=default'
+        type: object
+        properties:
+            fault:
+                type: boolean
+                description: Is the error a server-side fault?
+                example: true
+            id:
+                type: string
+                description: ID is a unique identifier for this particular occurrence of the problem.
+                example: 123abc
+            message:
+                type: string
+                description: Message is a human-readable explanation specific to this occurrence of the problem.
+                example: parameter 'p' must be an integer
+            name:
+                type: string
+                description: Name is the name of this class of errors.
+                example: bad_request
+            temporary:
+                type: boolean
+                description: Is the error temporary?
+                example: false
+            timeout:
+                type: boolean
+                description: Is the error a timeout?
+                example: true
+        description: site is not a valid site/firewall-boundary label. (default view)
+        example:
+            fault: true
+            id: 123abc
+            message: parameter 'p' must be an integer
+            name: bad_request
+            temporary: false
+            timeout: true
+        required:
+            - name
+            - id
+            - message
+            - temporary
+            - timeout
+            - fault
     IpamReleaseServiceAddressInvalidInputResponseBody:
         title: 'Mediatype identifier: application/vnd.goa.error; view=default'
         type: object
@@ -464,6 +613,73 @@ definitions:
             cidr: Veniam eius ut illum pariatur.
         required:
             - cidr
+            - changed
+    IpamReleaseUDPPortInvalidInputResponseBody:
+        title: 'Mediatype identifier: application/vnd.goa.error; view=default'
+        type: object
+        properties:
+            fault:
+                type: boolean
+                description: Is the error a server-side fault?
+                example: true
+            id:
+                type: string
+                description: ID is a unique identifier for this particular occurrence of the problem.
+                example: 123abc
+            message:
+                type: string
+                description: Message is a human-readable explanation specific to this occurrence of the problem.
+                example: parameter 'p' must be an integer
+            name:
+                type: string
+                description: Name is the name of this class of errors.
+                example: bad_request
+            temporary:
+                type: boolean
+                description: Is the error temporary?
+                example: false
+            timeout:
+                type: boolean
+                description: Is the error a timeout?
+                example: true
+        description: site or port is invalid. (default view)
+        example:
+            fault: true
+            id: 123abc
+            message: parameter 'p' must be an integer
+            name: bad_request
+            temporary: false
+            timeout: true
+        required:
+            - name
+            - id
+            - message
+            - temporary
+            - timeout
+            - fault
+    IpamReleaseUDPPortResponseBody:
+        title: IpamReleaseUDPPortResponseBody
+        type: object
+        properties:
+            changed:
+                type: boolean
+                description: False when the site and port were not reserved.
+                example: false
+            port:
+                type: string
+                description: Canonical decimal UDP port released.
+                example: Quam reprehenderit qui.
+            site:
+                type: string
+                description: Canonical site label containing the released port.
+                example: Accusantium quaerat ut vitae est dolore nulla.
+        example:
+            changed: false
+            port: Quam reprehenderit qui.
+            site: Accusantium quaerat ut vitae est dolore nulla.
+        required:
+            - site
+            - port
             - changed
     IpamReserveServiceAddressCollisionResponseBody:
         title: 'Mediatype identifier: application/vnd.goa.error; view=default'
@@ -975,6 +1191,146 @@ definitions:
             - cidr
             - site
             - changed
+    IpamReserveUDPPortCollisionResponseBody:
+        title: 'Mediatype identifier: application/vnd.goa.error; view=default'
+        type: object
+        properties:
+            fault:
+                type: boolean
+                description: Is the error a server-side fault?
+                example: true
+            id:
+                type: string
+                description: ID is a unique identifier for this particular occurrence of the problem.
+                example: 123abc
+            message:
+                type: string
+                description: Message is a human-readable explanation specific to this occurrence of the problem.
+                example: parameter 'p' must be an integer
+            name:
+                type: string
+                description: Name is the name of this class of errors.
+                example: bad_request
+            temporary:
+                type: boolean
+                description: Is the error temporary?
+                example: false
+            timeout:
+                type: boolean
+                description: Is the error a timeout?
+                example: true
+        description: port is already reserved for a different device within the site. (default view)
+        example:
+            fault: true
+            id: 123abc
+            message: parameter 'p' must be an integer
+            name: bad_request
+            temporary: false
+            timeout: true
+        required:
+            - name
+            - id
+            - message
+            - temporary
+            - timeout
+            - fault
+    IpamReserveUDPPortInvalidInputResponseBody:
+        title: 'Mediatype identifier: application/vnd.goa.error; view=default'
+        type: object
+        properties:
+            fault:
+                type: boolean
+                description: Is the error a server-side fault?
+                example: true
+            id:
+                type: string
+                description: ID is a unique identifier for this particular occurrence of the problem.
+                example: 123abc
+            message:
+                type: string
+                description: Message is a human-readable explanation specific to this occurrence of the problem.
+                example: parameter 'p' must be an integer
+            name:
+                type: string
+                description: Name is the name of this class of errors.
+                example: bad_request
+            temporary:
+                type: boolean
+                description: Is the error temporary?
+                example: false
+            timeout:
+                type: boolean
+                description: Is the error a timeout?
+                example: true
+        description: site, port, or device is invalid. (default view)
+        example:
+            fault: true
+            id: 123abc
+            message: parameter 'p' must be an integer
+            name: bad_request
+            temporary: false
+            timeout: true
+        required:
+            - name
+            - id
+            - message
+            - temporary
+            - timeout
+            - fault
+    IpamReserveUDPPortRequestBody:
+        title: IpamReserveUDPPortRequestBody
+        type: object
+        properties:
+            device:
+                type: string
+                description: Device label to reserve the port for.
+                example: Iste ut labore nostrum.
+            port:
+                type: string
+                description: Decimal UDP listen port to reserve, 1024-65535.
+                example: Assumenda officiis.
+            site:
+                type: string
+                description: Site/firewall-boundary label for the reservation.
+                example: Et neque expedita.
+        example:
+            device: Iste ut labore nostrum.
+            port: Assumenda officiis.
+            site: Et neque expedita.
+        required:
+            - site
+            - port
+            - device
+    IpamReserveUDPPortResponseBody:
+        title: IpamReserveUDPPortResponseBody
+        type: object
+        properties:
+            changed:
+                type: boolean
+                description: False when the exact site, port, and device tuple was already reserved.
+                example: true
+            device:
+                type: string
+                description: Canonical device label actually written.
+                example: Sed quia ut ex quasi ea.
+            port:
+                type: string
+                description: Canonical decimal UDP port actually written.
+                example: Dolores impedit et.
+            site:
+                type: string
+                description: Canonical site label actually written.
+                example: Est est mollitia voluptatibus possimus.
+        example:
+            changed: true
+            device: Sed quia ut ex quasi ea.
+            port: Dolores impedit et.
+            site: Est est mollitia voluptatibus possimus.
+        required:
+            - site
+            - port
+            - device
+            - changed
     ServiceAddressReservation:
         title: ServiceAddressReservation
         type: object
@@ -1095,3 +1451,28 @@ definitions:
         required:
             - cidr
             - site
+    UDPPortReservation:
+        title: UDPPortReservation
+        type: object
+        properties:
+            device:
+                type: string
+                description: Canonical device label that owns the port within the site.
+                example: Similique et ut quae.
+            port:
+                type: string
+                description: Canonical decimal UDP listen port, 1024-65535.
+                example: Ex qui.
+            site:
+                type: string
+                description: Canonical site/firewall-boundary label.
+                example: Eaque non qui nam atque.
+        description: A UDP listen port reserved for a device within one site/firewall boundary.
+        example:
+            device: Similique et ut quae.
+            port: Ex qui.
+            site: Eaque non qui nam atque.
+        required:
+            - site
+            - port
+            - device

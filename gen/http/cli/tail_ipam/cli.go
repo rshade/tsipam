@@ -23,7 +23,7 @@ import (
 //	command (subcommand1|subcommand2|...)
 func UsageCommands() []string {
 	return []string{
-		"ipam (list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address)",
+		"ipam (list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
 	}
 }
 
@@ -77,6 +77,19 @@ func ParseEndpoint(
 		ipamReleaseServiceAddressFlags       = flag.NewFlagSet("release-service-address", flag.ExitOnError)
 		ipamReleaseServiceAddressTailnetFlag = ipamReleaseServiceAddressFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
 		ipamReleaseServiceAddressAddressFlag = ipamReleaseServiceAddressFlags.String("address", "REQUIRED", "")
+
+		ipamListUDPPortsFlags       = flag.NewFlagSet("list-udp-ports", flag.ExitOnError)
+		ipamListUDPPortsTailnetFlag = ipamListUDPPortsFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.")
+		ipamListUDPPortsSiteFlag    = ipamListUDPPortsFlags.String("site", "", "")
+
+		ipamReserveUDPPortFlags       = flag.NewFlagSet("reserve-udp-port", flag.ExitOnError)
+		ipamReserveUDPPortBodyFlag    = ipamReserveUDPPortFlags.String("body", "REQUIRED", "")
+		ipamReserveUDPPortTailnetFlag = ipamReserveUDPPortFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
+
+		ipamReleaseUDPPortFlags       = flag.NewFlagSet("release-udp-port", flag.ExitOnError)
+		ipamReleaseUDPPortTailnetFlag = ipamReleaseUDPPortFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
+		ipamReleaseUDPPortSiteFlag    = ipamReleaseUDPPortFlags.String("site", "REQUIRED", "")
+		ipamReleaseUDPPortPortFlag    = ipamReleaseUDPPortFlags.String("port", "REQUIRED", "")
 	)
 	ipamFlags.Usage = ipamUsage
 	ipamListSiteIdsFlags.Usage = ipamListSiteIdsUsage
@@ -88,6 +101,9 @@ func ParseEndpoint(
 	ipamListServiceAddressesFlags.Usage = ipamListServiceAddressesUsage
 	ipamReserveServiceAddressFlags.Usage = ipamReserveServiceAddressUsage
 	ipamReleaseServiceAddressFlags.Usage = ipamReleaseServiceAddressUsage
+	ipamListUDPPortsFlags.Usage = ipamListUDPPortsUsage
+	ipamReserveUDPPortFlags.Usage = ipamReserveUDPPortUsage
+	ipamReleaseUDPPortFlags.Usage = ipamReleaseUDPPortUsage
 
 	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
 		return nil, nil, err
@@ -150,6 +166,15 @@ func ParseEndpoint(
 			case "release-service-address":
 				epf = ipamReleaseServiceAddressFlags
 
+			case "list-udp-ports":
+				epf = ipamListUDPPortsFlags
+
+			case "reserve-udp-port":
+				epf = ipamReserveUDPPortFlags
+
+			case "release-udp-port":
+				epf = ipamReleaseUDPPortFlags
+
 			}
 
 		}
@@ -202,6 +227,15 @@ func ParseEndpoint(
 			case "release-service-address":
 				endpoint = c.ReleaseServiceAddress()
 				data, err = ipamc.BuildReleaseServiceAddressPayload(*ipamReleaseServiceAddressTailnetFlag, *ipamReleaseServiceAddressAddressFlag)
+			case "list-udp-ports":
+				endpoint = c.ListUDPPorts()
+				data, err = ipamc.BuildListUDPPortsPayload(*ipamListUDPPortsTailnetFlag, *ipamListUDPPortsSiteFlag)
+			case "reserve-udp-port":
+				endpoint = c.ReserveUDPPort()
+				data, err = ipamc.BuildReserveUDPPortPayload(*ipamReserveUDPPortBodyFlag, *ipamReserveUDPPortTailnetFlag)
+			case "release-udp-port":
+				endpoint = c.ReleaseUDPPort()
+				data, err = ipamc.BuildReleaseUDPPortPayload(*ipamReleaseUDPPortTailnetFlag, *ipamReleaseUDPPortSiteFlag, *ipamReleaseUDPPortPortFlag)
 			}
 		}
 	}
@@ -214,7 +248,7 @@ func ParseEndpoint(
 
 // ipamUsage displays the usage of the ipam command and its subcommands.
 func ipamUsage() {
-	fmt.Fprintln(os.Stderr, `Reserve, release, and list address-space allocations for one tailnet's registry.`)
+	fmt.Fprintln(os.Stderr, `Reserve, release, and list address-space and UDP-port allocations for one tailnet's registry.`)
 	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] ipam COMMAND [flags]\n\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "COMMAND:")
 	fmt.Fprintln(os.Stderr, `    list-site-ids: ListSiteIds implements list_site_ids.`)
@@ -226,6 +260,9 @@ func ipamUsage() {
 	fmt.Fprintln(os.Stderr, `    list-service-addresses: ListServiceAddresses implements list_service_addresses.`)
 	fmt.Fprintln(os.Stderr, `    reserve-service-address: ReserveServiceAddress implements reserve_service_address.`)
 	fmt.Fprintln(os.Stderr, `    release-service-address: ReleaseServiceAddress implements release_service_address.`)
+	fmt.Fprintln(os.Stderr, `    list-udp-ports: ListUDPPorts implements list_udp_ports.`)
+	fmt.Fprintln(os.Stderr, `    reserve-udp-port: ReserveUDPPort implements reserve_udp_port.`)
+	fmt.Fprintln(os.Stderr, `    release-udp-port: ReleaseUDPPort implements release_udp_port.`)
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Additional help:")
 	fmt.Fprintf(os.Stderr, "    %s ipam COMMAND --help\n", os.Args[0])
@@ -402,4 +439,66 @@ func ipamReleaseServiceAddressUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-service-address --tailnet \"Illum aspernatur ad repudiandae at quas laborum.\" --address \"Qui nulla dolores est optio.\"")
+}
+
+func ipamListUDPPortsUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam list-udp-ports", os.Args[0])
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprint(os.Stderr, " -site STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ListUDPPorts implements list_udp_ports.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.`)
+	fmt.Fprintln(os.Stderr, `    -site STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam list-udp-ports --tailnet \"Autem ea consequatur rerum aperiam est facere.\" --site \"In commodi voluptatum.\"")
+}
+
+func ipamReserveUDPPortUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam reserve-udp-port", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ReserveUDPPort implements reserve_udp_port.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-udp-port --body '{\n      \"device\": \"Iste ut labore nostrum.\",\n      \"port\": \"Assumenda officiis.\",\n      \"site\": \"Et neque expedita.\"\n   }' --tailnet \"Atque velit voluptates modi qui.\"")
+}
+
+func ipamReleaseUDPPortUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam release-udp-port", os.Args[0])
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprint(os.Stderr, " -site STRING")
+	fmt.Fprint(os.Stderr, " -port STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `ReleaseUDPPort implements release_udp_port.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+	fmt.Fprintln(os.Stderr, `    -site STRING: `)
+	fmt.Fprintln(os.Stderr, `    -port STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-udp-port --tailnet \"Velit soluta et sint libero illo non.\" --site \"Dolorem dolorum explicabo dolores deserunt culpa qui.\" --port \"Quidem et.\"")
 }

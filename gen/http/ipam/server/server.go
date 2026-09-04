@@ -28,6 +28,9 @@ type Server struct {
 	ListServiceAddresses  http.Handler
 	ReserveServiceAddress http.Handler
 	ReleaseServiceAddress http.Handler
+	ListUDPPorts          http.Handler
+	ReserveUDPPort        http.Handler
+	ReleaseUDPPort        http.Handler
 }
 
 // MountPoint holds information about the mounted endpoints.
@@ -66,6 +69,9 @@ func New(
 			{"ListServiceAddresses", "GET", "/tailnet/{tailnet}/ipam/service-addresses"},
 			{"ReserveServiceAddress", "POST", "/tailnet/{tailnet}/ipam/service-addresses"},
 			{"ReleaseServiceAddress", "DELETE", "/tailnet/{tailnet}/ipam/service-addresses"},
+			{"ListUDPPorts", "GET", "/tailnet/{tailnet}/ipam/udp-ports"},
+			{"ReserveUDPPort", "POST", "/tailnet/{tailnet}/ipam/udp-ports"},
+			{"ReleaseUDPPort", "DELETE", "/tailnet/{tailnet}/ipam/udp-ports"},
 		},
 		ListSiteIds:           NewListSiteIdsHandler(e.ListSiteIds, mux, decoder, encoder, errhandler, formatter),
 		ReserveSiteID:         NewReserveSiteIDHandler(e.ReserveSiteID, mux, decoder, encoder, errhandler, formatter),
@@ -76,6 +82,9 @@ func New(
 		ListServiceAddresses:  NewListServiceAddressesHandler(e.ListServiceAddresses, mux, decoder, encoder, errhandler, formatter),
 		ReserveServiceAddress: NewReserveServiceAddressHandler(e.ReserveServiceAddress, mux, decoder, encoder, errhandler, formatter),
 		ReleaseServiceAddress: NewReleaseServiceAddressHandler(e.ReleaseServiceAddress, mux, decoder, encoder, errhandler, formatter),
+		ListUDPPorts:          NewListUDPPortsHandler(e.ListUDPPorts, mux, decoder, encoder, errhandler, formatter),
+		ReserveUDPPort:        NewReserveUDPPortHandler(e.ReserveUDPPort, mux, decoder, encoder, errhandler, formatter),
+		ReleaseUDPPort:        NewReleaseUDPPortHandler(e.ReleaseUDPPort, mux, decoder, encoder, errhandler, formatter),
 	}
 }
 
@@ -93,6 +102,9 @@ func (s *Server) Use(m func(http.Handler) http.Handler) {
 	s.ListServiceAddresses = m(s.ListServiceAddresses)
 	s.ReserveServiceAddress = m(s.ReserveServiceAddress)
 	s.ReleaseServiceAddress = m(s.ReleaseServiceAddress)
+	s.ListUDPPorts = m(s.ListUDPPorts)
+	s.ReserveUDPPort = m(s.ReserveUDPPort)
+	s.ReleaseUDPPort = m(s.ReleaseUDPPort)
 }
 
 // MethodNames returns the methods served.
@@ -109,6 +121,9 @@ func Mount(mux goahttp.Muxer, h *Server) {
 	MountListServiceAddressesHandler(mux, h.ListServiceAddresses)
 	MountReserveServiceAddressHandler(mux, h.ReserveServiceAddress)
 	MountReleaseServiceAddressHandler(mux, h.ReleaseServiceAddress)
+	MountListUDPPortsHandler(mux, h.ListUDPPorts)
+	MountReserveUDPPortHandler(mux, h.ReserveUDPPort)
+	MountReleaseUDPPortHandler(mux, h.ReleaseUDPPort)
 }
 
 // Mount configures the mux to serve the ipam endpoints.
@@ -570,6 +585,165 @@ func NewReleaseServiceAddressHandler(
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
 		ctx = context.WithValue(ctx, goa.MethodKey, "release_service_address")
+		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
+		payload, err := decodeRequest(r)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		res, err := endpoint(ctx, payload)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		if err := encodeResponse(ctx, w, res); err != nil {
+			if errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+		}
+	})
+}
+
+// MountListUDPPortsHandler configures the mux to serve the "ipam" service
+// "list_udp_ports" endpoint.
+func MountListUDPPortsHandler(mux goahttp.Muxer, h http.Handler) {
+	f, ok := h.(http.HandlerFunc)
+	if !ok {
+		f = func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+		}
+	}
+	mux.Handle("GET", "/tailnet/{tailnet}/ipam/udp-ports", f)
+}
+
+// NewListUDPPortsHandler creates a HTTP handler which loads the HTTP request
+// and calls the "ipam" service "list_udp_ports" endpoint.
+func NewListUDPPortsHandler(
+	endpoint goa.Endpoint,
+	mux goahttp.Muxer,
+	decoder func(*http.Request) goahttp.Decoder,
+	encoder func(context.Context, http.ResponseWriter) goahttp.Encoder,
+	errhandler func(context.Context, http.ResponseWriter, error),
+	formatter func(ctx context.Context, err error) goahttp.Statuser,
+) http.Handler {
+	var (
+		decodeRequest  = DecodeListUDPPortsRequest(mux, decoder)
+		encodeResponse = EncodeListUDPPortsResponse(encoder)
+		encodeError    = EncodeListUDPPortsError(encoder, formatter)
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
+		ctx = context.WithValue(ctx, goa.MethodKey, "list_udp_ports")
+		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
+		payload, err := decodeRequest(r)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		res, err := endpoint(ctx, payload)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		if err := encodeResponse(ctx, w, res); err != nil {
+			if errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+		}
+	})
+}
+
+// MountReserveUDPPortHandler configures the mux to serve the "ipam" service
+// "reserve_udp_port" endpoint.
+func MountReserveUDPPortHandler(mux goahttp.Muxer, h http.Handler) {
+	f, ok := h.(http.HandlerFunc)
+	if !ok {
+		f = func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+		}
+	}
+	mux.Handle("POST", "/tailnet/{tailnet}/ipam/udp-ports", f)
+}
+
+// NewReserveUDPPortHandler creates a HTTP handler which loads the HTTP request
+// and calls the "ipam" service "reserve_udp_port" endpoint.
+func NewReserveUDPPortHandler(
+	endpoint goa.Endpoint,
+	mux goahttp.Muxer,
+	decoder func(*http.Request) goahttp.Decoder,
+	encoder func(context.Context, http.ResponseWriter) goahttp.Encoder,
+	errhandler func(context.Context, http.ResponseWriter, error),
+	formatter func(ctx context.Context, err error) goahttp.Statuser,
+) http.Handler {
+	var (
+		decodeRequest  = DecodeReserveUDPPortRequest(mux, decoder)
+		encodeResponse = EncodeReserveUDPPortResponse(encoder)
+		encodeError    = EncodeReserveUDPPortError(encoder, formatter)
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
+		ctx = context.WithValue(ctx, goa.MethodKey, "reserve_udp_port")
+		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
+		payload, err := decodeRequest(r)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		res, err := endpoint(ctx, payload)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		if err := encodeResponse(ctx, w, res); err != nil {
+			if errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+		}
+	})
+}
+
+// MountReleaseUDPPortHandler configures the mux to serve the "ipam" service
+// "release_udp_port" endpoint.
+func MountReleaseUDPPortHandler(mux goahttp.Muxer, h http.Handler) {
+	f, ok := h.(http.HandlerFunc)
+	if !ok {
+		f = func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+		}
+	}
+	mux.Handle("DELETE", "/tailnet/{tailnet}/ipam/udp-ports", f)
+}
+
+// NewReleaseUDPPortHandler creates a HTTP handler which loads the HTTP request
+// and calls the "ipam" service "release_udp_port" endpoint.
+func NewReleaseUDPPortHandler(
+	endpoint goa.Endpoint,
+	mux goahttp.Muxer,
+	decoder func(*http.Request) goahttp.Decoder,
+	encoder func(context.Context, http.ResponseWriter) goahttp.Encoder,
+	errhandler func(context.Context, http.ResponseWriter, error),
+	formatter func(ctx context.Context, err error) goahttp.Statuser,
+) http.Handler {
+	var (
+		decodeRequest  = DecodeReleaseUDPPortRequest(mux, decoder)
+		encodeResponse = EncodeReleaseUDPPortResponse(encoder)
+		encodeError    = EncodeReleaseUDPPortError(encoder, formatter)
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
+		ctx = context.WithValue(ctx, goa.MethodKey, "release_udp_port")
 		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
 		payload, err := decodeRequest(r)
 		if err != nil {

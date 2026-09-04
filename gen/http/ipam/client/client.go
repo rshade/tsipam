@@ -53,6 +53,18 @@ type Client struct {
 	// release_service_address endpoint.
 	ReleaseServiceAddressDoer goahttp.Doer
 
+	// ListUDPPorts Doer is the HTTP client used to make requests to the
+	// list_udp_ports endpoint.
+	ListUDPPortsDoer goahttp.Doer
+
+	// ReserveUDPPort Doer is the HTTP client used to make requests to the
+	// reserve_udp_port endpoint.
+	ReserveUDPPortDoer goahttp.Doer
+
+	// ReleaseUDPPort Doer is the HTTP client used to make requests to the
+	// release_udp_port endpoint.
+	ReleaseUDPPortDoer goahttp.Doer
+
 	// RestoreResponseBody controls whether the response bodies are reset after
 	// decoding so they can be read again.
 	RestoreResponseBody bool
@@ -82,6 +94,9 @@ func NewClient(
 		ListServiceAddressesDoer:  doer,
 		ReserveServiceAddressDoer: doer,
 		ReleaseServiceAddressDoer: doer,
+		ListUDPPortsDoer:          doer,
+		ReserveUDPPortDoer:        doer,
+		ReleaseUDPPortDoer:        doer,
 		RestoreResponseBody:       restoreBody,
 		scheme:                    scheme,
 		host:                      host,
@@ -281,6 +296,78 @@ func (c *Client) ReleaseServiceAddress() goa.Endpoint {
 		resp, err := c.ReleaseServiceAddressDoer.Do(req)
 		if err != nil {
 			return nil, goahttp.ErrRequestError("ipam", "release_service_address", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ListUDPPorts returns an endpoint that makes HTTP requests to the ipam
+// service list_udp_ports server.
+func (c *Client) ListUDPPorts() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeListUDPPortsRequest(c.encoder)
+		decodeResponse = DecodeListUDPPortsResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildListUDPPortsRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ListUDPPortsDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "list_udp_ports", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ReserveUDPPort returns an endpoint that makes HTTP requests to the ipam
+// service reserve_udp_port server.
+func (c *Client) ReserveUDPPort() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeReserveUDPPortRequest(c.encoder)
+		decodeResponse = DecodeReserveUDPPortResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildReserveUDPPortRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ReserveUDPPortDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "reserve_udp_port", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ReleaseUDPPort returns an endpoint that makes HTTP requests to the ipam
+// service release_udp_port server.
+func (c *Client) ReleaseUDPPort() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeReleaseUDPPortRequest(c.encoder)
+		decodeResponse = DecodeReleaseUDPPortResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildReleaseUDPPortRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ReleaseUDPPortDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "release_udp_port", err)
 		}
 		return decodeResponse(resp)
 	}

@@ -393,7 +393,7 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 	if missing := sanitize.UnhandledFields[outputEnvelope](
 		"SchemaVersion", "Tool", "Sanitization", "Command", "Status", "Message", "Tailnet",
 		"Changed", "ID", "CIDR", "Address", "Site", "Service", "SiteIDs", "SubnetPools",
-		"ServiceAddresses", "Devices", "Subnets", "BlockInfo",
+		"ServiceAddresses", "Port", "Device", "UDPPorts", "Devices", "Subnets", "BlockInfo",
 	); len(missing) != 0 {
 		t.Errorf("outputEnvelope fields without an explicit sanitization decision: %v", missing)
 	}
@@ -405,6 +405,9 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 	}
 	if missing := sanitize.UnhandledFields[serviceAddressOutput]("Address", "Service"); len(missing) != 0 {
 		t.Errorf("serviceAddressOutput fields without an explicit sanitization decision: %v", missing)
+	}
+	if missing := sanitize.UnhandledFields[udpPortOutput]("Site", "Port", "Device"); len(missing) != 0 {
+		t.Errorf("udpPortOutput fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[blockInfoOutput](
 		"Prefix", "Network", "Broadcast", "FirstUsable", "LastUsable", "UsableHosts",
@@ -493,6 +496,82 @@ func TestServiceAddressOutputDistinguishesEmptyListFromAbsentField(t *testing.T)
 	}
 	if bytes.Contains(reserveJSON, []byte(`"service_addresses"`)) {
 		t.Errorf("non-list JSON = %s, want service_addresses omitted", reserveJSON)
+	}
+}
+
+func TestUDPPortOutputContract(t *testing.T) {
+	t.Parallel()
+
+	entries := []udpPortOutput{
+		{Site: "branch", Port: "1024", Device: "branch-fw01"},
+		{Site: "branch", Port: "41642", Device: "branch-fw02"},
+		{Site: "hq", Port: "41642", Device: "hq-fw01"},
+	}
+	result := newOutput(commandPortList, statusOK, "listed 3 UDP-port reservation(s)", "acme")
+	result.UDPPorts = &entries
+
+	var human bytes.Buffer
+	if err := renderOutput(&human, formatHuman, result); err != nil {
+		t.Fatalf("render human: %v", err)
+	}
+	wantHuman := "branch\t1024\tbranch-fw01\n" +
+		"branch\t41642\tbranch-fw02\n" +
+		"hq\t41642\thq-fw01\n"
+	if human.String() != wantHuman {
+		t.Errorf("human UDP-port output = %q, want %q", human.String(), wantHuman)
+	}
+
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal output: %v", err)
+	}
+	for _, fragment := range []string{`"udp_ports":[`, `"site":"branch"`, `"port":"1024"`, `"device":"branch-fw01"`} {
+		if !bytes.Contains(encoded, []byte(fragment)) {
+			t.Errorf("JSON output %s omits %s", encoded, fragment)
+		}
+	}
+}
+
+func TestUDPPortOutputDistinguishesEmptyListFromAbsentField(t *testing.T) {
+	t.Parallel()
+
+	empty := []udpPortOutput{}
+	listed := newOutput(commandPortList, statusOK, "listed 0 UDP-port reservation(s)", "acme")
+	listed.UDPPorts = &empty
+	listedJSON, err := json.Marshal(listed)
+	if err != nil {
+		t.Fatalf("marshal list: %v", err)
+	}
+	if !bytes.Contains(listedJSON, []byte(`"udp_ports":[]`)) {
+		t.Errorf("empty list JSON = %s, want udp_ports:[]", listedJSON)
+	}
+
+	reserve := newOutput(commandPortReserve, statusOK, "reserved", "acme")
+	reserveJSON, err := json.Marshal(reserve)
+	if err != nil {
+		t.Fatalf("marshal reserve: %v", err)
+	}
+	if bytes.Contains(reserveJSON, []byte(`"udp_ports"`)) {
+		t.Errorf("non-list JSON = %s, want udp_ports omitted", reserveJSON)
+	}
+}
+
+func TestUDPPortMessageBuildersUseEnvelopeValues(t *testing.T) {
+	t.Parallel()
+
+	changed := true
+	result := newOutput(commandPortReserve, statusOK, "", "acme")
+	result.Changed = &changed
+	result.Site = "branch"
+	result.Port = "41642"
+	result.Device = "branch-fw01"
+	wantReserve := `reserved UDP port 41642 in site "branch" for "branch-fw01"`
+	if got, want := udpPortReserveMessage(result), wantReserve; got != want {
+		t.Errorf("udpPortReserveMessage = %q, want %q", got, want)
+	}
+	result.messageBuilder = udpPortReleaseMessage
+	if got, want := udpPortReleaseMessage(result), `released UDP port 41642 from site "branch"`; got != want {
+		t.Errorf("udpPortReleaseMessage = %q, want %q", got, want)
 	}
 }
 

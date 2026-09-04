@@ -852,6 +852,322 @@ func DecodeReleaseServiceAddressResponse(decoder func(*http.Response) goahttp.De
 	}
 }
 
+// BuildListUDPPortsRequest instantiates a HTTP request object with method and
+// path set to call the "ipam" service "list_udp_ports" endpoint
+func (c *Client) BuildListUDPPortsRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ListUDPPortsPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "list_udp_ports", "*ipam.ListUDPPortsPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListUDPPortsIpamPath(tailnet)}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "list_udp_ports", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeListUDPPortsRequest returns an encoder for requests sent to the ipam
+// list_udp_ports server.
+func EncodeListUDPPortsRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ListUDPPortsPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "list_udp_ports", "*ipam.ListUDPPortsPayload", v)
+		}
+		values := req.URL.Query()
+		if p.Site != nil {
+			values.Add("site", *p.Site)
+		}
+		req.URL.RawQuery = values.Encode()
+		return nil
+	}
+}
+
+// DecodeListUDPPortsResponse returns a decoder for responses returned by the
+// ipam list_udp_ports endpoint. restoreBody controls whether the response body
+// should be restored after having been read.
+// DecodeListUDPPortsResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - error: internal error
+func DecodeListUDPPortsResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body []*UDPPortReservationResponse
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_udp_ports", err)
+			}
+			for _, e := range body {
+				if e != nil {
+					if err2 := ValidateUDPPortReservationResponse(e); err2 != nil {
+						err = goa.MergeErrors(err, err2)
+					}
+				}
+			}
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "list_udp_ports", err)
+			}
+			res := NewListUDPPortsUDPPortReservationOK(body)
+			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ListUDPPortsInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_udp_ports", err)
+			}
+			err = ValidateListUDPPortsInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "list_udp_ports", err)
+			}
+			return nil, NewListUDPPortsInvalidInput(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "list_udp_ports", resp.StatusCode, string(body))
+		}
+	}
+}
+
+// BuildReserveUDPPortRequest instantiates a HTTP request object with method
+// and path set to call the "ipam" service "reserve_udp_port" endpoint
+func (c *Client) BuildReserveUDPPortRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ReserveUDPPortPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "reserve_udp_port", "*ipam.ReserveUDPPortPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveUDPPortIpamPath(tailnet)}
+	req, err := http.NewRequest("POST", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "reserve_udp_port", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeReserveUDPPortRequest returns an encoder for requests sent to the ipam
+// reserve_udp_port server.
+func EncodeReserveUDPPortRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ReserveUDPPortPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "reserve_udp_port", "*ipam.ReserveUDPPortPayload", v)
+		}
+		body := NewReserveUDPPortRequestBody(p)
+		if err := encoder(req).Encode(&body); err != nil {
+			return goahttp.ErrEncodingError("ipam", "reserve_udp_port", err)
+		}
+		return nil
+	}
+}
+
+// DecodeReserveUDPPortResponse returns a decoder for responses returned by the
+// ipam reserve_udp_port endpoint. restoreBody controls whether the response
+// body should be restored after having been read.
+// DecodeReserveUDPPortResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - "collision" (type *goa.ServiceError): http.StatusConflict
+//   - error: internal error
+func DecodeReserveUDPPortResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body ReserveUDPPortResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_udp_port", err)
+			}
+			err = ValidateReserveUDPPortResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_udp_port", err)
+			}
+			res := NewReserveUDPPortResultOK(&body)
+			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ReserveUDPPortInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_udp_port", err)
+			}
+			err = ValidateReserveUDPPortInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_udp_port", err)
+			}
+			return nil, NewReserveUDPPortInvalidInput(&body)
+		case http.StatusConflict:
+			var (
+				body ReserveUDPPortCollisionResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_udp_port", err)
+			}
+			err = ValidateReserveUDPPortCollisionResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "reserve_udp_port", err)
+			}
+			return nil, NewReserveUDPPortCollision(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "reserve_udp_port", resp.StatusCode, string(body))
+		}
+	}
+}
+
+// BuildReleaseUDPPortRequest instantiates a HTTP request object with method
+// and path set to call the "ipam" service "release_udp_port" endpoint
+func (c *Client) BuildReleaseUDPPortRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ReleaseUDPPortPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "release_udp_port", "*ipam.ReleaseUDPPortPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseUDPPortIpamPath(tailnet)}
+	req, err := http.NewRequest("DELETE", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "release_udp_port", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeReleaseUDPPortRequest returns an encoder for requests sent to the ipam
+// release_udp_port server.
+func EncodeReleaseUDPPortRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ReleaseUDPPortPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "release_udp_port", "*ipam.ReleaseUDPPortPayload", v)
+		}
+		values := req.URL.Query()
+		values.Add("site", p.Site)
+		values.Add("port", p.Port)
+		req.URL.RawQuery = values.Encode()
+		return nil
+	}
+}
+
+// DecodeReleaseUDPPortResponse returns a decoder for responses returned by the
+// ipam release_udp_port endpoint. restoreBody controls whether the response
+// body should be restored after having been read.
+// DecodeReleaseUDPPortResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - error: internal error
+func DecodeReleaseUDPPortResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body ReleaseUDPPortResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_udp_port", err)
+			}
+			err = ValidateReleaseUDPPortResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "release_udp_port", err)
+			}
+			res := NewReleaseUDPPortResultOK(&body)
+			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ReleaseUDPPortInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_udp_port", err)
+			}
+			err = ValidateReleaseUDPPortInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "release_udp_port", err)
+			}
+			return nil, NewReleaseUDPPortInvalidInput(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "release_udp_port", resp.StatusCode, string(body))
+		}
+	}
+}
+
 // unmarshalSiteIDReservationResponseToIpamSiteIDReservation builds a value of
 // type *ipam.SiteIDReservation from a value of type *SiteIDReservationResponse.
 func unmarshalSiteIDReservationResponseToIpamSiteIDReservation(v *SiteIDReservationResponse) *ipam.SiteIDReservation {
@@ -894,6 +1210,19 @@ func unmarshalServiceAddressReservationResponseToIpamServiceAddressReservation(v
 		Description: v.Description,
 		Ticket:      v.Ticket,
 		ReservedAt:  v.ReservedAt,
+	}
+
+	return res
+}
+
+// unmarshalUDPPortReservationResponseToIpamUDPPortReservation builds a value
+// of type *ipam.UDPPortReservation from a value of type
+// *UDPPortReservationResponse.
+func unmarshalUDPPortReservationResponseToIpamUDPPortReservation(v *UDPPortReservationResponse) *ipam.UDPPortReservation {
+	res := &ipam.UDPPortReservation{
+		Site:   *v.Site,
+		Port:   *v.Port,
+		Device: *v.Device,
 	}
 
 	return res

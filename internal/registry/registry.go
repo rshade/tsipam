@@ -1,7 +1,8 @@
 // Package registry provides comment-preserving, HuJSON-backed read/write
 // access to the tail-ipam address-space registry — the declarative source of
-// truth for reserved Tailscale address-space allocations. It supports 4via6
-// site IDs, subnet-CIDR pools, and per-service IPv4 address reservations.
+// truth for reserved Tailscale allocations. It supports 4via6 site IDs,
+// subnet-CIDR pools, per-service IPv4 address reservations, and per-device UDP
+// listen-port reservations scoped to a site/firewall boundary.
 package registry
 
 import (
@@ -29,6 +30,9 @@ const (
 	// serviceAddressesKey is the registry's top-level key for per-service IPv4
 	// address reservations.
 	serviceAddressesKey = "serviceAddresses"
+	// udpPortsKey is the registry's top-level key for per-site, per-device UDP
+	// listen-port reservations.
+	udpPortsKey = "udpPorts"
 )
 
 // storedStateError strips the InvalidInputError marker from an error if present,
@@ -60,8 +64,10 @@ const (
 // Registry is the tail-ipam address-space allocation ledger, canonicalized by
 // Load. SiteIDs maps a canonical 4via6 site ID (see NormalizeSiteID) to its
 // site; SubnetPools maps a canonical CIDR (see NormalizeSubnetCIDR) to its
-// site; and ServiceAddresses maps a canonical IPv4 address (see
-// NormalizeServiceAddress) to a per-service entry. rawKeys records each
+// site; ServiceAddresses maps a canonical IPv4 address (see
+// NormalizeServiceAddress) to a per-service entry; and UDPPorts maps a
+// canonical site name and canonical port (see NormalizePort) to a device
+// name. rawKeys records each
 // site-ID entry's original on-file key spelling (e.g. "01" for canonical "1");
 // subnetPoolRawKeys and serviceAddressRawKeys do the same for subnet pools and
 // service addresses. hujson's patch matching is exact and case/format-sensitive,
@@ -75,27 +81,33 @@ const (
 // both decode to a nil SiteIDs map, yet ReserveSiteID must edit them with
 // different patch strategies (see its doc comment). The same applies to
 // subnetPoolsPresent for the "subnetPools" member and serviceAddressesPresent
-// for the "serviceAddresses" member: a caller that creates a service-address
-// reservation needs to know whether to add a new object or a key into an
-// existing one.
+// for the "serviceAddresses" member. UDP ports additionally track whether
+// each site's child object is present, because that second level can also be
+// absent, null, empty, or populated.
 //
-// siteIDsErr, subnetPoolsErr, and serviceAddressesErr capture any decode/
-// validate failure scoped to that map only, so a caller that needs only one
-// map is not blocked by a problem confined to the other (e.g., a malformed
-// subnetPools does not prevent site-ID commands from working).
+// The four *Err fields capture decode/validate failures scoped to one map, so
+// a caller that needs only one map is not blocked by a problem confined to
+// another (e.g., a malformed subnetPools does not prevent UDP-port commands
+// from working).
 type Registry struct {
 	SiteIDs                 map[string]Entry
 	SubnetPools             map[string]Entry
 	ServiceAddresses        map[string]ServiceEntry
+	UDPPorts                map[string]map[string]string
 	rawKeys                 map[string]string
 	subnetPoolRawKeys       map[string]string
 	serviceAddressRawKeys   map[string]string
+	udpPortSiteRawKeys      map[string]string
+	udpPortRawKeys          map[string]map[string]string
 	siteIDsPresent          bool
 	subnetPoolsPresent      bool
 	serviceAddressesPresent bool
+	udpPortsPresent         bool
+	udpPortSitePresent      map[string]bool
 	siteIDsErr              error
 	subnetPoolsErr          error
 	serviceAddressesErr     error
+	udpPortsErr             error
 }
 
 // SiteIDEntry is one resolved site-ID reservation, returned by ListSiteIDs.
@@ -142,19 +154,12 @@ func NormalizeSiteID(id string) (string, error) {
 }
 
 // NormalizeSiteName validates a site name: non-empty after trimming and
-// containing no control characters (C0 control characters or DEL). Validation
-// errors are wrapped with invalidInput so they are classified as HTTP 400
-// caller-input failures on caller-supplied input, and unwrapped by
+// containing no control characters (C0 control characters or DEL) and valid UTF-8.
+// Validation errors are wrapped with invalidInput so they are classified as
+// HTTP 400 caller-input failures on caller-supplied input, and unwrapped by
 // storedStateError on stored-state validation.
 func NormalizeSiteName(name string) (string, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return "", invalidInput(errors.New("site name must not be empty"))
-	}
-	if err := rejectControlChars("site name", name); err != nil {
-		return "", invalidInput(err)
-	}
-	return name, nil
+	return normalizeLabel("site name", name)
 }
 
 // Load reads and decodes the registry at path. A missing file is reported as
@@ -180,7 +185,8 @@ func NormalizeSiteName(name string) (string, error) {
 // A near-miss top-level spelling (e.g. "siteids") is rejected, as is an
 // ambiguous document with more than one member that case-insensitively
 // matches "siteIDs" -- including two members with the identical exact
-// spelling. The same rules apply to "subnetPools" and "serviceAddresses".
+// spelling. The same rules apply to "subnetPools", "serviceAddresses", and
+// "udpPorts".
 // Any other top-level key loads and round-trips untouched: the registry is
 // documented to grow additional top-level keys (for example per-service
 // address ranges or next-free allocation pools) in future versions, so
@@ -191,12 +197,12 @@ func NormalizeSiteName(name string) (string, error) {
 // and "1") name both spellings in the returned error, since Load cannot
 // decide which is right. An entry whose value is null or "" is rejected: a
 // reservation must have a genuine non-empty site name. The same rules apply
-// to subnet pools and service addresses.
+// to subnet pools and service addresses. UDP ports repeat duplicate and
+// canonical-key validation at both their site and port nesting levels.
 //
-// Decode/validate failures are scoped to the affected map only (siteIDsErr,
-// subnetPoolsErr, or serviceAddressesErr): a caller that needs only one map
-// can check mapError for that specific map and proceed even if the other maps
-// have errors.
+// Decode/validate failures are scoped to the affected map only: a caller that
+// needs one map can check mapError for that specific map and proceed even if
+// another map has errors.
 func Load(path string) (*Registry, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -239,6 +245,7 @@ func loadBytes(raw []byte) (*Registry, error) {
 	reg.loadSiteIDs(object)
 	reg.loadSubnetPools(object)
 	reg.loadServiceAddresses(object)
+	reg.loadUDPPorts(object)
 	return reg, nil
 }
 
@@ -342,6 +349,11 @@ func (reg *Registry) mapAccessorFor(topLevel string) (mapAccessor, error) {
 			hasView: reg.ServiceAddresses != nil,
 			present: reg.serviceAddressesPresent,
 		}, nil
+	case udpPortsKey:
+		// UDP ports is a two-level nested map (site -> port -> device), so no
+		// single canonical key addresses a reservation; only the error state is
+		// consumed (via mapError).
+		return mapAccessor{err: reg.udpPortsErr}, nil
 	default:
 		return mapAccessor{}, fmt.Errorf("unknown registry map %q", topLevel)
 	}
@@ -684,7 +696,7 @@ func rawReservationMapMember(object *hujson.Object, key, subjectField string) ma
 // caller that also observed the file as absent cannot silently overwrite the
 // first's create: it re-Loads instead, picking up whatever is now on disk.
 // Callers must run this inside withRegistryLock. topLevel selects which map
-// (siteIDsKey, subnetPoolsKey, or serviceAddressesKey) the caller needs; after
+// (siteIDsKey, subnetPoolsKey, serviceAddressesKey, or udpPortsKey) the caller needs; after
 // a successful load, loadOrCreate checks mapError(topLevel) internally before
 // returning.
 func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, error) {
@@ -696,7 +708,7 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 		}
 		diagnostics.Debug(logger, "registry loaded",
 			"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools),
-			"service_address_count", len(reg.ServiceAddresses))
+			"service_address_count", len(reg.ServiceAddresses), "udp_port_count", reg.udpPortCount())
 		return reg, nil
 	case !errors.Is(err, os.ErrNotExist):
 		return nil, err
@@ -714,7 +726,8 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 			return nil, fmt.Errorf("creating registry: %w", identityFreePathError(closeErr))
 		}
 		diagnostics.Debug(logger, "registry created",
-			"site_id_count", 0, "subnet_pool_count", 0, "service_address_count", 0)
+			"site_id_count", 0, "subnet_pool_count", 0,
+			"service_address_count", 0, "udp_port_count", 0)
 		return &Registry{}, nil
 	case errors.Is(createErr, os.ErrExist):
 		// Another holder created it between our Load and this attempt; pick
@@ -726,7 +739,8 @@ func loadOrCreate(path, topLevel string, logger diagnostics.Logger) (*Registry, 
 			}
 			diagnostics.Debug(logger, "registry loaded",
 				"site_id_count", len(reloaded.SiteIDs), "subnet_pool_count", len(reloaded.SubnetPools),
-				"service_address_count", len(reloaded.ServiceAddresses))
+				"service_address_count", len(reloaded.ServiceAddresses),
+				"udp_port_count", reloaded.udpPortCount())
 		}
 		return reloaded, loadErr
 	default:
@@ -928,7 +942,7 @@ func releaseRegistryEntry(
 		}
 		diagnostics.Debug(logger, "registry loaded",
 			"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools),
-			"service_address_count", len(reg.ServiceAddresses))
+			"service_address_count", len(reg.ServiceAddresses), "udp_port_count", reg.udpPortCount())
 		acc, selectErr := reg.mapAccessorFor(topLevel)
 		if selectErr != nil {
 			return selectErr
@@ -1026,6 +1040,32 @@ func repairMalformedMap(path, topLevel, key string) (bool, error) {
 	return false, nil
 }
 
+// topLevelObjectMember returns the object value of document's topLevel
+// member. ok is false when the document does not parse, is not an object, or
+// topLevel is absent or not object-valued. Repair paths navigate the raw
+// document this way because a decode error may have left the canonical view
+// only partly built.
+func topLevelObjectMember(document []byte, topLevel string) (*hujson.Object, bool) {
+	value, err := hujson.Parse(document)
+	if err != nil {
+		return nil, false
+	}
+	value.Standardize()
+	object, ok := value.Value.(*hujson.Object)
+	if !ok {
+		return nil, false
+	}
+	idx, err := registryMemberIndex(object, topLevel)
+	if err != nil || idx < 0 {
+		return nil, false
+	}
+	entries, ok := object.Members[idx].Value.Value.(*hujson.Object)
+	if !ok {
+		return nil, false
+	}
+	return entries, true
+}
+
 // repairRawKeys returns every exact on-file member spelling in topLevel that
 // normalizes to key. The map's canonical view is unavailable on this path, so
 // its usual canonical-to-raw index cannot be trusted; walking the HuJSON syntax
@@ -1033,20 +1073,7 @@ func repairMalformedMap(path, topLevel, key string) (bool, error) {
 // entry value. Candidates remain in document order so exact duplicate members
 // are tested conservatively one at a time by repairCandidateFixesMap.
 func repairRawKeys(document []byte, topLevel, key string) []string {
-	value, err := hujson.Parse(document)
-	if err != nil {
-		return nil
-	}
-	value.Standardize()
-	object, ok := value.Value.(*hujson.Object)
-	if !ok {
-		return nil
-	}
-	idx, err := registryMemberIndex(object, topLevel)
-	if err != nil || idx < 0 {
-		return nil
-	}
-	entries, ok := object.Members[idx].Value.Value.(*hujson.Object)
+	entries, ok := topLevelObjectMember(document, topLevel)
 	if !ok {
 		return nil
 	}
@@ -1074,6 +1101,8 @@ func normalizeRegistryKey(topLevel, key string) (string, error) {
 		return NormalizeSubnetCIDR(key)
 	case serviceAddressesKey:
 		return NormalizeServiceAddress(key)
+	case udpPortsKey:
+		return "", errors.New("nested map has no single canonical key")
 	default:
 		return "", fmt.Errorf("unknown registry map %q", topLevel)
 	}
@@ -1116,7 +1145,7 @@ func ListSiteIDsWithLogger(path string, logger diagnostics.Logger) ([]SiteIDEntr
 	}
 	diagnostics.Debug(logger, "registry loaded",
 		"site_id_count", len(reg.SiteIDs), "subnet_pool_count", len(reg.SubnetPools),
-		"service_address_count", len(reg.ServiceAddresses))
+		"service_address_count", len(reg.ServiceAddresses), "udp_port_count", reg.udpPortCount())
 	entries := make([]SiteIDEntry, 0, len(reg.SiteIDs))
 	for id, entry := range reg.SiteIDs {
 		entries = append(entries, SiteIDEntry{ID: id, Site: entry.Site, ReservationMetadata: entry.ReservationMetadata})

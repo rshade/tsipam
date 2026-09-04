@@ -213,6 +213,74 @@ func (s *Service) ReleaseServiceAddress(
 	return &ipam.ReleaseServiceAddressResult{Address: address, Changed: changed}, nil
 }
 
+// ListUDPPorts implements ipam.Service.
+func (s *Service) ListUDPPorts(
+	_ context.Context,
+	p *ipam.ListUDPPortsPayload,
+) ([]*ipam.UDPPortReservation, error) {
+	site := ""
+	if p.Site != nil {
+		var err error
+		site, err = registry.NormalizeSiteName(*p.Site)
+		if err != nil {
+			return nil, translateUDPPortError(err)
+		}
+	}
+	entries, err := registry.ListUDPPortsWithLogger(
+		s.registryPath(p.Tailnet), site, s.Logger,
+	)
+	if err != nil {
+		return nil, translateUDPPortError(err)
+	}
+	out := make([]*ipam.UDPPortReservation, len(entries))
+	for i, entry := range entries {
+		out[i] = &ipam.UDPPortReservation{Site: entry.Site, Port: entry.Port, Device: entry.Device}
+	}
+	return out, nil
+}
+
+// ReserveUDPPort implements ipam.Service.
+func (s *Service) ReserveUDPPort(
+	_ context.Context,
+	p *ipam.ReserveUDPPortPayload,
+) (*ipam.ReserveUDPPortResult, error) {
+	site, port, device, changed, err := registry.ReserveUDPPortWithLogger(
+		s.registryPath(p.Tailnet), p.Site, p.Port, p.Device, s.Logger,
+	)
+	if err != nil {
+		return nil, translateUDPPortError(err)
+	}
+	return &ipam.ReserveUDPPortResult{
+		Site: site, Port: port, Device: device, Changed: changed,
+	}, nil
+}
+
+// ReleaseUDPPort implements ipam.Service.
+func (s *Service) ReleaseUDPPort(
+	_ context.Context,
+	p *ipam.ReleaseUDPPortPayload,
+) (*ipam.ReleaseUDPPortResult, error) {
+	site, port, changed, err := registry.ReleaseUDPPortWithLogger(
+		s.registryPath(p.Tailnet), p.Site, p.Port, s.Logger,
+	)
+	if err != nil {
+		return nil, translateUDPPortError(err)
+	}
+	return &ipam.ReleaseUDPPortResult{Site: site, Port: port, Changed: changed}, nil
+}
+
+func translateUDPPortError(err error) error {
+	var collision *registry.UDPPortCollisionError
+	if errors.As(err, &collision) {
+		return ipam.MakeCollision(collision)
+	}
+	var invalidInput *registry.InvalidInputError
+	if errors.As(err, &invalidInput) {
+		return ipam.MakeInvalidInput(err)
+	}
+	return err
+}
+
 func translateServiceAddressError(err error) error {
 	var collision *registry.ServiceAddressCollisionError
 	if errors.As(err, &collision) {

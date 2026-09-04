@@ -63,6 +63,17 @@ type ReserveServiceAddressRequestBody struct {
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
+// ReserveUDPPortRequestBody is the type of the "ipam" service
+// "reserve_udp_port" endpoint HTTP request body.
+type ReserveUDPPortRequestBody struct {
+	// Site/firewall-boundary label for the reservation.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Decimal UDP listen port to reserve, 1024-65535.
+	Port *string `form:"port,omitempty" json:"port,omitempty" xml:"port,omitempty"`
+	// Device label to reserve the port for.
+	Device *string `form:"device,omitempty" json:"device,omitempty" xml:"device,omitempty"`
+}
+
 // ListSiteIdsResponseBody is the type of the "ipam" service "list_site_ids"
 // endpoint HTTP response body.
 type ListSiteIdsResponseBody []*SiteIDReservationResponse
@@ -156,6 +167,34 @@ type ReleaseServiceAddressResponseBody struct {
 	// Canonical bare IPv4 host address released.
 	Address string `form:"address" json:"address" xml:"address"`
 	// False when address was not reserved.
+	Changed bool `form:"changed" json:"changed" xml:"changed"`
+}
+
+// ListUDPPortsResponseBody is the type of the "ipam" service "list_udp_ports"
+// endpoint HTTP response body.
+type ListUDPPortsResponseBody []*UDPPortReservationResponse
+
+// ReserveUDPPortResponseBody is the type of the "ipam" service
+// "reserve_udp_port" endpoint HTTP response body.
+type ReserveUDPPortResponseBody struct {
+	// Canonical site label actually written.
+	Site string `form:"site" json:"site" xml:"site"`
+	// Canonical decimal UDP port actually written.
+	Port string `form:"port" json:"port" xml:"port"`
+	// Canonical device label actually written.
+	Device string `form:"device" json:"device" xml:"device"`
+	// False when the exact site, port, and device tuple was already reserved.
+	Changed bool `form:"changed" json:"changed" xml:"changed"`
+}
+
+// ReleaseUDPPortResponseBody is the type of the "ipam" service
+// "release_udp_port" endpoint HTTP response body.
+type ReleaseUDPPortResponseBody struct {
+	// Canonical site label containing the released port.
+	Site string `form:"site" json:"site" xml:"site"`
+	// Canonical decimal UDP port released.
+	Port string `form:"port" json:"port" xml:"port"`
+	// False when the site and port were not reserved.
 	Changed bool `form:"changed" json:"changed" xml:"changed"`
 }
 
@@ -326,6 +365,78 @@ type ReleaseServiceAddressInvalidInputResponseBody struct {
 	Fault bool `form:"fault" json:"fault" xml:"fault"`
 }
 
+// ListUDPPortsInvalidInputResponseBody is the type of the "ipam" service
+// "list_udp_ports" endpoint HTTP response body for the "invalid_input" error.
+type ListUDPPortsInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// ReserveUDPPortInvalidInputResponseBody is the type of the "ipam" service
+// "reserve_udp_port" endpoint HTTP response body for the "invalid_input" error.
+type ReserveUDPPortInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// ReserveUDPPortCollisionResponseBody is the type of the "ipam" service
+// "reserve_udp_port" endpoint HTTP response body for the "collision" error.
+type ReserveUDPPortCollisionResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// ReleaseUDPPortInvalidInputResponseBody is the type of the "ipam" service
+// "release_udp_port" endpoint HTTP response body for the "invalid_input" error.
+type ReleaseUDPPortInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
 // SiteIDReservationResponse is used to define fields on response body types.
 type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -374,6 +485,16 @@ type ServiceAddressReservationResponse struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+}
+
+// UDPPortReservationResponse is used to define fields on response body types.
+type UDPPortReservationResponse struct {
+	// Canonical site/firewall-boundary label.
+	Site string `form:"site" json:"site" xml:"site"`
+	// Canonical decimal UDP listen port, 1024-65535.
+	Port string `form:"port" json:"port" xml:"port"`
+	// Canonical device label that owns the port within the site.
+	Device string `form:"device" json:"device" xml:"device"`
 }
 
 // NewListSiteIdsResponseBody builds the HTTP response body from the result of
@@ -488,6 +609,43 @@ func NewReserveServiceAddressResponseBody(res *ipam.ReserveServiceAddressResult)
 func NewReleaseServiceAddressResponseBody(res *ipam.ReleaseServiceAddressResult) *ReleaseServiceAddressResponseBody {
 	body := &ReleaseServiceAddressResponseBody{
 		Address: res.Address,
+		Changed: res.Changed,
+	}
+	return body
+}
+
+// NewListUDPPortsResponseBody builds the HTTP response body from the result of
+// the "list_udp_ports" endpoint of the "ipam" service.
+func NewListUDPPortsResponseBody(res []*ipam.UDPPortReservation) ListUDPPortsResponseBody {
+	body := make([]*UDPPortReservationResponse, len(res))
+	for i, val := range res {
+		if val == nil {
+			body[i] = nil
+			continue
+		}
+		body[i] = marshalIpamUDPPortReservationToUDPPortReservationResponse(val)
+	}
+	return body
+}
+
+// NewReserveUDPPortResponseBody builds the HTTP response body from the result
+// of the "reserve_udp_port" endpoint of the "ipam" service.
+func NewReserveUDPPortResponseBody(res *ipam.ReserveUDPPortResult) *ReserveUDPPortResponseBody {
+	body := &ReserveUDPPortResponseBody{
+		Site:    res.Site,
+		Port:    res.Port,
+		Device:  res.Device,
+		Changed: res.Changed,
+	}
+	return body
+}
+
+// NewReleaseUDPPortResponseBody builds the HTTP response body from the result
+// of the "release_udp_port" endpoint of the "ipam" service.
+func NewReleaseUDPPortResponseBody(res *ipam.ReleaseUDPPortResult) *ReleaseUDPPortResponseBody {
+	body := &ReleaseUDPPortResponseBody{
+		Site:    res.Site,
+		Port:    res.Port,
 		Changed: res.Changed,
 	}
 	return body
@@ -622,6 +780,62 @@ func NewReleaseServiceAddressInvalidInputResponseBody(res *goa.ServiceError) *Re
 	return body
 }
 
+// NewListUDPPortsInvalidInputResponseBody builds the HTTP response body from
+// the result of the "list_udp_ports" endpoint of the "ipam" service.
+func NewListUDPPortsInvalidInputResponseBody(res *goa.ServiceError) *ListUDPPortsInvalidInputResponseBody {
+	body := &ListUDPPortsInvalidInputResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewReserveUDPPortInvalidInputResponseBody builds the HTTP response body from
+// the result of the "reserve_udp_port" endpoint of the "ipam" service.
+func NewReserveUDPPortInvalidInputResponseBody(res *goa.ServiceError) *ReserveUDPPortInvalidInputResponseBody {
+	body := &ReserveUDPPortInvalidInputResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewReserveUDPPortCollisionResponseBody builds the HTTP response body from
+// the result of the "reserve_udp_port" endpoint of the "ipam" service.
+func NewReserveUDPPortCollisionResponseBody(res *goa.ServiceError) *ReserveUDPPortCollisionResponseBody {
+	body := &ReserveUDPPortCollisionResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewReleaseUDPPortInvalidInputResponseBody builds the HTTP response body from
+// the result of the "release_udp_port" endpoint of the "ipam" service.
+func NewReleaseUDPPortInvalidInputResponseBody(res *goa.ServiceError) *ReleaseUDPPortInvalidInputResponseBody {
+	body := &ReleaseUDPPortInvalidInputResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
 // NewListSiteIdsPayload builds a ipam service list_site_ids endpoint payload.
 func NewListSiteIdsPayload(tailnet string) *ipam.ListSiteIdsPayload {
 	v := &ipam.ListSiteIdsPayload{}
@@ -726,6 +940,39 @@ func NewReleaseServiceAddressPayload(tailnet string, address string) *ipam.Relea
 	return v
 }
 
+// NewListUDPPortsPayload builds a ipam service list_udp_ports endpoint payload.
+func NewListUDPPortsPayload(tailnet string, site *string) *ipam.ListUDPPortsPayload {
+	v := &ipam.ListUDPPortsPayload{}
+	v.Tailnet = tailnet
+	v.Site = site
+
+	return v
+}
+
+// NewReserveUDPPortPayload builds a ipam service reserve_udp_port endpoint
+// payload.
+func NewReserveUDPPortPayload(body *ReserveUDPPortRequestBody, tailnet string) *ipam.ReserveUDPPortPayload {
+	v := &ipam.ReserveUDPPortPayload{
+		Site:   *body.Site,
+		Port:   *body.Port,
+		Device: *body.Device,
+	}
+	v.Tailnet = tailnet
+
+	return v
+}
+
+// NewReleaseUDPPortPayload builds a ipam service release_udp_port endpoint
+// payload.
+func NewReleaseUDPPortPayload(tailnet string, site string, port string) *ipam.ReleaseUDPPortPayload {
+	v := &ipam.ReleaseUDPPortPayload{}
+	v.Tailnet = tailnet
+	v.Site = site
+	v.Port = port
+
+	return v
+}
+
 // ValidateReserveSiteIDRequestBody runs the validations defined on
 // reserve_site_id_request_body
 func ValidateReserveSiteIDRequestBody(body *ReserveSiteIDRequestBody) (err error) {
@@ -767,6 +1014,21 @@ func ValidateReserveServiceAddressRequestBody(body *ReserveServiceAddressRequest
 	}
 	if body.ReservedAt != nil {
 		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
+// ValidateReserveUDPPortRequestBody runs the validations defined on
+// reserve_udp_port_request_body
+func ValidateReserveUDPPortRequestBody(body *ReserveUDPPortRequestBody) (err error) {
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	if body.Port == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("port", "body"))
+	}
+	if body.Device == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("device", "body"))
 	}
 	return
 }

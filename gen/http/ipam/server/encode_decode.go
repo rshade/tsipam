@@ -572,6 +572,233 @@ func EncodeReleaseServiceAddressError(encoder func(context.Context, http.Respons
 	}
 }
 
+// EncodeListUDPPortsResponse returns an encoder for responses returned by the
+// ipam list_udp_ports endpoint.
+func EncodeListUDPPortsResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.([]*ipam.UDPPortReservation)
+		enc := encoder(ctx, w)
+		body := NewListUDPPortsResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeListUDPPortsRequest returns a decoder for requests sent to the ipam
+// list_udp_ports endpoint.
+func DecodeListUDPPortsRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ListUDPPortsPayload, error) {
+	return func(r *http.Request) (*ipam.ListUDPPortsPayload, error) {
+		var payload *ipam.ListUDPPortsPayload
+		var (
+			tailnet string
+			site    *string
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		siteRaw := r.URL.Query().Get("site")
+		if siteRaw != "" {
+			site = &siteRaw
+		}
+		payload = NewListUDPPortsPayload(tailnet, site)
+
+		return payload, nil
+	}
+}
+
+// EncodeListUDPPortsError returns an encoder for errors returned by the
+// list_udp_ports ipam endpoint.
+func EncodeListUDPPortsError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewListUDPPortsInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
+// EncodeReserveUDPPortResponse returns an encoder for responses returned by
+// the ipam reserve_udp_port endpoint.
+func EncodeReserveUDPPortResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.ReserveUDPPortResult)
+		enc := encoder(ctx, w)
+		body := NewReserveUDPPortResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeReserveUDPPortRequest returns a decoder for requests sent to the ipam
+// reserve_udp_port endpoint.
+func DecodeReserveUDPPortRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ReserveUDPPortPayload, error) {
+	return func(r *http.Request) (*ipam.ReserveUDPPortPayload, error) {
+		var payload *ipam.ReserveUDPPortPayload
+		var (
+			body ReserveUDPPortRequestBody
+			err  error
+		)
+		err = decoder(r).Decode(&body)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return payload, goa.MissingPayloadError()
+			}
+			var gerr *goa.ServiceError
+			if errors.As(err, &gerr) {
+				return payload, gerr
+			}
+			return payload, goa.DecodePayloadError(err.Error())
+		}
+		err = ValidateReserveUDPPortRequestBody(&body)
+		if err != nil {
+			return payload, err
+		}
+
+		var (
+			tailnet string
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		payload = NewReserveUDPPortPayload(&body, tailnet)
+
+		return payload, nil
+	}
+}
+
+// EncodeReserveUDPPortError returns an encoder for errors returned by the
+// reserve_udp_port ipam endpoint.
+func EncodeReserveUDPPortError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReserveUDPPortInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		case "collision":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReserveUDPPortCollisionResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusConflict)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
+// EncodeReleaseUDPPortResponse returns an encoder for responses returned by
+// the ipam release_udp_port endpoint.
+func EncodeReleaseUDPPortResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.ReleaseUDPPortResult)
+		enc := encoder(ctx, w)
+		body := NewReleaseUDPPortResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeReleaseUDPPortRequest returns a decoder for requests sent to the ipam
+// release_udp_port endpoint.
+func DecodeReleaseUDPPortRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ReleaseUDPPortPayload, error) {
+	return func(r *http.Request) (*ipam.ReleaseUDPPortPayload, error) {
+		var payload *ipam.ReleaseUDPPortPayload
+		var (
+			tailnet string
+			site    string
+			port    string
+			err     error
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		qp := r.URL.Query()
+		site = qp.Get("site")
+		if site == "" {
+			err = goa.MergeErrors(err, goa.MissingFieldError("site", "query string"))
+		}
+		port = qp.Get("port")
+		if port == "" {
+			err = goa.MergeErrors(err, goa.MissingFieldError("port", "query string"))
+		}
+		if err != nil {
+			return payload, err
+		}
+		payload = NewReleaseUDPPortPayload(tailnet, site, port)
+
+		return payload, nil
+	}
+}
+
+// EncodeReleaseUDPPortError returns an encoder for errors returned by the
+// release_udp_port ipam endpoint.
+func EncodeReleaseUDPPortError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewReleaseUDPPortInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
 // marshalIpamSiteIDReservationToSiteIDReservationResponse builds a value of
 // type *SiteIDReservationResponse from a value of type *ipam.SiteIDReservation.
 func marshalIpamSiteIDReservationToSiteIDReservationResponse(v *ipam.SiteIDReservation) *SiteIDReservationResponse {
@@ -614,6 +841,19 @@ func marshalIpamServiceAddressReservationToServiceAddressReservationResponse(v *
 		Description: v.Description,
 		Ticket:      v.Ticket,
 		ReservedAt:  v.ReservedAt,
+	}
+
+	return res
+}
+
+// marshalIpamUDPPortReservationToUDPPortReservationResponse builds a value of
+// type *UDPPortReservationResponse from a value of type
+// *ipam.UDPPortReservation.
+func marshalIpamUDPPortReservationToUDPPortReservationResponse(v *ipam.UDPPortReservation) *UDPPortReservationResponse {
+	res := &UDPPortReservationResponse{
+		Site:   v.Site,
+		Port:   v.Port,
+		Device: v.Device,
 	}
 
 	return res

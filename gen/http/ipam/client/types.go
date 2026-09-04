@@ -63,6 +63,17 @@ type ReserveServiceAddressRequestBody struct {
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
+// ReserveUDPPortRequestBody is the type of the "ipam" service
+// "reserve_udp_port" endpoint HTTP request body.
+type ReserveUDPPortRequestBody struct {
+	// Site/firewall-boundary label for the reservation.
+	Site string `form:"site" json:"site" xml:"site"`
+	// Decimal UDP listen port to reserve, 1024-65535.
+	Port string `form:"port" json:"port" xml:"port"`
+	// Device label to reserve the port for.
+	Device string `form:"device" json:"device" xml:"device"`
+}
+
 // ReserveSiteIDResponseBody is the type of the "ipam" service
 // "reserve_site_id" endpoint HTTP response body.
 type ReserveSiteIDResponseBody struct {
@@ -144,6 +155,30 @@ type ReleaseServiceAddressResponseBody struct {
 	// Canonical bare IPv4 host address released.
 	Address *string `form:"address,omitempty" json:"address,omitempty" xml:"address,omitempty"`
 	// False when address was not reserved.
+	Changed *bool `form:"changed,omitempty" json:"changed,omitempty" xml:"changed,omitempty"`
+}
+
+// ReserveUDPPortResponseBody is the type of the "ipam" service
+// "reserve_udp_port" endpoint HTTP response body.
+type ReserveUDPPortResponseBody struct {
+	// Canonical site label actually written.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Canonical decimal UDP port actually written.
+	Port *string `form:"port,omitempty" json:"port,omitempty" xml:"port,omitempty"`
+	// Canonical device label actually written.
+	Device *string `form:"device,omitempty" json:"device,omitempty" xml:"device,omitempty"`
+	// False when the exact site, port, and device tuple was already reserved.
+	Changed *bool `form:"changed,omitempty" json:"changed,omitempty" xml:"changed,omitempty"`
+}
+
+// ReleaseUDPPortResponseBody is the type of the "ipam" service
+// "release_udp_port" endpoint HTTP response body.
+type ReleaseUDPPortResponseBody struct {
+	// Canonical site label containing the released port.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Canonical decimal UDP port released.
+	Port *string `form:"port,omitempty" json:"port,omitempty" xml:"port,omitempty"`
+	// False when the site and port were not reserved.
 	Changed *bool `form:"changed,omitempty" json:"changed,omitempty" xml:"changed,omitempty"`
 }
 
@@ -314,6 +349,78 @@ type ReleaseServiceAddressInvalidInputResponseBody struct {
 	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
 }
 
+// ListUDPPortsInvalidInputResponseBody is the type of the "ipam" service
+// "list_udp_ports" endpoint HTTP response body for the "invalid_input" error.
+type ListUDPPortsInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ReserveUDPPortInvalidInputResponseBody is the type of the "ipam" service
+// "reserve_udp_port" endpoint HTTP response body for the "invalid_input" error.
+type ReserveUDPPortInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ReserveUDPPortCollisionResponseBody is the type of the "ipam" service
+// "reserve_udp_port" endpoint HTTP response body for the "collision" error.
+type ReserveUDPPortCollisionResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ReleaseUDPPortInvalidInputResponseBody is the type of the "ipam" service
+// "release_udp_port" endpoint HTTP response body for the "invalid_input" error.
+type ReleaseUDPPortInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
 // SiteIDReservationResponse is used to define fields on response body types.
 type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -364,6 +471,16 @@ type ServiceAddressReservationResponse struct {
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
+// UDPPortReservationResponse is used to define fields on response body types.
+type UDPPortReservationResponse struct {
+	// Canonical site/firewall-boundary label.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Canonical decimal UDP listen port, 1024-65535.
+	Port *string `form:"port,omitempty" json:"port,omitempty" xml:"port,omitempty"`
+	// Canonical device label that owns the port within the site.
+	Device *string `form:"device,omitempty" json:"device,omitempty" xml:"device,omitempty"`
+}
+
 // NewReserveSiteIDRequestBody builds the HTTP request body from the payload of
 // the "reserve_site_id" endpoint of the "ipam" service.
 func NewReserveSiteIDRequestBody(p *ipam.ReserveSiteIDPayload) *ReserveSiteIDRequestBody {
@@ -402,6 +519,17 @@ func NewReserveServiceAddressRequestBody(p *ipam.ReserveServiceAddressPayload) *
 		Description: p.Description,
 		Ticket:      p.Ticket,
 		ReservedAt:  p.ReservedAt,
+	}
+	return body
+}
+
+// NewReserveUDPPortRequestBody builds the HTTP request body from the payload
+// of the "reserve_udp_port" endpoint of the "ipam" service.
+func NewReserveUDPPortRequestBody(p *ipam.ReserveUDPPortPayload) *ReserveUDPPortRequestBody {
+	body := &ReserveUDPPortRequestBody{
+		Site:   p.Site,
+		Port:   p.Port,
+		Device: p.Device,
 	}
 	return body
 }
@@ -667,6 +795,106 @@ func NewReleaseServiceAddressInvalidInput(body *ReleaseServiceAddressInvalidInpu
 	return v
 }
 
+// NewListUDPPortsUDPPortReservationOK builds a "ipam" service "list_udp_ports"
+// endpoint result from a HTTP "OK" response.
+func NewListUDPPortsUDPPortReservationOK(body []*UDPPortReservationResponse) []*ipam.UDPPortReservation {
+	v := make([]*ipam.UDPPortReservation, len(body))
+	for i, val := range body {
+		if val == nil {
+			v[i] = nil
+			continue
+		}
+		v[i] = unmarshalUDPPortReservationResponseToIpamUDPPortReservation(val)
+	}
+
+	return v
+}
+
+// NewListUDPPortsInvalidInput builds a ipam service list_udp_ports endpoint
+// invalid_input error.
+func NewListUDPPortsInvalidInput(body *ListUDPPortsInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewReserveUDPPortResultOK builds a "ipam" service "reserve_udp_port"
+// endpoint result from a HTTP "OK" response.
+func NewReserveUDPPortResultOK(body *ReserveUDPPortResponseBody) *ipam.ReserveUDPPortResult {
+	v := &ipam.ReserveUDPPortResult{
+		Site:    *body.Site,
+		Port:    *body.Port,
+		Device:  *body.Device,
+		Changed: *body.Changed,
+	}
+
+	return v
+}
+
+// NewReserveUDPPortInvalidInput builds a ipam service reserve_udp_port
+// endpoint invalid_input error.
+func NewReserveUDPPortInvalidInput(body *ReserveUDPPortInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewReserveUDPPortCollision builds a ipam service reserve_udp_port endpoint
+// collision error.
+func NewReserveUDPPortCollision(body *ReserveUDPPortCollisionResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewReleaseUDPPortResultOK builds a "ipam" service "release_udp_port"
+// endpoint result from a HTTP "OK" response.
+func NewReleaseUDPPortResultOK(body *ReleaseUDPPortResponseBody) *ipam.ReleaseUDPPortResult {
+	v := &ipam.ReleaseUDPPortResult{
+		Site:    *body.Site,
+		Port:    *body.Port,
+		Changed: *body.Changed,
+	}
+
+	return v
+}
+
+// NewReleaseUDPPortInvalidInput builds a ipam service release_udp_port
+// endpoint invalid_input error.
+func NewReleaseUDPPortInvalidInput(body *ReleaseUDPPortInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
 // ValidateReserveSiteIDResponseBody runs the validations defined on
 // reserve_site_id_response_body
 func ValidateReserveSiteIDResponseBody(body *ReserveSiteIDResponseBody) (err error) {
@@ -750,6 +978,39 @@ func ValidateReserveServiceAddressResponseBody(body *ReserveServiceAddressRespon
 func ValidateReleaseServiceAddressResponseBody(body *ReleaseServiceAddressResponseBody) (err error) {
 	if body.Address == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("address", "body"))
+	}
+	if body.Changed == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("changed", "body"))
+	}
+	return
+}
+
+// ValidateReserveUDPPortResponseBody runs the validations defined on
+// reserve_udp_port_response_body
+func ValidateReserveUDPPortResponseBody(body *ReserveUDPPortResponseBody) (err error) {
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	if body.Port == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("port", "body"))
+	}
+	if body.Device == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("device", "body"))
+	}
+	if body.Changed == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("changed", "body"))
+	}
+	return
+}
+
+// ValidateReleaseUDPPortResponseBody runs the validations defined on
+// release_udp_port_response_body
+func ValidateReleaseUDPPortResponseBody(body *ReleaseUDPPortResponseBody) (err error) {
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	if body.Port == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("port", "body"))
 	}
 	if body.Changed == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("changed", "body"))
@@ -973,6 +1234,102 @@ func ValidateReleaseServiceAddressInvalidInputResponseBody(body *ReleaseServiceA
 	return
 }
 
+// ValidateListUDPPortsInvalidInputResponseBody runs the validations defined on
+// list_udp_ports_invalid_input_response_body
+func ValidateListUDPPortsInvalidInputResponseBody(body *ListUDPPortsInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateReserveUDPPortInvalidInputResponseBody runs the validations defined
+// on reserve_udp_port_invalid_input_response_body
+func ValidateReserveUDPPortInvalidInputResponseBody(body *ReserveUDPPortInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateReserveUDPPortCollisionResponseBody runs the validations defined on
+// reserve_udp_port_collision_response_body
+func ValidateReserveUDPPortCollisionResponseBody(body *ReserveUDPPortCollisionResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateReleaseUDPPortInvalidInputResponseBody runs the validations defined
+// on release_udp_port_invalid_input_response_body
+func ValidateReleaseUDPPortInvalidInputResponseBody(body *ReleaseUDPPortInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
 // ValidateSiteIDReservationResponse runs the validations defined on
 // SiteIDReservationResponse
 func ValidateSiteIDReservationResponse(body *SiteIDReservationResponse) (err error) {
@@ -1014,6 +1371,21 @@ func ValidateServiceAddressReservationResponse(body *ServiceAddressReservationRe
 	}
 	if body.ReservedAt != nil {
 		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
+// ValidateUDPPortReservationResponse runs the validations defined on
+// UDPPortReservationResponse
+func ValidateUDPPortReservationResponse(body *UDPPortReservationResponse) (err error) {
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	if body.Port == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("port", "body"))
+	}
+	if body.Device == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("device", "body"))
 	}
 	return
 }

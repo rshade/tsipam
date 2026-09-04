@@ -305,6 +305,58 @@ func TestSubnetReserveSiteArgRegistersForErrorSweep(t *testing.T) {
 	}
 }
 
+// TestSubnetReserveRejectsInvalidUTF8SiteNameBeforeWrite covers a client-side
+// pre-check: a JSON POST body silently rewrites invalid UTF-8 to U+FFFD
+// (which is itself valid UTF-8), so a server-side-only check would accept the
+// mangled value with exit 0 and a corrupted registry entry. The site-name
+// argument must be validated against the raw argv before the loopback client
+// ever sends it, mirroring newUDPPortLeafCommand's device-name pre-check
+// (udpport.go).
+func TestSubnetReserveRejectsInvalidUTF8SiteNameBeforeWrite(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	stdout, _, err := runSubnet(t, dir, "reserve", "10.0.0.0/24", "branch\xff")
+	if err == nil {
+		t.Fatal("reserve with invalid UTF-8 site name: error = nil, want rejection")
+	}
+	if !strings.Contains(err.Error(), "UTF-8") {
+		t.Errorf("reserve error = %v, want it to mention UTF-8", err)
+	}
+	if exitCodeFor(err) == exitOK {
+		t.Errorf("exitCodeFor(err) = %d, want non-zero", exitCodeFor(err))
+	}
+	if stdout != "" {
+		t.Errorf("reserve stdout = %q, want empty on failure", stdout)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "local.ipam.hujson")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("registry exists after invalid input: %v", statErr)
+	}
+}
+
+// TestSubnetReserveAcceptsValidMultiByteUTF8SiteName is the accept-path
+// counterpart of the rejection test above: valid multi-byte UTF-8 must keep
+// working end to end through reserve, list, and release.
+func TestSubnetReserveAcceptsValidMultiByteUTF8SiteName(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const site = "münchen"
+
+	if _, _, err := runSubnet(t, dir, "reserve", "10.0.0.0/24", site); err != nil {
+		t.Fatalf("reserve: %v", err)
+	}
+	out, _, err := runSubnet(t, dir, "list")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if !strings.Contains(out, site) {
+		t.Errorf("list stdout = %q, want it to contain %q", out, site)
+	}
+	if _, _, err = runSubnet(t, dir, "release", "10.0.0.0/24"); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+}
+
 func TestSubnetExactCollisionErrorFormatMatchesAnchoredSanitizerPattern(t *testing.T) {
 	t.Parallel()
 	err := (&registry.SubnetPoolCollisionError{

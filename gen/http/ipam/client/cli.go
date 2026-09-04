@@ -209,3 +209,71 @@ func BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnet string, 
 
 	return v, nil
 }
+
+// BuildListUDPPortsPayload builds the payload for the ipam list_udp_ports
+// endpoint from CLI flags.
+func BuildListUDPPortsPayload(ipamListUDPPortsTailnet string, ipamListUDPPortsSite string) (*ipam.ListUDPPortsPayload, error) {
+	var tailnet string
+	{
+		tailnet = ipamListUDPPortsTailnet
+	}
+	var site *string
+	{
+		if ipamListUDPPortsSite != "" {
+			site = &ipamListUDPPortsSite
+		}
+	}
+	v := &ipam.ListUDPPortsPayload{}
+	v.Tailnet = tailnet
+	v.Site = site
+
+	return v, nil
+}
+
+// BuildReserveUDPPortPayload builds the payload for the ipam reserve_udp_port
+// endpoint from CLI flags.
+func BuildReserveUDPPortPayload(ipamReserveUDPPortBody string, ipamReserveUDPPortTailnet string) (*ipam.ReserveUDPPortPayload, error) {
+	var err error
+	var body ReserveUDPPortRequestBody
+	{
+		err = json.Unmarshal([]byte(ipamReserveUDPPortBody), &body)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"device\": \"Iste ut labore nostrum.\",\n      \"port\": \"Assumenda officiis.\",\n      \"site\": \"Et neque expedita.\"\n   }'")
+		}
+	}
+	var tailnet string
+	{
+		tailnet = ipamReserveUDPPortTailnet
+	}
+	v := &ipam.ReserveUDPPortPayload{
+		Site:   body.Site,
+		Port:   body.Port,
+		Device: body.Device,
+	}
+	v.Tailnet = tailnet
+
+	return v, nil
+}
+
+// BuildReleaseUDPPortPayload builds the payload for the ipam release_udp_port
+// endpoint from CLI flags.
+func BuildReleaseUDPPortPayload(ipamReleaseUDPPortTailnet string, ipamReleaseUDPPortSite string, ipamReleaseUDPPortPort string) (*ipam.ReleaseUDPPortPayload, error) {
+	var tailnet string
+	{
+		tailnet = ipamReleaseUDPPortTailnet
+	}
+	var site string
+	{
+		site = ipamReleaseUDPPortSite
+	}
+	var port string
+	{
+		port = ipamReleaseUDPPortPort
+	}
+	v := &ipam.ReleaseUDPPortPayload{}
+	v.Tailnet = tailnet
+	v.Site = site
+	v.Port = port
+
+	return v, nil
+}

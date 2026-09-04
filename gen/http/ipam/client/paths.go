@@ -55,3 +55,18 @@ func ReserveServiceAddressIpamPath(tailnet string) string {
 func ReleaseServiceAddressIpamPath(tailnet string) string {
 	return fmt.Sprintf("/tailnet/%v/ipam/service-addresses", tailnet)
 }
+
+// ListUDPPortsIpamPath returns the URL path to the ipam service list_udp_ports HTTP endpoint.
+func ListUDPPortsIpamPath(tailnet string) string {
+	return fmt.Sprintf("/tailnet/%v/ipam/udp-ports", tailnet)
+}
+
+// ReserveUDPPortIpamPath returns the URL path to the ipam service reserve_udp_port HTTP endpoint.
+func ReserveUDPPortIpamPath(tailnet string) string {
+	return fmt.Sprintf("/tailnet/%v/ipam/udp-ports", tailnet)
+}
+
+// ReleaseUDPPortIpamPath returns the URL path to the ipam service release_udp_port HTTP endpoint.
+func ReleaseUDPPortIpamPath(tailnet string) string {
+	return fmt.Sprintf("/tailnet/%v/ipam/udp-ports", tailnet)
+}

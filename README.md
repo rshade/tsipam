@@ -1,8 +1,9 @@
 # tail-ipam
 
 Allocate and plan Tailscale address space: 4via6 site IDs, subnet CIDR pools
-for sites, and per-service `/32` reservations for Tailscale Services. Starts
-scoped to Tailscale-route/site-ID/service-VIP space; on-prem CIDR planning
+for sites, per-service `/32` reservations for Tailscale Services, and
+per-device UDP listen ports. Starts scoped to
+Tailscale-route/site-ID/service-VIP/listen-port space; on-prem CIDR planning
 (address space that has not yet been advertised as a live route) is an
 explicit future-growth direction, not initial scope. See
 [`../ROADMAP.md`](../ROADMAP.md) ("Future Vision" → `tail-ipam`) for the full
@@ -212,6 +213,63 @@ tail-ipam service list
 tail-ipam service list --format json
 ```
 
+#### `port reserve <port> <device> --site <site>`
+
+Reserves an explicit UDP listen port for one device within a site/firewall
+boundary. This is intended for deployments where a firewall cannot let
+multiple devices share tailscaled's default UDP 41641. Configure the returned
+port with `tailscaled --port` or the `PORT` environment variable.
+
+```bash
+tail-ipam port reserve 41642 branch-fw01 --site branch-office
+tail-ipam port reserve 41643 branch-fw02 --site branch-office \
+  --registry-dir /etc/tail-ipam --tailnet production
+```
+
+Ports must contain only ASCII decimal digits and fall within 1024-65535.
+Leading zeroes are accepted and canonicalized, so `041642` and `41642` select
+the same reservation. Device and site labels are trimmed and must remain
+non-empty and free of control characters.
+
+Uniqueness is scoped to the site, not the whole tailnet. Reserving the same
+site, port, and device again is an idempotent no-op. Reserving that port for a
+different device in the same site is a collision (exit code 1), but a device
+behind a different firewall may reuse it:
+
+```bash
+# Allowed: the sites represent different firewall boundaries.
+tail-ipam port reserve 41642 hq-fw01 --site hq-vpc
+```
+
+This command records only explicit reservations. It does not choose the next
+free port, inspect tailscaled's live configuration, or require `--site` to
+match a site-ID reservation. UDP-port reservations carry no ownership or
+tracking metadata.
+
+#### `port release <port> --site <site>`
+
+Releases a reservation from the selected site. Releasing an absent site/port
+pair is a successful no-op; a missing registry file is an error.
+
+```bash
+tail-ipam port release 41642 --site branch-office
+tail-ipam port release 41643 --site branch-office --format json
+```
+
+#### `port list [--site <site>]`
+
+Lists every UDP-port reservation, sorted by site and then numerically by port.
+`--site` filters the result to one firewall boundary. Human output is
+tab-separated (`site`, `port`, `device`); JSON output carries a `udp_ports`
+array whose entries have those same three fields. An empty result remains an
+empty JSON array.
+
+```bash
+tail-ipam port list
+tail-ipam port list --site branch-office
+tail-ipam port list --site branch-office --format json
+```
+
 #### `calc split`
 
 Stateless IPv4 and IPv6 CIDR splitting: divides a parent CIDR into equal-sized
@@ -338,6 +396,18 @@ straightforward:
       "reservedAt": "2026-08-31T12:00:00Z",
     },
   },
+
+  // Per-device UDP listen ports, grouped by firewall boundary
+  "udpPorts": {
+    "branch-office": {
+      "41642": "branch-fw01",
+      "41643": "branch-fw02",
+    },
+    "hq-vpc": {
+      // Cross-site reuse is valid.
+      "41642": "hq-fw01",
+    },
+  },
 }
 ```
 
@@ -349,13 +419,15 @@ indentation character: it is shown here with spaces because this repository's
 markdown lint config forbids hard tabs in a fenced code block, but the tool
 itself always writes tabs.
 
-An entry is either a bare string (the reservation target, and the only shape
-`reserve` writes when no metadata flags are given) or an object carrying that
-target plus whatever optional `owner`, `description`, `ticket`, and
-`reservedAt` fields were attached. Site-ID and subnet-pool objects use `site`;
-service-address objects use `service`. A registry with only bare-string
-entries loads and re-saves byte-for-byte unchanged; the two shapes freely
-coexist in one map, as `"1"` and `"2"` do above.
+An entry in `siteIDs`, `subnetPools`, or `serviceAddresses` is either a bare
+string (the reservation target, and the only shape `reserve` writes when no
+metadata flags are given) or an object carrying that target plus whatever
+optional `owner`, `description`, `ticket`, and `reservedAt` fields were
+attached. Site-ID and subnet-pool objects use `site`; service-address objects
+use `service`. A registry with only bare-string entries loads and re-saves
+byte-for-byte unchanged; the two shapes freely coexist in one map, as `"1"`
+and `"2"` do above. UDP-port device leaves are always strings and do not carry
+metadata.
 
 Site IDs are canonicalized as decimal integers from 0 to 65535 (Tailscale's
 16-bit site-ID field): `"01"` and `"1"` map to the same key. This is a
@@ -377,6 +449,19 @@ or mapped IPv6, duplicate aliases that resolve to the same address, and
 invalid service identities. A bare service value is canonicalized with one
 `svc:` prefix. Collision checks are exact-address checks only; they do not
 cross-reference subnet pools or live service state.
+
+UDP-port keys are canonical decimal ports from 1024 through 65535. The nested
+site object scopes uniqueness to one firewall boundary, so identical port
+keys may appear under different sites. Registry load rejects duplicate
+canonical site or port aliases, invalid labels, and non-string device leaves.
+Releasing a site's final port retains the empty site object so comments on the
+site itself are not discarded.
+
+Validation failures are isolated to their top-level allocation map: malformed
+UDP-port data blocks UDP-port operations without preventing valid site-ID,
+subnet-pool, or service-address operations, and a malformed existing map does
+not prevent valid UDP-port operations. Every operation still refuses malformed
+data in the map it is about to read or change.
 
 A comment attached directly to a released entry (i.e. immediately above it)
 is removed along with that entry — this is standard `hujson` behavior, not a
@@ -403,14 +488,15 @@ top-level contract as the repository's other action-oriented CLI output:
 ```
 
 `site-id list` carries `site_ids`, `subnet list` carries `subnet_pools`,
-`service list` carries `service_addresses`, and `devices list` carries
-`devices`. Reserve/release results carry the applicable `changed`, `id`,
-`cidr`, `address`, `site`, and `service` fields, plus `owner`, `description`,
-`ticket`, and `reserved_at` when the reservation carries that metadata (a
-reserve echoes back what was actually written, including any auto-stamped
-`reserved_at`). Empty list results remain JSON arrays. Treat field names and
-meanings as a compatibility surface; `schema_version` changes before a
-breaking contract change.
+`service list` carries `service_addresses`, `port list` carries `udp_ports`,
+and `devices list` carries `devices`. Reserve/release results carry the
+applicable `changed`, `id`, `cidr`, `address`, `site`, `service`, `port`, and
+`device` fields, plus `owner`, `description`, `ticket`, and `reserved_at` when
+the reservation shape supports and carries that metadata (a reserve echoes
+back what was actually written, including any auto-stamped `reserved_at`).
+Empty list results remain JSON arrays. Treat field names and meanings as a
+compatibility surface; `schema_version` changes before a breaking contract
+change.
 
 Run `tail-ipam -schema` for the authoritative machine-readable command, flag,
 and exit-code catalog. Run `tail-ipam --help` for examples and the human-facing
@@ -423,9 +509,10 @@ on stderr, so stdout remains parse-clean under `-format json`.
 
 `TAILSCALE_SANITIZE=identity` or `strict` replaces device names, addresses,
 routes, tailnet routing keys, site names, service identities, reservation
-owners, reserved subnet CIDRs, and reserved service addresses after the real
-operation has completed. Collision errors receive the same treatment on
-stderr, including service names whose quoted representation contains escapes.
+owners, reserved subnet CIDRs, reserved service addresses, and UDP-port site
+and device labels after the real operation has completed. UDP port numbers
+remain visible. Collision errors receive the same treatment on stderr,
+including identity labels whose quoted representation contains escapes.
 `description`, `ticket`, and `reserved_at` are left unredacted: they are
 free-form operator text and a timestamp, not tailnet-derived identities the
 sanitizer's exact-token replacement can meaningfully sweep. A non-`off`

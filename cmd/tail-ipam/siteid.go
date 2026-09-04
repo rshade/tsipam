@@ -185,11 +185,10 @@ type siteIDLeafCall func(
 //
 // It mirrors newServiceLeafCommand (service.go) by design: site-id has no
 // third per-leaf canonicalization step (unlike newSubnetLeafCommand's
-// CIDR-suggestion call), so its RunE body is structurally identical to
-// service's two-arg-index sweep-then-call shape. Unifying the three needs a
-// generic beyond this file's scope.
-//
-//nolint:dupl // mirrors newServiceLeafCommand by design; see the doc comment above
+// CIDR-suggestion call), so its RunE body follows the same two-arg-index
+// sweep-then-call shape as service's, aside from each function's own
+// free-form-label UTF-8 pre-check landing at a different position in that
+// shape. Unifying the three needs a generic beyond this file's scope.
 func newSiteIDLeafCommand(
 	state *commandState,
 	use, short string,
@@ -218,9 +217,11 @@ func newSiteIDLeafCommand(
 			// registerQuotedForm) before the loopback client is ever
 			// invoked.
 			if siteArgIndex >= 0 && siteArgIndex < len(args) {
-				registerSweepValueWithCanonical(
+				if validateErr := registerAndValidate(
 					outputSanitizer, kindSite, args[siteArgIndex], registry.NormalizeSiteName,
-				)
+				); validateErr != nil {
+					return validateErr
+				}
 			}
 			if idArgIndex >= 0 && idArgIndex < len(args) {
 				registerSweepValueWithCanonical(
