@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -894,6 +895,31 @@ func TestCalcAggregateHumanOutput(t *testing.T) {
 			args: []string{"10.1.0.0/24", "10.0.0.1/24", "10.0.0.0/25"},
 			want: "10.0.0.0/24\n10.1.0.0/24\n",
 		},
+		{
+			name: "adjacent IPv6 siblings merge",
+			args: []string{"2001:db8:0:8000::/49", "2001:db8::/49"},
+			want: "2001:db8::/48\n",
+		},
+		{
+			name: "ULA blocks merge across levels",
+			args: []string{"fd12:3456:789a:1::/64", "fd12:3456:789a:2::/63", "fd12:3456:789a::/64"},
+			want: "fd12:3456:789a::/62\n",
+		},
+		{
+			name: "unmergeable IPv6 prefixes stay separate and ordered",
+			args: []string{"2001:db8:2::/48", "2001:db8::/48"},
+			want: "2001:db8::/48\n2001:db8:2::/48\n",
+		},
+		{
+			name: "mixed families aggregate independently with IPv4 first",
+			args: []string{"2001:db8::/49", "10.0.0.128/25", "2001:db8:0:8000::/49", "10.0.0.0/25"},
+			want: "10.0.0.0/24\n2001:db8::/48\n",
+		},
+		{
+			name: "short mapped prefix aggregates as native IPv6",
+			args: []string{"::ffff:10.0.0.0/95"},
+			want: "::fffe:0:0/95\n",
+		},
 	}
 
 	for _, tt := range tests {
@@ -917,23 +943,45 @@ func TestCalcAggregateHumanOutput(t *testing.T) {
 func TestCalcAggregateJSONOutput(t *testing.T) {
 	t.Parallel()
 
-	out, errOut, err := runCalcAggregate(t,
-		"10.0.0.0/25", "10.0.0.128/25", "--format", formatJSON)
-	if err != nil {
-		t.Fatalf("runCalcAggregate() error = %v (stderr = %q)", err, errOut)
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "IPv4 pair",
+			args: []string{"10.0.0.0/25", "10.0.0.128/25"},
+			want: []string{"10.0.0.0/24"},
+		},
+		{
+			name: "mixed families keep IPv4 first",
+			args: []string{"2001:db8::/49", "10.0.0.128/25", "2001:db8:0:8000::/49", "10.0.0.0/25"},
+			want: []string{"10.0.0.0/24", "2001:db8::/48"},
+		},
 	}
-	var envelope outputEnvelope
-	if unmarshalErr := json.Unmarshal([]byte(out), &envelope); unmarshalErr != nil {
-		t.Fatalf("json.Unmarshal() error = %v; output = %q", unmarshalErr, out)
-	}
-	if envelope.Command != commandCalcAggregate {
-		t.Errorf("Command = %q, want %q", envelope.Command, commandCalcAggregate)
-	}
-	if envelope.Supernets == nil {
-		t.Fatal("Supernets = nil, want non-nil")
-	}
-	if envelope.Supernets != nil && (len(*envelope.Supernets) != 1 || (*envelope.Supernets)[0] != "10.0.0.0/24") {
-		t.Errorf("Supernets = %#v, want [10.0.0.0/24]", envelope.Supernets)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			out, errOut, err := runCalcAggregate(t, append(tt.args, "--format", formatJSON)...)
+			if err != nil {
+				t.Fatalf("runCalcAggregate() error = %v (stderr = %q)", err, errOut)
+			}
+			var envelope outputEnvelope
+			if unmarshalErr := json.Unmarshal([]byte(out), &envelope); unmarshalErr != nil {
+				t.Fatalf("json.Unmarshal() error = %v; output = %q", unmarshalErr, out)
+			}
+			if envelope.Command != commandCalcAggregate {
+				t.Errorf("Command = %q, want %q", envelope.Command, commandCalcAggregate)
+			}
+			if envelope.Supernets == nil {
+				t.Fatal("Supernets = nil, want non-nil")
+			}
+			if !slices.Equal(*envelope.Supernets, tt.want) {
+				t.Errorf("Supernets = %#v, want %#v", *envelope.Supernets, tt.want)
+			}
+		})
 	}
 }
 
@@ -953,33 +1001,18 @@ func TestCalcAggregateMappedIPv4MatchesPlainIPv4(t *testing.T) {
 	}
 }
 
-func TestCalcAggregateRejectsIPv6AndInvalidCIDR(t *testing.T) {
+func TestCalcAggregateRejectsInvalidCIDR(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name string
-		cidr string
-		want string
-	}{
-		{name: "native IPv6", cidr: "2001:db8::/64", want: "#253"},
-		{name: "short mapped IPv6", cidr: "::ffff:10.0.0.0/95", want: "#253"},
-		{name: "invalid CIDR", cidr: "not-a-cidr", want: "not-a-cidr"},
+	code, out, errOut := runCalcAggregateCLI(t, "10.0.0.0/24", "not-a-cidr")
+	if code != exitUsage {
+		t.Errorf("exit code = %d, want %d (exitUsage)", code, exitUsage)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			code, out, errOut := runCalcAggregateCLI(t, tt.cidr)
-			if code != exitUsage {
-				t.Errorf("exit code = %d, want %d (exitUsage)", code, exitUsage)
-			}
-			if out != "" {
-				t.Errorf("stdout = %q, want empty on refusal", out)
-			}
-			if !strings.Contains(errOut, tt.want) {
-				t.Errorf("stderr = %q, want %q", errOut, tt.want)
-			}
-		})
+	if out != "" {
+		t.Errorf("stdout = %q, want empty on refusal", out)
+	}
+	if !strings.Contains(errOut, "not-a-cidr") {
+		t.Errorf("stderr = %q, want the invalid argument named", errOut)
 	}
 }
 

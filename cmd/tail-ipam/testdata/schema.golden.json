@@ -39,7 +39,7 @@
     },
     {
       "name": "calc aggregate",
-      "summary": "Summarize IPv4 CIDRs into their minimal covering set.",
+      "summary": "Summarize IPv4 and IPv6 CIDRs into their minimal covering set.",
       "usage": "calc aggregate \u003ccidr...\u003e"
     },
     {

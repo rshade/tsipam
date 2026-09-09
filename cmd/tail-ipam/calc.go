@@ -281,7 +281,7 @@ func newCalcInfoCommand(state *commandState) *cobra.Command {
 func newCalcAggregateCommand(state *commandState) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "aggregate <cidr...>",
-		Short:         "Summarize IPv4 CIDRs into their minimal covering set.",
+		Short:         "Summarize IPv4 and IPv6 CIDRs into their minimal covering set.",
 		Args:          cobra.MinimumNArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -299,12 +299,6 @@ func newCalcAggregateCommand(state *commandState) *cobra.Command {
 				}
 				if normalized, ok := ipcalc.Unmap4In6(prefix); ok {
 					prefix = normalized
-				}
-				if !prefix.Addr().Is4() {
-					return fmt.Errorf(
-						"calc aggregate does not support IPv6 yet (tracked in rshade/tailscale-utils#253): %s",
-						cidrArg,
-					)
 				}
 				prefixes[i] = prefix.Masked()
 			}

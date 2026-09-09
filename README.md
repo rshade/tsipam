@@ -311,26 +311,38 @@ example, `tail-ipam calc split '::ffff:10.0.0.0/104' --prefix 20` normalizes to
 
 #### `calc aggregate`
 
-Stateless IPv4 CIDR summarization: merges supplied CIDRs into the smallest
-set of supernets that covers exactly the same addresses. It needs no registry,
-network I/O, or Tailscale API credentials. Duplicate or covered CIDRs collapse,
-and adjacent siblings merge recursively; non-adjacent CIDRs remain separate.
-Human output is one bare CIDR per line in network-address order, making it
-safe to compose in a shell:
+Stateless IPv4 and IPv6 CIDR summarization: merges supplied CIDRs into the
+smallest set of supernets that covers exactly the same addresses. It needs no
+registry, network I/O, or Tailscale API credentials. Duplicate or covered
+CIDRs collapse, and adjacent siblings merge recursively; non-adjacent CIDRs
+remain separate. Human output is one bare CIDR per line in network-address
+order, making it safe to compose in a shell:
 
 ```bash
 tail-ipam calc aggregate 10.0.0.0/25 10.0.0.128/25
 # 10.0.0.0/24
 
+tail-ipam calc aggregate fd12:3456:789a:1::/64 fd12:3456:789a:2::/63 fd12:3456:789a::/64
+# fd12:3456:789a::/62
+
 tail-ipam calc aggregate 10.0.0.0/24 10.1.0.0/24 --format json
 ```
 
+IPv4 and IPv6 CIDRs may be mixed in one invocation. Each family is aggregated
+on its own, so a CIDR never merges with, or is covered by, a CIDR of the other
+family, and every IPv4 supernet is listed before any IPv6 supernet:
+
+```bash
+tail-ipam calc aggregate 2001:db8::/49 10.0.0.128/25 2001:db8:0:8000::/49 10.0.0.0/25
+# 10.0.0.0/24
+# 2001:db8::/48
+```
+
 JSON output carries the same ordered result in the `supernets` array of the
-versioned envelope. Native IPv6 input is a usage error until the
-[IPv6 aggregate follow-up](https://github.com/rshade/tailscale-utils/issues/253)
-lands. IPv4-mapped prefixes of `/96` or longer are normalized to their plain
-IPv4 equivalents before aggregation; shorter mapped-looking prefixes are
-treated as native IPv6 and rejected.
+versioned envelope. IPv4-mapped prefixes of `/96` or longer are normalized to
+their plain IPv4 equivalents before aggregation, exactly as `calc split` and
+`calc info` do; shorter mapped-looking prefixes cannot be exclusively
+IPv4-mapped and are aggregated as native IPv6.
 
 #### `calc next-free`
 
