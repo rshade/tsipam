@@ -90,3 +90,114 @@ address ranges cannot silently overflow a consumer's integer parsing.
 - **WHEN** `calc info 10.1.2.0/30 --format json` runs
 - **THEN** the JSON envelope carries `"usable_hosts": "2"` as a string value,
   not a bare number
+
+### Requirement: Calc suggests available IPv4 child blocks
+
+`tail-ipam calc next-free <pool-cidr> --size <prefix>` SHALL return the first
+available IPv4 child CIDR of the requested size within the pool. It SHALL
+exclude every overlapping subnet-pool reservation for the selected registry
+tailnet and every overlapping route advertised by a live device. It SHALL
+perform no registry write or other mutation.
+
+#### Scenario: Registry and live routes both exclude candidates
+
+- **WHEN** a pool's first child is reserved in the local registry and its
+  second child is advertised by a live device
+- **THEN** the command returns the third child CIDR
+
+#### Scenario: A live-only route excludes a candidate
+
+- **WHEN** no registry reservation conflicts but a live advertised route
+  overlaps the first requested child
+- **THEN** the command does not return that child
+
+### Requirement: Calc next-free renders composable CIDR output
+
+A successful single suggestion SHALL write exactly one bare CIDR followed by a
+newline in human format. `--format json` SHALL expose the suggested CIDRs in
+the versioned envelope. `--all` SHALL return every available child and
+`--count` (short form `-n`) SHALL return up to its positive requested count,
+with one CIDR per human-output line in ascending address order.
+
+#### Scenario: Single suggestion is usable in shell substitution
+
+- **WHEN** an operator runs `tail-ipam calc next-free 10.0.0.0/24 --size 26`
+  and the first child is available
+- **THEN** human stdout is exactly `10.0.0.0/26\\n`
+
+#### Scenario: Count limits returned suggestions
+
+- **WHEN** more than two children are available and the operator passes
+  `--count 2`
+- **THEN** the command returns the first two available CIDRs only
+
+### Requirement: Calc next-free handles exhaustion and unsupported families
+
+When no requested IPv4 child is available, `calc next-free` SHALL return a
+normal successful result describing that no free block exists. It SHALL reject
+native IPv6 input as a usage error that references the IPv6 follow-up issue.
+
+#### Scenario: Exhausted pool is not a command failure
+
+- **WHEN** exclusions cover every requested child of the pool
+- **THEN** the command exits successfully and reports that no free block is
+  available
+
+#### Scenario: IPv6 waits for the follow-up capability
+
+- **WHEN** an operator supplies an IPv6 pool
+- **THEN** the command exits with a usage error that names IPv6 and issue #257
+
+### Requirement: Aggregate supplied IPv4 CIDRs
+
+`tail-ipam calc aggregate <cidr...>` SHALL accept one or more supplied IPv4
+CIDRs and print their deterministic minimal CIDR cover, one normalized CIDR
+per line in ascending network-address order. Duplicate, covered, and
+adjacent sibling CIDRs SHALL collapse into that cover. The command SHALL be
+stateless and SHALL not read a registry, tailnet, or external API.
+
+#### Scenario: A complete pair becomes its supernet
+
+- **WHEN** an operator runs `calc aggregate 10.0.0.0/25 10.0.0.128/25`
+- **THEN** stdout contains exactly `10.0.0.0/24` followed by a newline
+
+#### Scenario: Unrelated CIDRs remain separate
+
+- **WHEN** an operator runs `calc aggregate 10.1.0.0/24 10.0.0.0/24`
+- **THEN** stdout lists `10.0.0.0/24` and then `10.1.0.0/24`, one per line
+
+#### Scenario: Covered CIDRs do not produce duplicates
+
+- **WHEN** an operator runs `calc aggregate 10.0.0.0/24 10.0.0.0/25`
+- **THEN** stdout contains exactly `10.0.0.0/24` followed by a newline
+
+### Requirement: Aggregate JSON output carries supernets
+
+Successful aggregate JSON output SHALL use the versioned output envelope with
+the command identifier and a `supernets` array containing the same ordered
+CIDRs as human output. Aggregate CIDRs SHALL remain unredacted at every
+sanitize level, consistent with other stateless calc output.
+
+#### Scenario: JSON preserves the aggregate result
+
+- **WHEN** an operator runs `calc aggregate 10.0.0.0/25 10.0.0.128/25 --format json`
+- **THEN** the JSON envelope identifies the aggregate command and contains
+  `"supernets": ["10.0.0.0/24"]`
+
+### Requirement: Native IPv6 aggregate input is refused
+
+The aggregate command SHALL reject native IPv6 CIDRs as unsupported until the
+IPv6 aggregate follow-up is implemented, with no success output. IPv4-mapped
+prefixes of `/96` or longer SHALL normalize to their plain IPv4 equivalents,
+consistent with the other calc commands.
+
+#### Scenario: Native IPv6 is rejected
+
+- **WHEN** an operator runs `calc aggregate 2001:db8::/64`
+- **THEN** the command fails without stdout and stderr identifies IPv6 as
+  unsupported and references the tracking follow-up `#253`
+
+#### Scenario: An IPv4-mapped prefix aggregates as IPv4
+
+- **WHEN** an operator runs `calc aggregate ::ffff:10.0.0.0/121 ::ffff:10.0.0.128/121`
+- **THEN** stdout contains exactly `10.0.0.0/24` followed by a newline
