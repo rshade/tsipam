@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -8,6 +9,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rshade/tailscale-utils/policycore/ipcalc"
+	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
+	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/loopback"
 )
 
 // wrapSplitError wraps a split error with context about 4-in-6 normalization if applicable.
@@ -18,14 +23,206 @@ func wrapSplitError(cidrArg string, prefix netip.Prefix, normalizedFrom4In6 bool
 	return fmt.Errorf("%s is an IPv4-mapped prefix, split as %s: %w", cidrArg, prefix, err)
 }
 
-func newCalcCommand(state *commandState) *cobra.Command {
+func newCalcCommand(state *commandState, listDevices devicesListFunc) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   commandCalc,
-		Short: "Subnet and IP arithmetic (stateless).",
+		Short: "Subnet and IP arithmetic and allocation planning.",
 	}
 	cmd.AddCommand(newCalcSplitCommand(state))
 	cmd.AddCommand(newCalcInfoCommand(state))
+	cmd.AddCommand(newCalcNextFreeCommand(state, listDevices))
 	return cmd
+}
+
+func newCalcNextFreeCommand(state *commandState, listDevices devicesListFunc) *cobra.Command {
+	var registryDir, tailnetFlag string
+	var size, count int
+	var all bool
+
+	cmd := &cobra.Command{
+		Use:           "next-free <pool-cidr>",
+		Short:         "Suggest available IPv4 child CIDRs from a subnet pool.",
+		Args:          cobra.ExactArgs(1),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return executeCalcNextFree(
+				cmd, state, listDevices, args[0], registryDir, tailnetFlag, size, count, all,
+				cmd.Flags().Changed("count"),
+			)
+		},
+	}
+
+	cmd.Flags().IntVar(&size, "size", 0, "target prefix length (number of bits in each suggested child subnet)")
+	cmd.Flags().IntVarP(&count, "count", "n", 1, "number of suggestions to return")
+	cmd.Flags().BoolVar(&all, "all", false, "return every available child subnet")
+	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	_ = cmd.MarkFlagRequired("size")
+
+	return cmd
+}
+
+func executeCalcNextFree(
+	cmd *cobra.Command,
+	state *commandState,
+	listDevices devicesListFunc,
+	poolArg, registryDir, tailnetFlag string,
+	size, count int,
+	all, countChanged bool,
+) error {
+	pool, err := nextFreePool(poolArg)
+	if err != nil {
+		return err
+	}
+	if validationErr := validateNextFreeOptions(
+		pool, size, count, all, countChanged, listDevices,
+	); validationErr != nil {
+		return validationErr
+	}
+
+	tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
+	outputSanitizer, err := state.outputSanitizer(tailnet)
+	if err != nil {
+		return err
+	}
+	// Exhaustion includes pool in its message but has no output block to
+	// register, so register the canonical pool before rendering either form.
+	registerSweepValue(outputSanitizer, kindCIDR, pool.String())
+
+	var result *outputEnvelope
+	err = loopback.RunWithLogger(cmd.Context(), registryDir, state.logger,
+		func(ctx context.Context, client *ipamclient.Client) error {
+			output, outputErr := nextFreeOutput(ctx, client, tailnet, listDevices, state.logger, pool, size, count, all)
+			if outputErr != nil {
+				return outputErr
+			}
+			result = output
+			return nil
+		})
+	if err != nil {
+		return err
+	}
+	return emitOutput(cmd.OutOrStdout(), state.format, result, outputSanitizer)
+}
+
+func nextFreePool(arg string) (netip.Prefix, error) {
+	pool, err := netip.ParsePrefix(arg)
+	if err != nil {
+		return netip.Prefix{}, fmt.Errorf("invalid pool CIDR %q: %w", arg, err)
+	}
+	if normalized, ok := ipcalc.Unmap4In6(pool); ok {
+		pool = normalized
+	}
+	if !pool.Addr().Is4() {
+		return netip.Prefix{}, fmt.Errorf(
+			"calc next-free does not support IPv6 yet (tracked in rshade/tailscale-utils#257): %s", arg)
+	}
+	return pool.Masked(), nil
+}
+
+func validateNextFreeOptions(
+	pool netip.Prefix,
+	size, count int,
+	all, countChanged bool,
+	listDevices devicesListFunc,
+) error {
+	if size < pool.Bits() || size > pool.Addr().BitLen() {
+		return fmt.Errorf(
+			"target prefix length /%d must be between pool /%d and address length /%d",
+			size, pool.Bits(), pool.Addr().BitLen())
+	}
+	if count < 1 {
+		return fmt.Errorf("count must be positive, got %d", count)
+	}
+	if all && countChanged {
+		return errors.New("--all and --count cannot be used together")
+	}
+	if listDevices == nil {
+		return errors.New("device collector is not configured")
+	}
+	return nil
+}
+
+func nextFreeOutput(
+	ctx context.Context,
+	client *ipamclient.Client,
+	tailnet string,
+	listDevices devicesListFunc,
+	logger diagnostics.Logger,
+	pool netip.Prefix,
+	size, count int,
+	all bool,
+) (*outputEnvelope, error) {
+	reservations, err := listSubnetPoolReservations(ctx, client, tailnet)
+	if err != nil {
+		return nil, err
+	}
+	devices, err := listDevices(ctx, logger)
+	if err != nil {
+		return nil, err
+	}
+	blocks := nextFreeBlocks(pool, size, nextFreeTaken(reservations, devices), count, all)
+	message := fmt.Sprintf("suggested %d free block(s)", len(blocks))
+	if len(blocks) == 0 {
+		message = fmt.Sprintf("no free /%d block in %s", size, pool)
+	}
+	result := newOutput(commandCalcNextFree, statusOK, message, tailnet)
+	result.FreeBlocks = &blocks
+	return result, nil
+}
+
+func listSubnetPoolReservations(
+	ctx context.Context,
+	client *ipamclient.Client,
+	tailnet string,
+) ([]*ipam.SubnetPoolReservation, error) {
+	result, err := client.ListSubnetPools()(ctx, &ipam.ListSubnetPoolsPayload{Tailnet: tailnet})
+	if err != nil {
+		return nil, err
+	}
+	reservations, ok := result.([]*ipam.SubnetPoolReservation)
+	if !ok {
+		return nil, fmt.Errorf("unexpected list_subnet_pools result type %T", result)
+	}
+	return reservations, nil
+}
+
+func nextFreeTaken(reservations []*ipam.SubnetPoolReservation, devices []deviceRecord) []netip.Prefix {
+	taken := make([]netip.Prefix, 0, len(reservations))
+	for _, reservation := range reservations {
+		prefix, err := netip.ParsePrefix(reservation.CIDR)
+		if err == nil {
+			taken = append(taken, prefix)
+		}
+	}
+	for _, device := range devices {
+		for _, route := range device.AdvertisedRoutes {
+			prefix, err := netip.ParsePrefix(route)
+			if err == nil {
+				taken = append(taken, prefix)
+			}
+		}
+	}
+	return taken
+}
+
+func nextFreeBlocks(
+	pool netip.Prefix,
+	size int,
+	taken []netip.Prefix,
+	count int,
+	all bool,
+) []string {
+	blocks := []string{}
+	for all || len(blocks) < count {
+		block, ok := ipcalc.NextFree(pool, size, taken)
+		if !ok {
+			return blocks
+		}
+		blocks = append(blocks, block.String())
+		taken = append(taken, block)
+	}
+	return blocks
 }
 
 func newCalcInfoCommand(state *commandState) *cobra.Command {

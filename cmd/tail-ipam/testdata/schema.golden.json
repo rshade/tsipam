@@ -3,7 +3,7 @@
   "version": "tail-ipam dev",
   "schema_version": "1",
   "description": "Allocate and plan Tailscale address space through a local, comment-preserving registry and read-only control-plane inventory.",
-  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; reserved service addresses; and UDP-port site and device labels are replaced. UDP port numbers remain visible. strict is accepted for cross-tool flag compatibility and is currently equivalent to identity for tail-ipam. calc output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
+  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; reserved service addresses; and UDP-port site and device labels are replaced. UDP port numbers remain visible. strict is accepted for cross-tool flag compatibility and is currently equivalent to identity for tail-ipam. calc split and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; calc next-free output reflects registry and live-route data and is sanitized. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
   "flags": [
     {
       "name": "format",
@@ -34,13 +34,46 @@
   "commands": [
     {
       "name": "calc",
-      "summary": "Subnet and IP arithmetic (stateless).",
+      "summary": "Subnet and IP arithmetic and allocation planning.",
       "usage": "calc"
     },
     {
       "name": "calc info",
       "summary": "Report network, broadcast, usable range, and host count for an IPv4 CIDR.",
       "usage": "calc info \u003ccidr\u003e"
+    },
+    {
+      "name": "calc next-free",
+      "summary": "Suggest available IPv4 child CIDRs from a subnet pool.",
+      "usage": "calc next-free \u003cpool-cidr\u003e",
+      "flags": [
+        {
+          "name": "all",
+          "usage": "return every available child subnet",
+          "default": "false"
+        },
+        {
+          "name": "count",
+          "usage": "number of suggestions to return",
+          "default": "1"
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "size",
+          "usage": "target prefix length (number of bits in each suggested child subnet)",
+          "default": "0",
+          "required": true
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
     },
     {
       "name": "calc split",

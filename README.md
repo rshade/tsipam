@@ -309,6 +309,34 @@ and are treated as native IPv6 (so `--prefix` specifies IPv6 bits, 0–128). For
 example, `tail-ipam calc split '::ffff:10.0.0.0/104' --prefix 20` normalizes to
 `10.0.0.0/8` and splits it into `/20` IPv4 subnets.
 
+#### `calc next-free`
+
+Finds the first available IPv4 child CIDR of a pool after checking both the
+local subnet-pool registry and every route advertised by live tailnet devices.
+Unlike the other `calc` commands, this read-only planning command needs the
+registry and Tailscale API credentials used by `devices list`; it never writes
+to the registry. It searches conflicting CIDR intervals directly, so finding a
+free child does not enumerate every possible child of a large pool.
+
+```bash
+tail-ipam calc next-free 10.20.0.0/16 --size 24 \
+  --registry-dir /etc/tail-ipam --tailnet production
+tail-ipam subnet reserve "$(tail-ipam calc next-free 10.20.0.0/16 --size 24)" branch-office
+```
+
+One result is exactly one bare CIDR followed by a newline, which makes the
+second command safe to compose through shell substitution. Use `--count` (or
+`-n`) for the first several suggestions, or `--all` to print every available
+child; multiple results are one CIDR per line in address order. JSON output
+carries the same suggestions as the `free_blocks` array in the versioned
+envelope.
+
+If the pool is exhausted, the command succeeds with a message that no free
+block exists (and an empty `free_blocks` JSON array). Native IPv6 pools are a
+usage error until the [IPv6 follow-up](https://github.com/rshade/tailscale-utils/issues/257)
+lands. IPv4-mapped prefixes of `/96` or longer are normalized to their plain
+IPv4 equivalent before searching.
+
 #### `calc info`
 
 Stateless IPv4 block facts: the network address, broadcast address, usable
@@ -516,9 +544,11 @@ including identity labels whose quoted representation contains escapes.
 `description`, `ticket`, and `reserved_at` are left unredacted: they are
 free-form operator text and a timestamp, not tailnet-derived identities the
 sanitizer's exact-token replacement can meaningfully sweep. A non-`off`
-environment value overrides `--sanitize` and is announced on stderr. `calc`
-output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because
-it contains no tailnet-derived data. Placeholders for other commands are
+environment value overrides `--sanitize` and is announced on stderr. `calc
+split` and `calc info` output is not sanitized because those commands perform
+stateless arithmetic over CLI-supplied CIDRs. `calc next-free` reflects
+registry and live-route data, so its suggested CIDRs are sanitized when
+sanitization is active. Placeholders for other commands are
 scoped to the artifact's routing/storage key (the `--tailnet` alias for
 registry commands, or the live tailnet from `TAILSCALE_TAILNET` for `devices`
 commands), so passing an explicit `--tailnet` alias to a registry command

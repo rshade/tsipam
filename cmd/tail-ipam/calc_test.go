@@ -4,8 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 )
 
 func runCalcSplit(t *testing.T, args ...string) (string, string, error) {
@@ -34,6 +39,219 @@ func runCalcSplitCLI(t *testing.T, args ...string) (int, string, string) {
 		func(string) string { return "" }, &outBuf, &errBuf, nil,
 	)
 	return code, outBuf.String(), errBuf.String()
+}
+
+func runCalcNextFree(t *testing.T, registryDir string, devices []deviceRecord, args ...string) (string, string, error) {
+	t.Helper()
+	state := &commandState{sanitizeLevel: "off"}
+	root := newRootCommandWithDependencies(state, commandDependencies{
+		getenv: func(string) string { return "" },
+		listDevices: func(context.Context, diagnostics.Logger) ([]deviceRecord, error) {
+			return devices, nil
+		},
+	})
+	var outBuf, errBuf bytes.Buffer
+	root.SetOut(&outBuf)
+	root.SetErr(&errBuf)
+	root.SetArgs(append([]string{"calc", "next-free"}, append(args, "--registry-dir", registryDir)...))
+	err := root.Execute()
+	return outBuf.String(), errBuf.String(), err
+}
+
+func writeNextFreeRegistry(t *testing.T, dir, contents string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "local.ipam.hujson"), []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCalcNextFreeCombinesRegistryAndLiveRoutes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeNextFreeRegistry(t, dir, `{"subnetPools":{"10.0.0.0/26":"reserved"}}`)
+
+	out, errOut, err := runCalcNextFree(t, dir, []deviceRecord{{
+		Name: "router", AdvertisedRoutes: []string{"10.0.0.64/26"},
+	}}, "10.0.0.0/24", "--size", "26")
+	if err != nil {
+		t.Fatalf("runCalcNextFree() error = %v (stderr = %q)", err, errOut)
+	}
+	if errOut != "" {
+		t.Errorf("stderr = %q, want empty", errOut)
+	}
+	if out != "10.0.0.128/26\n" {
+		t.Errorf("stdout = %q, want one bare CIDR", out)
+	}
+}
+
+func TestCalcNextFreeExclusionSourcesAndCount(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		registry   string
+		devices    []deviceRecord
+		args       []string
+		wantOutput string
+	}{
+		{
+			name:       "registry only",
+			registry:   `{"subnetPools":{"10.0.0.0/26":"reserved"}}`,
+			args:       []string{"10.0.0.0/24", "--size", "26"},
+			wantOutput: "10.0.0.64/26\n",
+		},
+		{
+			name:     "live route only",
+			registry: `{}`,
+			devices: []deviceRecord{{
+				Name: "router", AdvertisedRoutes: []string{"10.0.0.0/26"},
+			}},
+			args:       []string{"10.0.0.0/24", "--size", "26"},
+			wantOutput: "10.0.0.64/26\n",
+		},
+		{
+			name:     "malformed live route is ignored",
+			registry: `{}`,
+			devices: []deviceRecord{{
+				Name: "router", AdvertisedRoutes: []string{"not-a-cidr"},
+			}},
+			args:       []string{"10.0.0.0/24", "--size", "26"},
+			wantOutput: "10.0.0.0/26\n",
+		},
+		{
+			name:       "short count flag",
+			registry:   `{}`,
+			args:       []string{"10.0.0.0/29", "--size", "31", "-n", "2"},
+			wantOutput: "10.0.0.0/31\n10.0.0.2/31\n",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeNextFreeRegistry(t, dir, test.registry)
+			out, errOut, err := runCalcNextFree(t, dir, test.devices, test.args...)
+			if err != nil {
+				t.Fatalf("runCalcNextFree() error = %v (stderr = %q)", err, errOut)
+			}
+			if out != test.wantOutput {
+				t.Errorf("stdout = %q, want %q", out, test.wantOutput)
+			}
+		})
+	}
+}
+
+func TestCalcNextFreeMultipleAndExhaustedOutput(t *testing.T) {
+	t.Parallel()
+
+	t.Run("all returns ordered blocks", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeNextFreeRegistry(t, dir, `{}`)
+		out, errOut, err := runCalcNextFree(t, dir, nil, "10.0.0.0/30", "--size", "31", "--all")
+		if err != nil {
+			t.Fatalf("runCalcNextFree() error = %v (stderr = %q)", err, errOut)
+		}
+		if out != "10.0.0.0/31\n10.0.0.2/31\n" {
+			t.Errorf("stdout = %q, want ordered free blocks", out)
+		}
+	})
+
+	t.Run("exhaustion is successful", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeNextFreeRegistry(t, dir, `{}`)
+		out, errOut, err := runCalcNextFree(t, dir, []deviceRecord{{
+			Name: "router", AdvertisedRoutes: []string{"10.0.0.0/24"},
+		}}, "10.0.0.0/24", "--size", "26", "--format", formatJSON)
+		if err != nil {
+			t.Fatalf("runCalcNextFree() error = %v (stderr = %q)", err, errOut)
+		}
+		var envelope outputEnvelope
+		if decodeErr := json.Unmarshal([]byte(out), &envelope); decodeErr != nil {
+			t.Fatalf("decode JSON output: %v\n%s", decodeErr, out)
+		}
+		if envelope.FreeBlocks == nil || len(*envelope.FreeBlocks) != 0 {
+			t.Errorf("FreeBlocks = %#v, want empty list", envelope.FreeBlocks)
+		}
+		if !strings.Contains(envelope.Message, "no free /26 block") {
+			t.Errorf("Message = %q, want exhaustion explanation", envelope.Message)
+		}
+	})
+}
+
+func TestCalcNextFreeRejectsIPv6(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeNextFreeRegistry(t, dir, `{}`)
+	_, _, err := runCalcNextFree(t, dir, nil, "2001:db8::/48", "--size", "64")
+	if err == nil {
+		t.Fatal("runCalcNextFree() error = nil, want IPv6 rejection")
+	}
+	if !strings.Contains(err.Error(), "#257") {
+		t.Errorf("error = %q, want IPv6 follow-up reference", err)
+	}
+}
+
+func TestCalcNextFreeValidatesOptions(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeNextFreeRegistry(t, dir, `{}`)
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "target shorter than pool",
+			args: []string{"10.0.0.0/24", "--size", "20"},
+			want: "must be between",
+		},
+		{
+			name: "count must be positive",
+			args: []string{"10.0.0.0/24", "--size", "26", "--count", "0"},
+			want: "count must be positive",
+		},
+		{
+			name: "all conflicts with count",
+			args: []string{"10.0.0.0/24", "--size", "26", "--all", "--count", "2"},
+			want: "cannot be used together",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			_, _, err := runCalcNextFree(t, dir, nil, test.args...)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Errorf("error = %v, want substring %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestCalcNextFreeSanitizesSuggestedBlocks(t *testing.T) {
+	t.Parallel()
+	output, err := sanitize.New(sanitize.Options{
+		Level: sanitize.Identity, Tool: toolName, Tailnet: "example.ts.net",
+		KeyHex: strings.Repeat("ab", 32),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks := []string{"10.0.0.0/26"}
+	input := newOutput(commandCalcNextFree, statusOK, "suggested 1 free block(s)", "example.ts.net")
+	input.FreeBlocks = &blocks
+
+	got := sanitizeOutput(input, output)
+	if got.FreeBlocks == nil || len(*got.FreeBlocks) != 1 {
+		t.Fatalf("FreeBlocks = %#v, want one sanitized value", got.FreeBlocks)
+	}
+	if (*got.FreeBlocks)[0] == blocks[0] || !strings.HasPrefix((*got.FreeBlocks)[0], "cidr-") {
+		t.Errorf("FreeBlocks = %#v, want CIDR placeholder", got.FreeBlocks)
+	}
 }
 
 func TestCalcSplitHumanOutput(t *testing.T) {

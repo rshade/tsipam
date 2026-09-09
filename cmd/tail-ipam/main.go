@@ -667,7 +667,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	root.AddCommand(newSubnetCommand(state))
 	root.AddCommand(newServiceCommand(state))
 	root.AddCommand(newUDPPortCommand(state))
-	root.AddCommand(newCalcCommand(state))
+	root.AddCommand(newCalcCommand(state, deps.listDevices))
 	root.InitDefaultHelpFlag()
 	return root
 }

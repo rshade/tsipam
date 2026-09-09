@@ -33,6 +33,7 @@ const (
 	commandPortRelease    = commandPort + " release"
 	commandCalcSplit      = commandCalc + " split"
 	commandCalcInfo       = commandCalc + " info"
+	commandCalcNextFree   = commandCalc + " next-free"
 	statusOK              = "ok"
 	statusNoChanges       = "no_changes"
 )
@@ -158,6 +159,7 @@ type outputEnvelope struct {
 	UDPPorts         *[]udpPortOutput        `json:"udp_ports,omitempty"`
 	Devices          *[]deviceRecord         `json:"devices,omitempty"`
 	Subnets          *[]string               `json:"subnets,omitempty"`
+	FreeBlocks       *[]string               `json:"free_blocks,omitempty"`
 	BlockInfo        *blockInfoOutput        `json:"block_info,omitempty"`
 
 	// messageBuilder, when set, renders Message from this envelope's own
@@ -206,6 +208,9 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 	}
 	if result.Subnets != nil {
 		return renderSubnets(writer, *result.Subnets)
+	}
+	if result.FreeBlocks != nil && len(*result.FreeBlocks) > 0 {
+		return renderSubnets(writer, *result.FreeBlocks)
 	}
 	if result.BlockInfo != nil {
 		return renderBlockInfo(writer, *result.BlockInfo)
@@ -389,11 +394,17 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		}
 		result.Devices = &devices
 	}
-	// Subnets and BlockInfo are computed from a CLI-supplied CIDR, not
-	// fetched from the tailnet, so unlike every other field above there is
-	// no identity to sweep here — copy them through unredacted.
+	// Subnets and BlockInfo are computed only from a CLI-supplied CIDR, so they
+	// have no tailnet-derived identity to sweep.
 	result.Subnets = input.Subnets
 	result.BlockInfo = input.BlockInfo
+	if input.FreeBlocks != nil {
+		blocks := make([]string, len(*input.FreeBlocks))
+		for index, block := range *input.FreeBlocks {
+			blocks[index] = output.Value(kindCIDR, block)
+		}
+		result.FreeBlocks = &blocks
+	}
 	return result
 }
 
@@ -442,6 +453,7 @@ func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer)
 			output.Value(kindHostname, entry.Device)
 		}
 	}
+	registerFreeBlocks(input.FreeBlocks, output)
 	if input.Devices == nil {
 		return
 	}
@@ -453,6 +465,15 @@ func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer)
 		for _, value := range device.AdvertisedRoutes {
 			output.Value(networkKind(value), value)
 		}
+	}
+}
+
+func registerFreeBlocks(blocks *[]string, output *sanitize.Sanitizer) {
+	if blocks == nil {
+		return
+	}
+	for _, block := range *blocks {
+		output.Value(kindCIDR, block)
 	}
 }
 
