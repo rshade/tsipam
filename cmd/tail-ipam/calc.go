@@ -229,7 +229,7 @@ func nextFreeBlocks(
 func newCalcInfoCommand(state *commandState) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "info <cidr>",
-		Short:         "Report network, broadcast, usable range, and host count for an IPv4 CIDR.",
+		Short:         "Report network, usable range, and host count for a CIDR.",
 		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -253,11 +253,6 @@ func newCalcInfoCommand(state *commandState) *cobra.Command {
 			masked := prefix.Masked()
 
 			info, err := ipcalc.Info(prefix)
-			if errors.Is(err, ipcalc.ErrIPv6NotSupported) {
-				return fmt.Errorf(
-					"calc info does not support IPv6 yet (tracked in rshade/tailscale-utils#251): %s: %w",
-					cidrArg, err)
-			}
 			if err != nil {
 				return err
 			}

@@ -113,10 +113,9 @@ func (o reservationMetadataOutput) formatMetadata() string {
 // blockInfoOutput mirrors ipcalc.BlockInfo in the machine contract.
 // Prefix is the masked CIDR (identity), followed by network, broadcast,
 // first_usable, last_usable, and usable_hosts facts. Broadcast is omitted,
-// not empty, for a /31 or /32 (RFC 3021 point-to-point and host routes have
-// no broadcast address). UsableHosts is a decimal string rather than a JSON
-// number: an IPv6 extension can exceed integer-safe JSON range, and switching
-// the field's type later would break the versioned envelope.
+// not empty, for IPv6 and for IPv4 /31 or /32 blocks (RFC 3021 point-to-point
+// and host routes have no broadcast address). UsableHosts is a decimal string
+// rather than a JSON number so every IPv6 count remains exact.
 type blockInfoOutput struct {
 	Prefix      string `json:"prefix"`
 	Network     string `json:"network"`

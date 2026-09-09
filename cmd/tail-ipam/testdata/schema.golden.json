@@ -44,7 +44,7 @@
     },
     {
       "name": "calc info",
-      "summary": "Report network, broadcast, usable range, and host count for an IPv4 CIDR.",
+      "summary": "Report network, usable range, and host count for a CIDR.",
       "usage": "calc info \u003ccidr\u003e"
     },
     {

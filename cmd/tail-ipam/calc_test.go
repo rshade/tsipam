@@ -734,39 +734,93 @@ func TestCalcInfoNormalized4in6(t *testing.T) {
 	}
 }
 
-func TestCalcInfoRejectsIPv6(t *testing.T) {
+func TestCalcInfoIPv6HumanOutput(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name string
 		cidr string
+		want string
 	}{
-		{name: "native_ipv6", cidr: "2001:db8::/64"},
-		// A prefix shorter than /96 cannot be normalized to IPv4 because
-		// it contains non-mapped IPv6 addresses, so the whole prefix is
-		// treated as native IPv6.
-		{name: "too_short_4in6", cidr: "::ffff:10.0.0.0/95"},
+		{
+			name: "slash48", cidr: "2001:db8:1234:5678::/48",
+			want: "prefix\t2001:db8:1234::/48\n" +
+				"network\t2001:db8:1234::\n" +
+				"first_usable\t2001:db8:1234::\n" +
+				"last_usable\t2001:db8:1234:ffff:ffff:ffff:ffff:ffff\n" +
+				"usable_hosts\t1208925819614629174706176\n",
+		},
+		{
+			name: "slash64_host_bits_masked", cidr: "2001:db8:1::42/64",
+			want: "prefix\t2001:db8:1::/64\n" +
+				"network\t2001:db8:1::\n" +
+				"first_usable\t2001:db8:1::\n" +
+				"last_usable\t2001:db8:1:0:ffff:ffff:ffff:ffff\n" +
+				"usable_hosts\t18446744073709551616\n",
+		},
+		{
+			name: "slash96", cidr: "2001:db8:abcd:1234:5678:90ab:cdef:1234/96",
+			want: "prefix\t2001:db8:abcd:1234:5678:90ab::/96\n" +
+				"network\t2001:db8:abcd:1234:5678:90ab::\n" +
+				"first_usable\t2001:db8:abcd:1234:5678:90ab::\n" +
+				"last_usable\t2001:db8:abcd:1234:5678:90ab:ffff:ffff\n" +
+				"usable_hosts\t4294967296\n",
+		},
+		{
+			name: "slash127", cidr: "2001:db8::4/127",
+			want: "prefix\t2001:db8::4/127\n" +
+				"network\t2001:db8::4\n" +
+				"first_usable\t2001:db8::4\n" +
+				"last_usable\t2001:db8::5\n" +
+				"usable_hosts\t2\n",
+		},
+		{
+			name: "slash128", cidr: "2001:db8::1/128",
+			want: "prefix\t2001:db8::1/128\n" +
+				"network\t2001:db8::1\n" +
+				"first_usable\t2001:db8::1\n" +
+				"last_usable\t2001:db8::1\n" +
+				"usable_hosts\t1\n",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			code, out, errOut := runCalcInfoCLI(t, tt.cidr)
-
-			if code != exitUsage {
-				t.Errorf("exit code = %d, want %d (exitUsage)", code, exitUsage)
+			out, errOut, err := runCalcInfo(t, tt.cidr)
+			if err != nil {
+				t.Fatalf("runCalcInfo() error = %v (stderr = %q)", err, errOut)
 			}
-			if out != "" {
-				t.Errorf("stdout = %q, want empty on rejection", out)
+			if errOut != "" {
+				t.Errorf("stderr = %q, want empty", errOut)
 			}
-			if !strings.Contains(errOut, "IPv6") {
-				t.Errorf("stderr = %q, want to name IPv6 as unsupported", errOut)
-			}
-			if !strings.Contains(errOut, "#251") {
-				t.Errorf("stderr = %q, want to reference the IPv6 follow-up issue #251", errOut)
+			if out != tt.want {
+				t.Errorf("stdout = %q, want %q", out, tt.want)
 			}
 		})
+	}
+}
+
+func TestCalcInfoIPv6JSONOmitsBroadcast(t *testing.T) {
+	t.Parallel()
+
+	state := &commandState{sanitizeLevel: "off"}
+	root := newRootCommandWithDependencies(state, commandDependencies{
+		getenv: func(string) string { return "" },
+	})
+	var outBuf, errBuf bytes.Buffer
+	root.SetOut(&outBuf)
+	root.SetErr(&errBuf)
+	root.SetArgs([]string{"--format", "json", "calc", "info", "2001:db8:1::42/64"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v; stderr = %q", err, errBuf.String())
+	}
+	if strings.Contains(outBuf.String(), "broadcast") {
+		t.Errorf("raw JSON %q carries a broadcast key for IPv6; want it omitted", outBuf.String())
+	}
+	if !strings.Contains(outBuf.String(), `"usable_hosts": "18446744073709551616"`) {
+		t.Errorf("raw JSON %q missing exact string-encoded IPv6 count", outBuf.String())
 	}
 }
 

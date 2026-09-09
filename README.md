@@ -362,12 +362,13 @@ IPv4 equivalent before searching.
 
 #### `calc info`
 
-Stateless IPv4 block facts: the network address, broadcast address, usable
-host range, and usable-host count for a CIDR — classic ipcalc output. Like
-`calc split`, it needs no registry, network I/O, or Tailscale API
-credentials. Host bits in the argument are masked off first, so an address
-inside a block reports the facts for its containing block. Human output is
-one tab-separated `fact` and `value` pair per line:
+Stateless IPv4 and IPv6 block facts: the network address, usable host range,
+and usable-host count for a CIDR — classic ipcalc output. IPv4 results also
+include a broadcast address where that concept applies. Like `calc split`, it
+needs no registry, network I/O, or Tailscale API credentials. Host bits in the
+argument are masked off first, so an address inside a block reports the facts
+for its containing block. Human output is one tab-separated `fact` and `value`
+pair per line:
 
 ```bash
 tail-ipam calc info 192.168.1.0/24
@@ -394,21 +395,31 @@ tail-ipam calc info 10.0.0.0/31
 # usable_hosts  2
 ```
 
-`-format json` carries the facts as a `block_info` object in the versioned
-envelope. `usable_hosts` is a decimal **string**, not a JSON number, so the
-planned IPv6 extension can exceed integer-safe JSON range without changing
-the field's type; use `jq -r '.block_info.usable_hosts | tonumber'` where a
-number is required.
+IPv6 has no broadcast address, so `broadcast` is omitted entirely in both
+formats. Every address in an IPv6 block is usable, including `/127` and
+`/128`; for example:
 
-Native IPv6 input is rejected as a usage error (exit code 2) until the IPv6
-follow-up lands (tracked in
-[issue #251](https://github.com/rshade/tailscale-utils/issues/251)).
+```bash
+tail-ipam calc info 2001:db8:1::42/64
+# prefix        2001:db8:1::/64
+# network       2001:db8:1::
+# first_usable  2001:db8:1::
+# last_usable   2001:db8:1:0:ffff:ffff:ffff:ffff
+# usable_hosts  18446744073709551616
+```
+
+`-format json` carries the facts as a `block_info` object in the versioned
+envelope. `usable_hosts` is an exact decimal **string**, not a JSON number.
+No scientific or `2^k` notation cutoff is used: even the full IPv6 address
+space (`2^128`) is only 39 decimal digits, so every count is precise and
+uniformly parseable. Use `jq -r '.block_info.usable_hosts | tonumber'` where
+a number is required.
+
 IPv4-mapped (4-in-6) prefixes of `/96` or longer are normalized to plain
 IPv4 first, exactly as `calc split` does, so
 `tail-ipam calc info '::ffff:10.0.0.0/120'` reports the facts for
 `10.0.0.0/24`. Shorter 4-in-6-like prefixes cannot be exclusively IPv4-mapped
-and are treated as native IPv6, so they are rejected as a usage error (exit
-code 2) with a reference to the IPv6 follow-up work.
+and are treated as native IPv6.
 
 ### Registry format
 
