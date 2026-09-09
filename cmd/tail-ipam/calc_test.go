@@ -41,6 +41,30 @@ func runCalcSplitCLI(t *testing.T, args ...string) (int, string, string) {
 	return code, outBuf.String(), errBuf.String()
 }
 
+func runCalcAggregate(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
+	state := &commandState{sanitizeLevel: "off"}
+	root := newRootCommandWithDependencies(state, commandDependencies{
+		getenv: func(string) string { return "" },
+	})
+	var outBuf, errBuf bytes.Buffer
+	root.SetOut(&outBuf)
+	root.SetErr(&errBuf)
+	root.SetArgs(append([]string{"calc", "aggregate"}, args...))
+	err := root.Execute()
+	return outBuf.String(), errBuf.String(), err
+}
+
+func runCalcAggregateCLI(t *testing.T, args ...string) (int, string, string) {
+	t.Helper()
+	var outBuf, errBuf bytes.Buffer
+	code := runCLI(
+		context.Background(), append([]string{"calc", "aggregate"}, args...),
+		func(string) string { return "" }, &outBuf, &errBuf, nil,
+	)
+	return code, outBuf.String(), errBuf.String()
+}
+
 func runCalcNextFree(t *testing.T, registryDir string, devices []deviceRecord, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{sanitizeLevel: "off"}
@@ -793,6 +817,143 @@ func TestCalcInfoNotSanitizedUnderIdentity(t *testing.T) {
 				if !strings.Contains(outBuf.String(), want) {
 					t.Errorf("output missing unredacted %s: %s", want, outBuf.String())
 				}
+			}
+		})
+	}
+}
+
+func TestCalcAggregateHumanOutput(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "adjacent prefixes merge",
+			args: []string{"10.0.0.0/25", "10.0.0.128/25"},
+			want: "10.0.0.0/24\n",
+		},
+		{
+			name: "covered and disjoint prefixes are normalized and ordered",
+			args: []string{"10.1.0.0/24", "10.0.0.1/24", "10.0.0.0/25"},
+			want: "10.0.0.0/24\n10.1.0.0/24\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			out, errOut, err := runCalcAggregate(t, tt.args...)
+			if err != nil {
+				t.Fatalf("runCalcAggregate() error = %v (stderr = %q)", err, errOut)
+			}
+			if errOut != "" {
+				t.Errorf("stderr = %q, want empty", errOut)
+			}
+			if out != tt.want {
+				t.Errorf("stdout = %q, want %q", out, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalcAggregateJSONOutput(t *testing.T) {
+	t.Parallel()
+
+	out, errOut, err := runCalcAggregate(t,
+		"10.0.0.0/25", "10.0.0.128/25", "--format", formatJSON)
+	if err != nil {
+		t.Fatalf("runCalcAggregate() error = %v (stderr = %q)", err, errOut)
+	}
+	var envelope outputEnvelope
+	if unmarshalErr := json.Unmarshal([]byte(out), &envelope); unmarshalErr != nil {
+		t.Fatalf("json.Unmarshal() error = %v; output = %q", unmarshalErr, out)
+	}
+	if envelope.Command != commandCalcAggregate {
+		t.Errorf("Command = %q, want %q", envelope.Command, commandCalcAggregate)
+	}
+	if envelope.Supernets == nil {
+		t.Fatal("Supernets = nil, want non-nil")
+	}
+	if envelope.Supernets != nil && (len(*envelope.Supernets) != 1 || (*envelope.Supernets)[0] != "10.0.0.0/24") {
+		t.Errorf("Supernets = %#v, want [10.0.0.0/24]", envelope.Supernets)
+	}
+}
+
+func TestCalcAggregateMappedIPv4MatchesPlainIPv4(t *testing.T) {
+	t.Parallel()
+
+	mapped, mappedErr, mappedRunErr := runCalcAggregate(t, "::ffff:10.0.0.0/121", "::ffff:10.0.0.128/121")
+	if mappedRunErr != nil {
+		t.Fatalf("mapped aggregate error = %v (stderr = %q)", mappedRunErr, mappedErr)
+	}
+	plain, plainErr, plainRunErr := runCalcAggregate(t, "10.0.0.0/25", "10.0.0.128/25")
+	if plainRunErr != nil {
+		t.Fatalf("plain aggregate error = %v (stderr = %q)", plainRunErr, plainErr)
+	}
+	if mapped != plain {
+		t.Errorf("mapped output = %q, want plain IPv4 output %q", mapped, plain)
+	}
+}
+
+func TestCalcAggregateRejectsIPv6AndInvalidCIDR(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cidr string
+		want string
+	}{
+		{name: "native IPv6", cidr: "2001:db8::/64", want: "#253"},
+		{name: "short mapped IPv6", cidr: "::ffff:10.0.0.0/95", want: "#253"},
+		{name: "invalid CIDR", cidr: "not-a-cidr", want: "not-a-cidr"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			code, out, errOut := runCalcAggregateCLI(t, tt.cidr)
+			if code != exitUsage {
+				t.Errorf("exit code = %d, want %d (exitUsage)", code, exitUsage)
+			}
+			if out != "" {
+				t.Errorf("stdout = %q, want empty on refusal", out)
+			}
+			if !strings.Contains(errOut, tt.want) {
+				t.Errorf("stderr = %q, want %q", errOut, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalcAggregateNotSanitizedUnderIdentity(t *testing.T) {
+	t.Parallel()
+
+	for _, format := range []string{formatHuman, formatJSON} {
+		t.Run(format, func(t *testing.T) {
+			t.Parallel()
+
+			state := &commandState{sanitizeLevel: "identity"}
+			root := newRootCommandWithDependencies(state, commandDependencies{
+				getenv: func(name string) string {
+					if name == "TAILSCALE_SANITIZE" {
+						return "identity"
+					}
+					return ""
+				},
+			})
+			var outBuf, errBuf bytes.Buffer
+			root.SetOut(&outBuf)
+			root.SetErr(&errBuf)
+			root.SetArgs([]string{"--format", format, "calc", "aggregate", "10.0.0.0/25", "10.0.0.128/25"})
+			if err := root.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v; stderr = %q", err, errBuf.String())
+			}
+			if !strings.Contains(outBuf.String(), "10.0.0.0/24") {
+				t.Errorf("output = %q, want unredacted aggregate CIDR", outBuf.String())
 			}
 		})
 	}

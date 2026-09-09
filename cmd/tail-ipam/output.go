@@ -33,6 +33,7 @@ const (
 	commandPortRelease    = commandPort + " release"
 	commandCalcSplit      = commandCalc + " split"
 	commandCalcInfo       = commandCalc + " info"
+	commandCalcAggregate  = commandCalc + " aggregate"
 	commandCalcNextFree   = commandCalc + " next-free"
 	statusOK              = "ok"
 	statusNoChanges       = "no_changes"
@@ -159,6 +160,7 @@ type outputEnvelope struct {
 	UDPPorts         *[]udpPortOutput        `json:"udp_ports,omitempty"`
 	Devices          *[]deviceRecord         `json:"devices,omitempty"`
 	Subnets          *[]string               `json:"subnets,omitempty"`
+	Supernets        *[]string               `json:"supernets,omitempty"`
 	FreeBlocks       *[]string               `json:"free_blocks,omitempty"`
 	BlockInfo        *blockInfoOutput        `json:"block_info,omitempty"`
 
@@ -208,6 +210,9 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 	}
 	if result.Subnets != nil {
 		return renderSubnets(writer, *result.Subnets)
+	}
+	if result.Supernets != nil {
+		return renderSubnets(writer, *result.Supernets)
 	}
 	if result.FreeBlocks != nil && len(*result.FreeBlocks) > 0 {
 		return renderSubnets(writer, *result.FreeBlocks)
@@ -394,9 +399,10 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		}
 		result.Devices = &devices
 	}
-	// Subnets and BlockInfo are computed only from a CLI-supplied CIDR, so they
+	// Subnets, Supernets, and BlockInfo are computed only from a CLI-supplied CIDR, so they
 	// have no tailnet-derived identity to sweep.
 	result.Subnets = input.Subnets
+	result.Supernets = input.Supernets
 	result.BlockInfo = input.BlockInfo
 	if input.FreeBlocks != nil {
 		blocks := make([]string, len(*input.FreeBlocks))

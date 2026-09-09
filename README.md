@@ -309,6 +309,29 @@ and are treated as native IPv6 (so `--prefix` specifies IPv6 bits, 0–128). For
 example, `tail-ipam calc split '::ffff:10.0.0.0/104' --prefix 20` normalizes to
 `10.0.0.0/8` and splits it into `/20` IPv4 subnets.
 
+#### `calc aggregate`
+
+Stateless IPv4 CIDR summarization: merges supplied CIDRs into the smallest
+set of supernets that covers exactly the same addresses. It needs no registry,
+network I/O, or Tailscale API credentials. Duplicate or covered CIDRs collapse,
+and adjacent siblings merge recursively; non-adjacent CIDRs remain separate.
+Human output is one bare CIDR per line in network-address order, making it
+safe to compose in a shell:
+
+```bash
+tail-ipam calc aggregate 10.0.0.0/25 10.0.0.128/25
+# 10.0.0.0/24
+
+tail-ipam calc aggregate 10.0.0.0/24 10.1.0.0/24 --format json
+```
+
+JSON output carries the same ordered result in the `supernets` array of the
+versioned envelope. Native IPv6 input is a usage error until the
+[IPv6 aggregate follow-up](https://github.com/rshade/tailscale-utils/issues/253)
+lands. IPv4-mapped prefixes of `/96` or longer are normalized to their plain
+IPv4 equivalents before aggregation; shorter mapped-looking prefixes are
+treated as native IPv6 and rejected.
+
 #### `calc next-free`
 
 Finds the first available IPv4 child CIDR of a pool after checking both the
@@ -545,7 +568,7 @@ including identity labels whose quoted representation contains escapes.
 free-form operator text and a timestamp, not tailnet-derived identities the
 sanitizer's exact-token replacement can meaningfully sweep. A non-`off`
 environment value overrides `--sanitize` and is announced on stderr. `calc
-split` and `calc info` output is not sanitized because those commands perform
+split`, `calc aggregate`, and `calc info` output is not sanitized because those commands perform
 stateless arithmetic over CLI-supplied CIDRs. `calc next-free` reflects
 registry and live-route data, so its suggested CIDRs are sanitized when
 sanitization is active. Placeholders for other commands are
