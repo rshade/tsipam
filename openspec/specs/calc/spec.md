@@ -148,13 +148,16 @@ native IPv6 input as a usage error that references the IPv6 follow-up issue.
 - **WHEN** an operator supplies an IPv6 pool
 - **THEN** the command exits with a usage error that names IPv6 and issue #257
 
-### Requirement: Aggregate supplied IPv4 CIDRs
+### Requirement: Aggregate supplied CIDRs
 
 `tail-ipam calc aggregate <cidr...>` SHALL accept one or more supplied IPv4
-CIDRs and print their deterministic minimal CIDR cover, one normalized CIDR
-per line in ascending network-address order. Duplicate, covered, and
-adjacent sibling CIDRs SHALL collapse into that cover. The command SHALL be
-stateless and SHALL not read a registry, tailnet, or external API.
+or IPv6 CIDRs and print their deterministic minimal CIDR cover, one
+normalized CIDR per line in ascending network-address order. Duplicate,
+covered, and adjacent sibling CIDRs SHALL collapse into that cover. A CIDR
+SHALL never merge with, or be treated as covered by, a CIDR of the other
+address family; when both families are supplied, every IPv4 supernet SHALL
+precede every IPv6 supernet. The command SHALL be stateless and SHALL not
+read a registry, tailnet, or external API.
 
 #### Scenario: A complete pair becomes its supernet
 
@@ -171,6 +174,29 @@ stateless and SHALL not read a registry, tailnet, or external API.
 - **WHEN** an operator runs `calc aggregate 10.0.0.0/24 10.0.0.0/25`
 - **THEN** stdout contains exactly `10.0.0.0/24` followed by a newline
 
+#### Scenario: Adjacent IPv6 siblings merge
+
+- **WHEN** an operator runs `calc aggregate 2001:db8:0:8000::/49 2001:db8::/49`
+- **THEN** stdout contains exactly `2001:db8::/48` followed by a newline
+
+#### Scenario: ULA blocks merge across levels
+
+- **WHEN** an operator runs
+  `calc aggregate fd12:3456:789a:1::/64 fd12:3456:789a:2::/63 fd12:3456:789a::/64`
+- **THEN** stdout contains exactly `fd12:3456:789a::/62` followed by a newline
+
+#### Scenario: Unmergeable IPv6 CIDRs stay separate and ordered
+
+- **WHEN** an operator runs `calc aggregate 2001:db8:2::/48 2001:db8::/48`
+- **THEN** stdout lists `2001:db8::/48` and then `2001:db8:2::/48`, one per
+  line
+
+#### Scenario: Mixed families aggregate independently with IPv4 first
+
+- **WHEN** an operator runs
+  `calc aggregate 2001:db8::/49 10.0.0.128/25 2001:db8:0:8000::/49 10.0.0.0/25`
+- **THEN** stdout lists `10.0.0.0/24` and then `2001:db8::/48`, one per line
+
 ### Requirement: Aggregate JSON output carries supernets
 
 Successful aggregate JSON output SHALL use the versioned output envelope with
@@ -184,20 +210,21 @@ sanitize level, consistent with other stateless calc output.
 - **THEN** the JSON envelope identifies the aggregate command and contains
   `"supernets": ["10.0.0.0/24"]`
 
-### Requirement: Native IPv6 aggregate input is refused
+### Requirement: Aggregate normalizes IPv4-mapped input
 
-The aggregate command SHALL reject native IPv6 CIDRs as unsupported until the
-IPv6 aggregate follow-up is implemented, with no success output. IPv4-mapped
-prefixes of `/96` or longer SHALL normalize to their plain IPv4 equivalents,
-consistent with the other calc commands.
-
-#### Scenario: Native IPv6 is rejected
-
-- **WHEN** an operator runs `calc aggregate 2001:db8::/64`
-- **THEN** the command fails without stdout and stderr identifies IPv6 as
-  unsupported and references the tracking follow-up `#253`
+IPv4-mapped prefixes of `/96` or longer SHALL normalize to their plain IPv4
+equivalents before aggregation, consistent with the other calc commands, so
+their result is identical to aggregating the equivalent IPv4 CIDRs. A mapped
+prefix shorter than `/96` cannot be exclusively IPv4-mapped and SHALL be
+aggregated as native IPv6.
 
 #### Scenario: An IPv4-mapped prefix aggregates as IPv4
 
 - **WHEN** an operator runs `calc aggregate ::ffff:10.0.0.0/121 ::ffff:10.0.0.128/121`
 - **THEN** stdout contains exactly `10.0.0.0/24` followed by a newline
+
+#### Scenario: A short mapped prefix aggregates as native IPv6
+
+- **WHEN** an operator runs `calc aggregate ::ffff:10.0.0.0/95`
+- **THEN** the command succeeds and stdout contains exactly `::fffe:0:0/95`
+  followed by a newline
