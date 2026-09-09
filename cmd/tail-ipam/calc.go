@@ -42,7 +42,7 @@ func newCalcNextFreeCommand(state *commandState, listDevices devicesListFunc) *c
 
 	cmd := &cobra.Command{
 		Use:           "next-free <pool-cidr>",
-		Short:         "Suggest available IPv4 child CIDRs from a subnet pool.",
+		Short:         "Suggest available IPv4 or IPv6 child CIDRs from a subnet pool.",
 		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -113,10 +113,6 @@ func nextFreePool(arg string) (netip.Prefix, error) {
 	}
 	if normalized, ok := ipcalc.Unmap4In6(pool); ok {
 		pool = normalized
-	}
-	if !pool.Addr().Is4() {
-		return netip.Prefix{}, fmt.Errorf(
-			"calc next-free does not support IPv6 yet (tracked in rshade/tailscale-utils#257): %s", arg)
 	}
 	return pool.Masked(), nil
 }

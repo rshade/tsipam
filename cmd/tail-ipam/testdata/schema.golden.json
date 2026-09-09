@@ -49,7 +49,7 @@
     },
     {
       "name": "calc next-free",
-      "summary": "Suggest available IPv4 child CIDRs from a subnet pool.",
+      "summary": "Suggest available IPv4 or IPv6 child CIDRs from a subnet pool.",
       "usage": "calc next-free \u003cpool-cidr\u003e",
       "flags": [
         {

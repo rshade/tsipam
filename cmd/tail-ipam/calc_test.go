@@ -206,19 +206,6 @@ func TestCalcNextFreeMultipleAndExhaustedOutput(t *testing.T) {
 	})
 }
 
-func TestCalcNextFreeRejectsIPv6(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	writeNextFreeRegistry(t, dir, `{}`)
-	_, _, err := runCalcNextFree(t, dir, nil, "2001:db8::/48", "--size", "64")
-	if err == nil {
-		t.Fatal("runCalcNextFree() error = nil, want IPv6 rejection")
-	}
-	if !strings.Contains(err.Error(), "#257") {
-		t.Errorf("error = %q, want IPv6 follow-up reference", err)
-	}
-}
-
 func TestCalcNextFreeValidatesOptions(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

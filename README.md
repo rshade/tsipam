@@ -346,7 +346,7 @@ IPv4-mapped and are aggregated as native IPv6.
 
 #### `calc next-free`
 
-Finds the first available IPv4 child CIDR of a pool after checking both the
+Finds the first available IPv4 or IPv6 child CIDR of a pool after checking both the
 local subnet-pool registry and every route advertised by live tailnet devices.
 Unlike the other `calc` commands, this read-only planning command needs the
 registry and Tailscale API credentials used by `devices list`; it never writes
@@ -357,6 +357,9 @@ free child does not enumerate every possible child of a large pool.
 tail-ipam calc next-free 10.20.0.0/16 --size 24 \
   --registry-dir /etc/tail-ipam --tailnet production
 tail-ipam subnet reserve "$(tail-ipam calc next-free 10.20.0.0/16 --size 24)" branch-office
+tail-ipam calc next-free 2001:db8::/32 --size 48 --count 3 \
+  --registry-dir /etc/tail-ipam --tailnet production
+tail-ipam subnet reserve "$(tail-ipam calc next-free 2001:db8::/48 --size 64)" branch-office
 ```
 
 One result is exactly one bare CIDR followed by a newline, which makes the
@@ -366,11 +369,18 @@ child; multiple results are one CIDR per line in address order. JSON output
 carries the same suggestions as the `free_blocks` array in the versioned
 envelope.
 
+Only overlapping reservations and routes from the pool's address family
+exclude candidates; a mixed IPv4/IPv6 registry supports either search.
+Target sizes range from the pool's prefix length through `/32` for IPv4 or
+`/128` for IPv6, including `/127` and `/128` pools. For large IPv6 pools, use
+the default single result or `--count`: `--all` still produces every free
+child and can be impractical even though the search skips occupied ranges.
+
 If the pool is exhausted, the command succeeds with a message that no free
-block exists (and an empty `free_blocks` JSON array). Native IPv6 pools are a
-usage error until the [IPv6 follow-up](https://github.com/rshade/tailscale-utils/issues/257)
-lands. IPv4-mapped prefixes of `/96` or longer are normalized to their plain
-IPv4 equivalent before searching.
+block exists (and an empty `free_blocks` JSON array). IPv4-mapped prefixes of
+`/96` or longer are normalized to their plain IPv4 equivalent before searching,
+so `--size` uses the IPv4 prefix length. Shorter mapped-looking prefixes remain
+native IPv6. Host bits in pool inputs are masked before searching.
 
 #### `calc info`
 
