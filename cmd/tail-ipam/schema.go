@@ -92,6 +92,7 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 			"calc split, positional aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; " +
 			"calc aggregate --from-registry and calc next-free output reflects registry or live-route data and is sanitized. " +
 			"plan/check redact comparison identities and both tailnet sources; numeric site IDs and drift counts remain visible. " +
+			"check-policy redacts ipset names, CIDRs, site labels, and registry aliases; drift counts remain visible. " +
 			"Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; " +
 			"without it placeholders are artifact-scoped.",
 		Flags:    flagSchemaFor(root.Flags()),
@@ -99,8 +100,9 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 		ExitCodes: []exitCodeSchema{
 			{Code: exitOK, Description: "success"},
 			{Code: exitFailure, Description: "a valid operation was refused, such as a registry collision " +
-				"or a calc split producing too many subnets to materialize, or check found allocation drift"},
-			{Code: exitUsage, Description: "invalid invocation, collection failure, or unreadable registry"},
+				"or a calc split producing too many subnets to materialize, or check/check-policy found allocation drift"},
+			{Code: exitUsage, Description: "invalid invocation, collection failure, unreadable registry or policy, " +
+				"incomplete policy comparison, or output failure"},
 		},
 	}
 	encoder := json.NewEncoder(writer)

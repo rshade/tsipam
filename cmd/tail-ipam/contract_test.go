@@ -394,7 +394,7 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 		"SchemaVersion", "Tool", "Sanitization", "Command", "Status", "Message", "Tailnet",
 		"Changed", "ID", "CIDR", "Address", "Site", "Service", "SiteIDs", "SubnetPools",
 		"ServiceAddresses", "Port", "Device", "UDPPorts", "Devices", "Subnets", "Supernets", "FreeBlocks", "BlockInfo",
-		"Comparison",
+		"Comparison", "PolicyComparison",
 	); len(missing) != 0 {
 		t.Errorf("outputEnvelope fields without an explicit sanitization decision: %v", missing)
 	}

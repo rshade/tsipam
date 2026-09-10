@@ -20,6 +20,7 @@ import (
 type Server struct {
 	Mounts                []*MountPoint
 	Plan                  http.Handler
+	CheckPolicy           http.Handler
 	ListSiteIds           http.Handler
 	ReserveSiteID         http.Handler
 	ReleaseSiteID         http.Handler
@@ -62,6 +63,7 @@ func New(
 	return &Server{
 		Mounts: []*MountPoint{
 			{"Plan", "GET", "/tailnet/{tailnet}/ipam/plan"},
+			{"CheckPolicy", "POST", "/tailnet/{tailnet}/ipam/check-policy"},
 			{"ListSiteIds", "GET", "/tailnet/{tailnet}/ipam/site-ids"},
 			{"ReserveSiteID", "POST", "/tailnet/{tailnet}/ipam/site-ids"},
 			{"ReleaseSiteID", "DELETE", "/tailnet/{tailnet}/ipam/site-ids/{id}"},
@@ -76,6 +78,7 @@ func New(
 			{"ReleaseUDPPort", "DELETE", "/tailnet/{tailnet}/ipam/udp-ports"},
 		},
 		Plan:                  NewPlanHandler(e.Plan, mux, decoder, encoder, errhandler, formatter),
+		CheckPolicy:           NewCheckPolicyHandler(e.CheckPolicy, mux, decoder, encoder, errhandler, formatter),
 		ListSiteIds:           NewListSiteIdsHandler(e.ListSiteIds, mux, decoder, encoder, errhandler, formatter),
 		ReserveSiteID:         NewReserveSiteIDHandler(e.ReserveSiteID, mux, decoder, encoder, errhandler, formatter),
 		ReleaseSiteID:         NewReleaseSiteIDHandler(e.ReleaseSiteID, mux, decoder, encoder, errhandler, formatter),
@@ -97,6 +100,7 @@ func (s *Server) Service() string { return "ipam" }
 // Use wraps the server handlers with the given middleware.
 func (s *Server) Use(m func(http.Handler) http.Handler) {
 	s.Plan = m(s.Plan)
+	s.CheckPolicy = m(s.CheckPolicy)
 	s.ListSiteIds = m(s.ListSiteIds)
 	s.ReserveSiteID = m(s.ReserveSiteID)
 	s.ReleaseSiteID = m(s.ReleaseSiteID)
@@ -117,6 +121,7 @@ func (s *Server) MethodNames() []string { return ipam.MethodNames[:] }
 // Mount configures the mux to serve the ipam endpoints.
 func Mount(mux goahttp.Muxer, h *Server) {
 	MountPlanHandler(mux, h.Plan)
+	MountCheckPolicyHandler(mux, h.CheckPolicy)
 	MountListSiteIdsHandler(mux, h.ListSiteIds)
 	MountReserveSiteIDHandler(mux, h.ReserveSiteID)
 	MountReleaseSiteIDHandler(mux, h.ReleaseSiteID)
@@ -166,6 +171,59 @@ func NewPlanHandler(
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
 		ctx = context.WithValue(ctx, goa.MethodKey, "plan")
+		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
+		payload, err := decodeRequest(r)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		res, err := endpoint(ctx, payload)
+		if err != nil {
+			if err := encodeError(ctx, w, err); err != nil && errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+			return
+		}
+		if err := encodeResponse(ctx, w, res); err != nil {
+			if errhandler != nil {
+				errhandler(ctx, w, err)
+			}
+		}
+	})
+}
+
+// MountCheckPolicyHandler configures the mux to serve the "ipam" service
+// "check_policy" endpoint.
+func MountCheckPolicyHandler(mux goahttp.Muxer, h http.Handler) {
+	f, ok := h.(http.HandlerFunc)
+	if !ok {
+		f = func(w http.ResponseWriter, r *http.Request) {
+			h.ServeHTTP(w, r)
+		}
+	}
+	mux.Handle("POST", "/tailnet/{tailnet}/ipam/check-policy", f)
+}
+
+// NewCheckPolicyHandler creates a HTTP handler which loads the HTTP request
+// and calls the "ipam" service "check_policy" endpoint.
+func NewCheckPolicyHandler(
+	endpoint goa.Endpoint,
+	mux goahttp.Muxer,
+	decoder func(*http.Request) goahttp.Decoder,
+	encoder func(context.Context, http.ResponseWriter) goahttp.Encoder,
+	errhandler func(context.Context, http.ResponseWriter, error),
+	formatter func(ctx context.Context, err error) goahttp.Statuser,
+) http.Handler {
+	var (
+		decodeRequest  = DecodeCheckPolicyRequest(mux, decoder)
+		encodeResponse = EncodeCheckPolicyResponse(encoder)
+		encodeError    = EncodeCheckPolicyError(encoder, formatter)
+	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), goahttp.AcceptTypeKey, r.Header.Get("Accept"))
+		ctx = context.WithValue(ctx, goa.MethodKey, "check_policy")
 		ctx = context.WithValue(ctx, goa.ServiceKey, "ipam")
 		payload, err := decodeRequest(r)
 		if err != nil {

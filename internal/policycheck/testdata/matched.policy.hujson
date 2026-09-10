@@ -1,0 +1,4 @@
+{
+  // Adjacent additions must not become an invented /24.
+  "ipsets": {"ipset:office": ["192.0.2.0/25", "192.0.2.128/25"], "ipset:v6": ["2001:db8:1::/48"]},
+}

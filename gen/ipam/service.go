@@ -19,6 +19,9 @@ type Service interface {
 	// Compare declared allocations with live control-plane state without modifying
 	// either.
 	Plan(context.Context, *PlanPayload) (res *ComparisonReport, err error)
+	// Compare static ipset definitions with subnet reservations without modifying
+	// either.
+	CheckPolicy(context.Context, *CheckPolicyPayload) (res *PolicyComparison, err error)
 	// ListSiteIds implements list_site_ids.
 	ListSiteIds(context.Context, *ListSiteIdsPayload) (res []*SiteIDReservation, err error)
 	// ReserveSiteID implements reserve_site_id.
@@ -59,7 +62,16 @@ const ServiceName = "ipam"
 // MethodNames lists the service method names as defined in the design. These
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
-var MethodNames = [13]string{"plan", "list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
+var MethodNames = [14]string{"plan", "check_policy", "list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
+
+// CheckPolicyPayload is the payload type of the ipam service check_policy
+// method.
+type CheckPolicyPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Local HuJSON policy contents; no server-side file path is accepted.
+	Policy string
+}
 
 // One allocation and its registry-versus-live classification.
 type ComparisonEntry struct {
@@ -130,6 +142,40 @@ type PlanPayload struct {
 	Tailnet string
 	// Tailscale tailnet whose live allocations are collected.
 	LiveTailnet string
+}
+
+// One effective authored CIDR and its containing reservations.
+type PolicyAuthored struct {
+	// Defining ipset name.
+	IPSet string
+	// Canonical effective CIDR.
+	CIDR string
+	// Authored classification.
+	State string
+	// Sorted containing reservation CIDRs.
+	Pools []string
+}
+
+// PolicyComparison is the result type of the ipam service check_policy method.
+type PolicyComparison struct {
+	// Number of unmatched rows in both directions.
+	DriftCount int
+	// Rows sorted by ipset name, then CIDR address and length.
+	Authored []*PolicyAuthored
+	// Rows sorted by CIDR address and length.
+	Reserved []*PolicyReserved
+}
+
+// One reserved subnet pool and its referencing ipsets.
+type PolicyReserved struct {
+	// Reserved CIDR.
+	CIDR string
+	// Registry site label.
+	Site string
+	// Reserved classification.
+	State string
+	// Sorted ipsets with overlapping effective address space.
+	IPSets []string
 }
 
 // ReleaseServiceAddressPayload is the payload type of the ipam service
@@ -409,6 +455,11 @@ type UDPPortReservation struct {
 // MakeComparisonFailed builds a goa.ServiceError from an error.
 func MakeComparisonFailed(err error) *goa.ServiceError {
 	return goa.NewServiceError(err, "comparison_failed", false, false, false)
+}
+
+// MakePolicyCheckFailed builds a goa.ServiceError from an error.
+func MakePolicyCheckFailed(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "policy_check_failed", false, false, false)
 }
 
 // MakeCollision builds a goa.ServiceError from an error.

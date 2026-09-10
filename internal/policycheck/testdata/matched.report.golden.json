@@ -1,0 +1,55 @@
+{
+  "drift_count": 0,
+  "authored": [
+    {
+      "ipset": "ipset:office",
+      "cidr": "192.0.2.0/25",
+      "state": "matched",
+      "pools": [
+        "192.0.2.0/25"
+      ]
+    },
+    {
+      "ipset": "ipset:office",
+      "cidr": "192.0.2.128/25",
+      "state": "matched",
+      "pools": [
+        "192.0.2.128/25"
+      ]
+    },
+    {
+      "ipset": "ipset:v6",
+      "cidr": "2001:db8:1::/48",
+      "state": "matched",
+      "pools": [
+        "2001:db8::/32"
+      ]
+    }
+  ],
+  "reserved": [
+    {
+      "cidr": "192.0.2.0/25",
+      "site": "office",
+      "state": "matched",
+      "ipsets": [
+        "ipset:office"
+      ]
+    },
+    {
+      "cidr": "192.0.2.128/25",
+      "site": "office",
+      "state": "matched",
+      "ipsets": [
+        "ipset:office"
+      ]
+    },
+    {
+      "cidr": "2001:db8::/32",
+      "site": "v6",
+      "state": "matched",
+      "ipsets": [
+        "ipset:v6"
+      ]
+    }
+  ]
+}

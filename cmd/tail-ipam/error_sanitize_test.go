@@ -1081,7 +1081,7 @@ func TestServiceNameSvcSelectorNotOverRedacted(t *testing.T) {
 // The original Round 2 domain additionally carried an "invalid UTF-8 with
 // control character" site row. That row is not reachable through any real
 // validation error in this codebase: NormalizeSiteName and NormalizeDeviceName
-// both check utf8.ValidString before rejectControlChars and, on invalid UTF-8,
+// both check [utf8.ValidString] before rejectControlChars and, on invalid UTF-8,
 // return a fixed, non-interpolated message ("... must be valid UTF-8") that
 // never echoes the value -- so there is no %q-formatted error for such a value
 // to leak from. It is also impossible to route an invalid byte through a

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/policycheck"
 )
 
 const (
@@ -163,6 +164,7 @@ type outputEnvelope struct {
 	FreeBlocks       *[]string               `json:"free_blocks,omitempty"`
 	BlockInfo        *blockInfoOutput        `json:"block_info,omitempty"`
 	Comparison       *comparisonOutput       `json:"comparison,omitempty"`
+	PolicyComparison *policycheck.Report     `json:"policy_comparison,omitempty"`
 
 	// messageBuilder, when set, renders Message from this envelope's own
 	// exported fields at emit time instead of Message being pre-formatted
@@ -202,6 +204,9 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 	}
 	if result.Comparison != nil {
 		return renderComparison(writer, result.Tailnet, result.Comparison)
+	}
+	if result.PolicyComparison != nil {
+		return renderPolicyComparison(writer, result.Tailnet, result.PolicyComparison)
 	}
 	if result.SubnetPools != nil {
 		return renderSubnetPools(writer, *result.SubnetPools)
@@ -416,6 +421,7 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 	}
 	result.BlockInfo = input.BlockInfo
 	result.Comparison = sanitizeComparison(input.Comparison, output)
+	result.PolicyComparison = sanitizePolicyComparison(input.PolicyComparison, output)
 	if input.FreeBlocks != nil {
 		blocks := make([]string, len(*input.FreeBlocks))
 		for index, block := range *input.FreeBlocks {

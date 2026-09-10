@@ -16,6 +16,7 @@ import (
 // Endpoints wraps the "ipam" service endpoints.
 type Endpoints struct {
 	Plan                  goa.Endpoint
+	CheckPolicy           goa.Endpoint
 	ListSiteIds           goa.Endpoint
 	ReserveSiteID         goa.Endpoint
 	ReleaseSiteID         goa.Endpoint
@@ -34,6 +35,7 @@ type Endpoints struct {
 func NewEndpoints(s Service) *Endpoints {
 	return &Endpoints{
 		Plan:                  NewPlanEndpoint(s),
+		CheckPolicy:           NewCheckPolicyEndpoint(s),
 		ListSiteIds:           NewListSiteIdsEndpoint(s),
 		ReserveSiteID:         NewReserveSiteIDEndpoint(s),
 		ReleaseSiteID:         NewReleaseSiteIDEndpoint(s),
@@ -52,6 +54,7 @@ func NewEndpoints(s Service) *Endpoints {
 // Use applies the given middleware to all the "ipam" service endpoints.
 func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
 	e.Plan = m(e.Plan)
+	e.CheckPolicy = m(e.CheckPolicy)
 	e.ListSiteIds = m(e.ListSiteIds)
 	e.ReserveSiteID = m(e.ReserveSiteID)
 	e.ReleaseSiteID = m(e.ReleaseSiteID)
@@ -72,6 +75,15 @@ func NewPlanEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*PlanPayload)
 		return s.Plan(ctx, p)
+	}
+}
+
+// NewCheckPolicyEndpoint returns an endpoint function that calls the method
+// "check_policy" of service "ipam".
+func NewCheckPolicyEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*CheckPolicyPayload)
+		return s.CheckPolicy(ctx, p)
 	}
 }
 

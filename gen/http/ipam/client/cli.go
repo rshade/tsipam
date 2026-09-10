@@ -33,6 +33,29 @@ func BuildPlanPayload(ipamPlanTailnet string, ipamPlanLiveTailnet string) (*ipam
 	return v, nil
 }
 
+// BuildCheckPolicyPayload builds the payload for the ipam check_policy
+// endpoint from CLI flags.
+func BuildCheckPolicyPayload(ipamCheckPolicyBody string, ipamCheckPolicyTailnet string) (*ipam.CheckPolicyPayload, error) {
+	var err error
+	var body CheckPolicyRequestBody
+	{
+		err = json.Unmarshal([]byte(ipamCheckPolicyBody), &body)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"policy\": \"Corrupti magnam inventore.\"\n   }'")
+		}
+	}
+	var tailnet string
+	{
+		tailnet = ipamCheckPolicyTailnet
+	}
+	v := &ipam.CheckPolicyPayload{
+		Policy: body.Policy,
+	}
+	v.Tailnet = tailnet
+
+	return v, nil
+}
+
 // BuildListSiteIdsPayload builds the payload for the ipam list_site_ids
 // endpoint from CLI flags.
 func BuildListSiteIdsPayload(ipamListSiteIdsTailnet string) (*ipam.ListSiteIdsPayload, error) {

@@ -12,6 +12,13 @@ import (
 	goa "goa.design/goa/v3/pkg"
 )
 
+// CheckPolicyRequestBody is the type of the "ipam" service "check_policy"
+// endpoint HTTP request body.
+type CheckPolicyRequestBody struct {
+	// Local HuJSON policy contents; no server-side file path is accepted.
+	Policy string `form:"policy" json:"policy" xml:"policy"`
+}
+
 // ReserveSiteIDRequestBody is the type of the "ipam" service "reserve_site_id"
 // endpoint HTTP request body.
 type ReserveSiteIDRequestBody struct {
@@ -85,6 +92,17 @@ type PlanResponseBody struct {
 	Entries []*ComparisonEntryResponseBody `form:"entries,omitempty" json:"entries,omitempty" xml:"entries,omitempty"`
 	// Allocation kinds with no live counterpart: udp_port.
 	Excluded []string `form:"excluded,omitempty" json:"excluded,omitempty" xml:"excluded,omitempty"`
+}
+
+// CheckPolicyResponseBody is the type of the "ipam" service "check_policy"
+// endpoint HTTP response body.
+type CheckPolicyResponseBody struct {
+	// Number of unmatched rows in both directions.
+	DriftCount *int `form:"drift_count,omitempty" json:"drift_count,omitempty" xml:"drift_count,omitempty"`
+	// Rows sorted by ipset name, then CIDR address and length.
+	Authored []*PolicyAuthoredResponseBody `form:"authored,omitempty" json:"authored,omitempty" xml:"authored,omitempty"`
+	// Rows sorted by CIDR address and length.
+	Reserved []*PolicyReservedResponseBody `form:"reserved,omitempty" json:"reserved,omitempty" xml:"reserved,omitempty"`
 }
 
 // ReserveSiteIDResponseBody is the type of the "ipam" service
@@ -198,6 +216,25 @@ type ReleaseUDPPortResponseBody struct {
 // PlanComparisonFailedResponseBody is the type of the "ipam" service "plan"
 // endpoint HTTP response body for the "comparison_failed" error.
 type PlanComparisonFailedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// CheckPolicyPolicyCheckFailedResponseBody is the type of the "ipam" service
+// "check_policy" endpoint HTTP response body for the "policy_check_failed"
+// error.
+type CheckPolicyPolicyCheckFailedResponseBody struct {
 	// Name is the name of this class of errors.
 	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
 	// ID is a unique identifier for this particular occurrence of the problem.
@@ -468,6 +505,30 @@ type ComparisonEntryResponseBody struct {
 	Routes []string `form:"routes,omitempty" json:"routes,omitempty" xml:"routes,omitempty"`
 }
 
+// PolicyAuthoredResponseBody is used to define fields on response body types.
+type PolicyAuthoredResponseBody struct {
+	// Defining ipset name.
+	IPSet *string `form:"ipset,omitempty" json:"ipset,omitempty" xml:"ipset,omitempty"`
+	// Canonical effective CIDR.
+	CIDR *string `form:"cidr,omitempty" json:"cidr,omitempty" xml:"cidr,omitempty"`
+	// Authored classification.
+	State *string `form:"state,omitempty" json:"state,omitempty" xml:"state,omitempty"`
+	// Sorted containing reservation CIDRs.
+	Pools []string `form:"pools,omitempty" json:"pools,omitempty" xml:"pools,omitempty"`
+}
+
+// PolicyReservedResponseBody is used to define fields on response body types.
+type PolicyReservedResponseBody struct {
+	// Reserved CIDR.
+	CIDR *string `form:"cidr,omitempty" json:"cidr,omitempty" xml:"cidr,omitempty"`
+	// Registry site label.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Reserved classification.
+	State *string `form:"state,omitempty" json:"state,omitempty" xml:"state,omitempty"`
+	// Sorted ipsets with overlapping effective address space.
+	IPSets []string `form:"ipsets,omitempty" json:"ipsets,omitempty" xml:"ipsets,omitempty"`
+}
+
 // SiteIDReservationResponse is used to define fields on response body types.
 type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -526,6 +587,15 @@ type UDPPortReservationResponse struct {
 	Port *string `form:"port,omitempty" json:"port,omitempty" xml:"port,omitempty"`
 	// Canonical device label that owns the port within the site.
 	Device *string `form:"device,omitempty" json:"device,omitempty" xml:"device,omitempty"`
+}
+
+// NewCheckPolicyRequestBody builds the HTTP request body from the payload of
+// the "check_policy" endpoint of the "ipam" service.
+func NewCheckPolicyRequestBody(p *ipam.CheckPolicyPayload) *CheckPolicyRequestBody {
+	body := &CheckPolicyRequestBody{
+		Policy: p.Policy,
+	}
+	return body
 }
 
 // NewReserveSiteIDRequestBody builds the HTTP request body from the payload of
@@ -607,6 +677,47 @@ func NewPlanComparisonReportOK(body *PlanResponseBody) *ipam.ComparisonReport {
 // NewPlanComparisonFailed builds a ipam service plan endpoint
 // comparison_failed error.
 func NewPlanComparisonFailed(body *PlanComparisonFailedResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewCheckPolicyPolicyComparisonOK builds a "ipam" service "check_policy"
+// endpoint result from a HTTP "OK" response.
+func NewCheckPolicyPolicyComparisonOK(body *CheckPolicyResponseBody) *ipam.PolicyComparison {
+	v := &ipam.PolicyComparison{
+		DriftCount: *body.DriftCount,
+	}
+	v.Authored = make([]*ipam.PolicyAuthored, len(body.Authored))
+	for i, val := range body.Authored {
+		if val == nil {
+			v.Authored[i] = nil
+			continue
+		}
+		v.Authored[i] = unmarshalPolicyAuthoredResponseBodyToIpamPolicyAuthored(val)
+	}
+	v.Reserved = make([]*ipam.PolicyReserved, len(body.Reserved))
+	for i, val := range body.Reserved {
+		if val == nil {
+			v.Reserved[i] = nil
+			continue
+		}
+		v.Reserved[i] = unmarshalPolicyReservedResponseBodyToIpamPolicyReserved(val)
+	}
+
+	return v
+}
+
+// NewCheckPolicyPolicyCheckFailed builds a ipam service check_policy endpoint
+// policy_check_failed error.
+func NewCheckPolicyPolicyCheckFailed(body *CheckPolicyPolicyCheckFailedResponseBody) *goa.ServiceError {
 	v := &goa.ServiceError{
 		Name:      *body.Name,
 		ID:        *body.ID,
@@ -1009,6 +1120,40 @@ func ValidatePlanResponseBody(body *PlanResponseBody) (err error) {
 	return
 }
 
+// ValidateCheckPolicyResponseBody runs the validations defined on
+// check_policy_response_body
+func ValidateCheckPolicyResponseBody(body *CheckPolicyResponseBody) (err error) {
+	if body.DriftCount == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("drift_count", "body"))
+	}
+	if body.Authored == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("authored", "body"))
+	}
+	if body.Reserved == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("reserved", "body"))
+	}
+	if body.DriftCount != nil {
+		if *body.DriftCount < 0 {
+			err = goa.MergeErrors(err, goa.InvalidRangeError("body.drift_count", *body.DriftCount, 0, true))
+		}
+	}
+	for _, e := range body.Authored {
+		if e != nil {
+			if err2 := ValidatePolicyAuthoredResponseBody(e); err2 != nil {
+				err = goa.MergeErrors(err, err2)
+			}
+		}
+	}
+	for _, e := range body.Reserved {
+		if e != nil {
+			if err2 := ValidatePolicyReservedResponseBody(e); err2 != nil {
+				err = goa.MergeErrors(err, err2)
+			}
+		}
+	}
+	return
+}
+
 // ValidateReserveSiteIDResponseBody runs the validations defined on
 // reserve_site_id_response_body
 func ValidateReserveSiteIDResponseBody(body *ReserveSiteIDResponseBody) (err error) {
@@ -1135,6 +1280,30 @@ func ValidateReleaseUDPPortResponseBody(body *ReleaseUDPPortResponseBody) (err e
 // ValidatePlanComparisonFailedResponseBody runs the validations defined on
 // plan_comparison_failed_response_body
 func ValidatePlanComparisonFailedResponseBody(body *PlanComparisonFailedResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateCheckPolicyPolicyCheckFailedResponseBody runs the validations
+// defined on check_policy_policy_check_failed_response_body
+func ValidateCheckPolicyPolicyCheckFailedResponseBody(body *CheckPolicyPolicyCheckFailedResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
 	}
@@ -1494,6 +1663,52 @@ func ValidateComparisonEntryResponseBody(body *ComparisonEntryResponseBody) (err
 	if body.State != nil {
 		if !(*body.State == "matched" || *body.State == "reserved_but_unadvertised" || *body.State == "unreserved_but_live" || *body.State == "conflict") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.state", *body.State, []any{"matched", "reserved_but_unadvertised", "unreserved_but_live", "conflict"}))
+		}
+	}
+	return
+}
+
+// ValidatePolicyAuthoredResponseBody runs the validations defined on
+// PolicyAuthoredResponseBody
+func ValidatePolicyAuthoredResponseBody(body *PolicyAuthoredResponseBody) (err error) {
+	if body.IPSet == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("ipset", "body"))
+	}
+	if body.CIDR == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
+	}
+	if body.State == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("state", "body"))
+	}
+	if body.Pools == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("pools", "body"))
+	}
+	if body.State != nil {
+		if !(*body.State == "matched" || *body.State == "authored_but_unreserved") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.state", *body.State, []any{"matched", "authored_but_unreserved"}))
+		}
+	}
+	return
+}
+
+// ValidatePolicyReservedResponseBody runs the validations defined on
+// PolicyReservedResponseBody
+func ValidatePolicyReservedResponseBody(body *PolicyReservedResponseBody) (err error) {
+	if body.CIDR == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
+	}
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	if body.State == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("state", "body"))
+	}
+	if body.IPSets == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("ipsets", "body"))
+	}
+	if body.State != nil {
+		if !(*body.State == "matched" || *body.State == "reserved_but_unreferenced") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.state", *body.State, []any{"matched", "reserved_but_unreferenced"}))
 		}
 	}
 	return

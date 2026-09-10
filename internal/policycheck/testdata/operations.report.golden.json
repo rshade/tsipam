@@ -1,0 +1,54 @@
+{
+  "drift_count": 1,
+  "authored": [
+    {
+      "ipset": "ipset:base",
+      "cidr": "192.0.2.0/24",
+      "state": "matched",
+      "pools": [
+        "192.0.2.0/24"
+      ]
+    },
+    {
+      "ipset": "ipset:readded",
+      "cidr": "198.51.100.2/31",
+      "state": "matched",
+      "pools": [
+        "198.51.100.0/24"
+      ]
+    },
+    {
+      "ipset": "ipset:trimmed",
+      "cidr": "192.0.2.0/25",
+      "state": "matched",
+      "pools": [
+        "192.0.2.0/24"
+      ]
+    }
+  ],
+  "reserved": [
+    {
+      "cidr": "192.0.2.0/24",
+      "site": "office",
+      "state": "matched",
+      "ipsets": [
+        "ipset:base",
+        "ipset:trimmed"
+      ]
+    },
+    {
+      "cidr": "198.51.100.0/24",
+      "site": "branch",
+      "state": "matched",
+      "ipsets": [
+        "ipset:readded"
+      ]
+    },
+    {
+      "cidr": "203.0.113.0/24",
+      "site": "unused",
+      "state": "reserved_but_unreferenced",
+      "ipsets": []
+    }
+  ]
+}

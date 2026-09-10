@@ -310,7 +310,7 @@ func runCLI(
 		// cobra never writes to stdout on failure; this is that print.
 		// The drift sentinel contains no identities and the report is already
 		// rendered. Avoid reopening registry data for this completed comparison.
-		if !errors.Is(err, errRegistryDrift) {
+		if !errors.Is(err, errRegistryDrift) && !errors.Is(err, errPolicyDrift) {
 			registerKnownIdentityInventory(executed, state)
 		}
 		_, _ = fmt.Fprintf(stderr, "%s: %v\n", toolName, sanitizeErrorIfNeeded(err, state.sanitizer))
@@ -569,7 +569,7 @@ const collisionErrorName = "collision"
 // that concrete Go type does not cross the wire. Both domain checks stay for
 // in-process callers.
 func exitCodeFor(err error) int {
-	if errors.Is(err, errRegistryDrift) {
+	if errors.Is(err, errRegistryDrift) || errors.Is(err, errPolicyDrift) {
 		return exitFailure
 	}
 	var svcErr *goa.ServiceError
@@ -612,8 +612,8 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 			"Exit codes:\n" +
 			"  0  success\n" +
 			"  1  a valid operation was refused (for example, a registry collision or\n" +
-			"     a calc split producing too many subnets to materialize), or check found drift\n" +
-			"  2  invalid invocation, collection failure, or unreadable registry",
+			"     a calc split producing too many subnets to materialize), or check/check-policy found drift\n" +
+			"  2  invalid invocation, incomplete comparison, unreadable input, or output failure",
 		Example: "  tail-ipam site-id reserve 1 hq-vpc\n" +
 			"  tail-ipam subnet reserve 10.0.0.0/24 hq-vpc\n" +
 			"  tail-ipam service reserve 100.100.100.8 dashboard\n" +
@@ -686,6 +686,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	root.AddCommand(newCalcCommand(state, deps.listDevices))
 	root.AddCommand(newPlanningCommand(state, commandPlan, deps.collectLive))
 	root.AddCommand(newPlanningCommand(state, commandCheck, deps.collectLive))
+	root.AddCommand(newPolicyCheckCommand(state))
 	root.InitDefaultHelpFlag()
 	return root
 }

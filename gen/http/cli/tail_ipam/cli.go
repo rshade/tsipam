@@ -23,7 +23,7 @@ import (
 //	command (subcommand1|subcommand2|...)
 func UsageCommands() []string {
 	return []string{
-		"ipam (plan|list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
+		"ipam (plan|check-policy|list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
 	}
 }
 
@@ -48,6 +48,10 @@ func ParseEndpoint(
 		ipamPlanFlags           = flag.NewFlagSet("plan", flag.ExitOnError)
 		ipamPlanTailnetFlag     = ipamPlanFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
 		ipamPlanLiveTailnetFlag = ipamPlanFlags.String("live-tailnet", "REQUIRED", "")
+
+		ipamCheckPolicyFlags       = flag.NewFlagSet("check-policy", flag.ExitOnError)
+		ipamCheckPolicyBodyFlag    = ipamCheckPolicyFlags.String("body", "REQUIRED", "")
+		ipamCheckPolicyTailnetFlag = ipamCheckPolicyFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
 
 		ipamListSiteIdsFlags       = flag.NewFlagSet("list-site-ids", flag.ExitOnError)
 		ipamListSiteIdsTailnetFlag = ipamListSiteIdsFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.")
@@ -97,6 +101,7 @@ func ParseEndpoint(
 	)
 	ipamFlags.Usage = ipamUsage
 	ipamPlanFlags.Usage = ipamPlanUsage
+	ipamCheckPolicyFlags.Usage = ipamCheckPolicyUsage
 	ipamListSiteIdsFlags.Usage = ipamListSiteIdsUsage
 	ipamReserveSiteIDFlags.Usage = ipamReserveSiteIDUsage
 	ipamReleaseSiteIDFlags.Usage = ipamReleaseSiteIDUsage
@@ -146,6 +151,9 @@ func ParseEndpoint(
 			switch epn {
 			case "plan":
 				epf = ipamPlanFlags
+
+			case "check-policy":
+				epf = ipamCheckPolicyFlags
 
 			case "list-site-ids":
 				epf = ipamListSiteIdsFlags
@@ -211,6 +219,9 @@ func ParseEndpoint(
 			case "plan":
 				endpoint = c.Plan()
 				data, err = ipamc.BuildPlanPayload(*ipamPlanTailnetFlag, *ipamPlanLiveTailnetFlag)
+			case "check-policy":
+				endpoint = c.CheckPolicy()
+				data, err = ipamc.BuildCheckPolicyPayload(*ipamCheckPolicyBodyFlag, *ipamCheckPolicyTailnetFlag)
 			case "list-site-ids":
 				endpoint = c.ListSiteIds()
 				data, err = ipamc.BuildListSiteIdsPayload(*ipamListSiteIdsTailnetFlag)
@@ -263,6 +274,7 @@ func ipamUsage() {
 	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] ipam COMMAND [flags]\n\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "COMMAND:")
 	fmt.Fprintln(os.Stderr, `    plan: Compare declared allocations with live control-plane state without modifying either.`)
+	fmt.Fprintln(os.Stderr, `    check-policy: Compare static ipset definitions with subnet reservations without modifying either.`)
 	fmt.Fprintln(os.Stderr, `    list-site-ids: ListSiteIds implements list_site_ids.`)
 	fmt.Fprintln(os.Stderr, `    reserve-site-id: ReserveSiteID implements reserve_site_id.`)
 	fmt.Fprintln(os.Stderr, `    release-site-id: ReleaseSiteID implements release_site_id.`)
@@ -297,6 +309,26 @@ func ipamPlanUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam plan --tailnet \"Quibusdam quidem ut.\" --live-tailnet \"Quis reiciendis animi provident.\"")
+}
+
+func ipamCheckPolicyUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam check-policy", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Compare static ipset definitions with subnet reservations without modifying either.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam check-policy --body '{\n      \"policy\": \"Corrupti magnam inventore.\"\n   }' --tailnet \"Nulla doloribus aut illum.\"")
 }
 
 func ipamListSiteIdsUsage() {

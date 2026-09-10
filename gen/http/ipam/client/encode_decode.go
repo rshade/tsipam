@@ -116,6 +116,104 @@ func DecodePlanResponse(decoder func(*http.Response) goahttp.Decoder, restoreBod
 	}
 }
 
+// BuildCheckPolicyRequest instantiates a HTTP request object with method and
+// path set to call the "ipam" service "check_policy" endpoint
+func (c *Client) BuildCheckPolicyRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.CheckPolicyPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "check_policy", "*ipam.CheckPolicyPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: CheckPolicyIpamPath(tailnet)}
+	req, err := http.NewRequest("POST", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "check_policy", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeCheckPolicyRequest returns an encoder for requests sent to the ipam
+// check_policy server.
+func EncodeCheckPolicyRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.CheckPolicyPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "check_policy", "*ipam.CheckPolicyPayload", v)
+		}
+		body := NewCheckPolicyRequestBody(p)
+		if err := encoder(req).Encode(&body); err != nil {
+			return goahttp.ErrEncodingError("ipam", "check_policy", err)
+		}
+		return nil
+	}
+}
+
+// DecodeCheckPolicyResponse returns a decoder for responses returned by the
+// ipam check_policy endpoint. restoreBody controls whether the response body
+// should be restored after having been read.
+// DecodeCheckPolicyResponse may return the following errors:
+//   - "policy_check_failed" (type *goa.ServiceError): http.StatusBadRequest
+//   - error: internal error
+func DecodeCheckPolicyResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body CheckPolicyResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "check_policy", err)
+			}
+			err = ValidateCheckPolicyResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "check_policy", err)
+			}
+			res := NewCheckPolicyPolicyComparisonOK(&body)
+			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body CheckPolicyPolicyCheckFailedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "check_policy", err)
+			}
+			err = ValidateCheckPolicyPolicyCheckFailedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "check_policy", err)
+			}
+			return nil, NewCheckPolicyPolicyCheckFailed(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "check_policy", resp.StatusCode, string(body))
+		}
+	}
+}
+
 // BuildListSiteIdsRequest instantiates a HTTP request object with method and
 // path set to call the "ipam" service "list_site_ids" endpoint
 func (c *Client) BuildListSiteIdsRequest(ctx context.Context, v any) (*http.Request, error) {
@@ -1281,6 +1379,38 @@ func unmarshalComparisonEntryResponseBodyToIpamComparisonEntry(v *ComparisonEntr
 	res.Routes = make([]string, len(v.Routes))
 	for i, val := range v.Routes {
 		res.Routes[i] = val
+	}
+
+	return res
+}
+
+// unmarshalPolicyAuthoredResponseBodyToIpamPolicyAuthored builds a value of
+// type *ipam.PolicyAuthored from a value of type *PolicyAuthoredResponseBody.
+func unmarshalPolicyAuthoredResponseBodyToIpamPolicyAuthored(v *PolicyAuthoredResponseBody) *ipam.PolicyAuthored {
+	res := &ipam.PolicyAuthored{
+		IPSet: *v.IPSet,
+		CIDR:  *v.CIDR,
+		State: *v.State,
+	}
+	res.Pools = make([]string, len(v.Pools))
+	for i, val := range v.Pools {
+		res.Pools[i] = val
+	}
+
+	return res
+}
+
+// unmarshalPolicyReservedResponseBodyToIpamPolicyReserved builds a value of
+// type *ipam.PolicyReserved from a value of type *PolicyReservedResponseBody.
+func unmarshalPolicyReservedResponseBodyToIpamPolicyReserved(v *PolicyReservedResponseBody) *ipam.PolicyReserved {
+	res := &ipam.PolicyReserved{
+		CIDR:  *v.CIDR,
+		Site:  *v.Site,
+		State: *v.State,
+	}
+	res.IPSets = make([]string, len(v.IPSets))
+	for i, val := range v.IPSets {
+		res.IPSets[i] = val
 	}
 
 	return res

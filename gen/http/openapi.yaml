@@ -13,6 +13,41 @@ produces:
     - application/xml
     - application/gob
 paths:
+    /tailnet/{tailnet}/ipam/check-policy:
+        post:
+            tags:
+                - ipam
+            summary: check_policy ipam
+            description: Compare static ipset definitions with subnet reservations without modifying either.
+            operationId: ipam#check_policy
+            parameters:
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  type: string
+                - name: check_policy_request_body
+                  in: body
+                  required: true
+                  schema:
+                    $ref: '#/definitions/IpamCheckPolicyRequestBody'
+                    required:
+                        - policy
+            responses:
+                "200":
+                    description: OK response.
+                    schema:
+                        $ref: '#/definitions/PolicyComparison'
+                        required:
+                            - drift_count
+                            - authored
+                            - reserved
+                "400":
+                    description: Bad Request response.
+                    schema:
+                        $ref: '#/definitions/IpamCheckPolicyPolicyCheckFailedResponseBody'
+            schemes:
+                - http
     /tailnet/{tailnet}/ipam/plan:
         get:
             tags:
@@ -643,6 +678,61 @@ definitions:
             - drift_count
             - entries
             - excluded
+    IpamCheckPolicyPolicyCheckFailedResponseBody:
+        title: 'Mediatype identifier: application/vnd.goa.error; view=default'
+        type: object
+        properties:
+            fault:
+                type: boolean
+                description: Is the error a server-side fault?
+                example: true
+            id:
+                type: string
+                description: ID is a unique identifier for this particular occurrence of the problem.
+                example: 123abc
+            message:
+                type: string
+                description: Message is a human-readable explanation specific to this occurrence of the problem.
+                example: parameter 'p' must be an integer
+            name:
+                type: string
+                description: Name is the name of this class of errors.
+                example: bad_request
+            temporary:
+                type: boolean
+                description: Is the error temporary?
+                example: false
+            timeout:
+                type: boolean
+                description: Is the error a timeout?
+                example: true
+        description: Policy or registry input could not be compared completely. (default view)
+        example:
+            fault: true
+            id: 123abc
+            message: parameter 'p' must be an integer
+            name: bad_request
+            temporary: false
+            timeout: true
+        required:
+            - name
+            - id
+            - message
+            - temporary
+            - timeout
+            - fault
+    IpamCheckPolicyRequestBody:
+        title: IpamCheckPolicyRequestBody
+        type: object
+        properties:
+            policy:
+                type: string
+                description: Local HuJSON policy contents; no server-side file path is accepted.
+                example: Corrupti magnam inventore.
+        example:
+            policy: Corrupti magnam inventore.
+        required:
+            - policy
     IpamListUDPPortsInvalidInputResponseBody:
         title: 'Mediatype identifier: application/vnd.goa.error; view=default'
         type: object
@@ -1629,6 +1719,235 @@ definitions:
             - port
             - device
             - changed
+    PolicyAuthored:
+        title: PolicyAuthored
+        type: object
+        properties:
+            cidr:
+                type: string
+                description: Canonical effective CIDR.
+                example: Recusandae alias dolorem doloribus ea voluptas.
+            ipset:
+                type: string
+                description: Defining ipset name.
+                example: Quis exercitationem aperiam velit quia.
+            pools:
+                type: array
+                items:
+                    type: string
+                    example: Enim qui quia animi aut.
+                description: Sorted containing reservation CIDRs.
+                example:
+                    - Enim qui quia animi aut.
+                    - Odit laudantium sunt incidunt neque.
+            state:
+                type: string
+                description: Authored classification.
+                example: matched
+                enum:
+                    - matched
+                    - authored_but_unreserved
+        description: One effective authored CIDR and its containing reservations.
+        example:
+            cidr: Recusandae alias dolorem doloribus ea voluptas.
+            ipset: Quis exercitationem aperiam velit quia.
+            pools:
+                - Enim qui quia animi aut.
+                - Odit laudantium sunt incidunt neque.
+            state: matched
+        required:
+            - ipset
+            - cidr
+            - state
+            - pools
+    PolicyComparison:
+        title: PolicyComparison
+        type: object
+        properties:
+            authored:
+                type: array
+                items:
+                    $ref: '#/definitions/PolicyAuthored'
+                description: Rows sorted by ipset name, then CIDR address and length.
+                example:
+                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                      ipset: Quis exercitationem aperiam velit quia.
+                      pools:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                      state: matched
+                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                      ipset: Quis exercitationem aperiam velit quia.
+                      pools:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                      state: matched
+                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                      ipset: Quis exercitationem aperiam velit quia.
+                      pools:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                      state: matched
+                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                      ipset: Quis exercitationem aperiam velit quia.
+                      pools:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                      state: matched
+            drift_count:
+                type: integer
+                description: Number of unmatched rows in both directions.
+                example: 839643861232554501
+                format: int64
+                minimum: 0
+            reserved:
+                type: array
+                items:
+                    $ref: '#/definitions/PolicyReserved'
+                description: Rows sorted by CIDR address and length.
+                example:
+                    - cidr: Quo quia ab qui laboriosam.
+                      ipsets:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                      site: Qui numquam exercitationem.
+                      state: reserved_but_unreferenced
+                    - cidr: Quo quia ab qui laboriosam.
+                      ipsets:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                      site: Qui numquam exercitationem.
+                      state: reserved_but_unreferenced
+                    - cidr: Quo quia ab qui laboriosam.
+                      ipsets:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                      site: Qui numquam exercitationem.
+                      state: reserved_but_unreferenced
+                    - cidr: Quo quia ab qui laboriosam.
+                      ipsets:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                      site: Qui numquam exercitationem.
+                      state: reserved_but_unreferenced
+        description: Complete static comparison of authored ipsets and reserved subnet pools.
+        example:
+            authored:
+                - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                  ipset: Quis exercitationem aperiam velit quia.
+                  pools:
+                    - Enim qui quia animi aut.
+                    - Odit laudantium sunt incidunt neque.
+                  state: matched
+                - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                  ipset: Quis exercitationem aperiam velit quia.
+                  pools:
+                    - Enim qui quia animi aut.
+                    - Odit laudantium sunt incidunt neque.
+                  state: matched
+                - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                  ipset: Quis exercitationem aperiam velit quia.
+                  pools:
+                    - Enim qui quia animi aut.
+                    - Odit laudantium sunt incidunt neque.
+                  state: matched
+                - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                  ipset: Quis exercitationem aperiam velit quia.
+                  pools:
+                    - Enim qui quia animi aut.
+                    - Odit laudantium sunt incidunt neque.
+                  state: matched
+            drift_count: 839643861232554501
+            reserved:
+                - cidr: Quo quia ab qui laboriosam.
+                  ipsets:
+                    - Ratione qui.
+                    - Dolorum enim dolore cupiditate deserunt nam.
+                    - Fugiat officia.
+                    - Qui asperiores sapiente minus.
+                  site: Qui numquam exercitationem.
+                  state: reserved_but_unreferenced
+                - cidr: Quo quia ab qui laboriosam.
+                  ipsets:
+                    - Ratione qui.
+                    - Dolorum enim dolore cupiditate deserunt nam.
+                    - Fugiat officia.
+                    - Qui asperiores sapiente minus.
+                  site: Qui numquam exercitationem.
+                  state: reserved_but_unreferenced
+                - cidr: Quo quia ab qui laboriosam.
+                  ipsets:
+                    - Ratione qui.
+                    - Dolorum enim dolore cupiditate deserunt nam.
+                    - Fugiat officia.
+                    - Qui asperiores sapiente minus.
+                  site: Qui numquam exercitationem.
+                  state: reserved_but_unreferenced
+                - cidr: Quo quia ab qui laboriosam.
+                  ipsets:
+                    - Ratione qui.
+                    - Dolorum enim dolore cupiditate deserunt nam.
+                    - Fugiat officia.
+                    - Qui asperiores sapiente minus.
+                  site: Qui numquam exercitationem.
+                  state: reserved_but_unreferenced
+        required:
+            - drift_count
+            - authored
+            - reserved
+    PolicyReserved:
+        title: PolicyReserved
+        type: object
+        properties:
+            cidr:
+                type: string
+                description: Reserved CIDR.
+                example: Quo quia ab qui laboriosam.
+            ipsets:
+                type: array
+                items:
+                    type: string
+                    example: Ratione qui.
+                description: Sorted ipsets with overlapping effective address space.
+                example:
+                    - Ratione qui.
+                    - Dolorum enim dolore cupiditate deserunt nam.
+                    - Fugiat officia.
+                    - Qui asperiores sapiente minus.
+            site:
+                type: string
+                description: Registry site label.
+                example: Qui numquam exercitationem.
+            state:
+                type: string
+                description: Reserved classification.
+                example: reserved_but_unreferenced
+                enum:
+                    - matched
+                    - reserved_but_unreferenced
+        description: One reserved subnet pool and its referencing ipsets.
+        example:
+            cidr: Quo quia ab qui laboriosam.
+            ipsets:
+                - Ratione qui.
+                - Dolorum enim dolore cupiditate deserunt nam.
+                - Fugiat officia.
+                - Qui asperiores sapiente minus.
+            site: Qui numquam exercitationem.
+            state: reserved_but_unreferenced
+        required:
+            - cidr
+            - site
+            - state
+            - ipsets
     ServiceAddressReservation:
         title: ServiceAddressReservation
         type: object

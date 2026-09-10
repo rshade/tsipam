@@ -1,0 +1,29 @@
+{
+  "drift_count": 1,
+  "authored": [
+    {
+      "ipset": "ipset:external",
+      "cidr": "198.51.100.0/24",
+      "state": "authored_but_unreserved",
+      "pools": []
+    },
+    {
+      "ipset": "ipset:office",
+      "cidr": "192.0.2.0/24",
+      "state": "matched",
+      "pools": [
+        "192.0.2.0/24"
+      ]
+    }
+  ],
+  "reserved": [
+    {
+      "cidr": "192.0.2.0/24",
+      "site": "office",
+      "state": "matched",
+      "ipsets": [
+        "ipset:office"
+      ]
+    }
+  ]
+}

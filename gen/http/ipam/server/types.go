@@ -12,6 +12,13 @@ import (
 	goa "goa.design/goa/v3/pkg"
 )
 
+// CheckPolicyRequestBody is the type of the "ipam" service "check_policy"
+// endpoint HTTP request body.
+type CheckPolicyRequestBody struct {
+	// Local HuJSON policy contents; no server-side file path is accepted.
+	Policy *string `form:"policy,omitempty" json:"policy,omitempty" xml:"policy,omitempty"`
+}
+
 // ReserveSiteIDRequestBody is the type of the "ipam" service "reserve_site_id"
 // endpoint HTTP request body.
 type ReserveSiteIDRequestBody struct {
@@ -85,6 +92,17 @@ type PlanResponseBody struct {
 	Entries []*ComparisonEntryResponseBody `form:"entries" json:"entries" xml:"entries"`
 	// Allocation kinds with no live counterpart: udp_port.
 	Excluded []string `form:"excluded" json:"excluded" xml:"excluded"`
+}
+
+// CheckPolicyResponseBody is the type of the "ipam" service "check_policy"
+// endpoint HTTP response body.
+type CheckPolicyResponseBody struct {
+	// Number of unmatched rows in both directions.
+	DriftCount int `form:"drift_count" json:"drift_count" xml:"drift_count"`
+	// Rows sorted by ipset name, then CIDR address and length.
+	Authored []*PolicyAuthoredResponseBody `form:"authored" json:"authored" xml:"authored"`
+	// Rows sorted by CIDR address and length.
+	Reserved []*PolicyReservedResponseBody `form:"reserved" json:"reserved" xml:"reserved"`
 }
 
 // ListSiteIdsResponseBody is the type of the "ipam" service "list_site_ids"
@@ -214,6 +232,25 @@ type ReleaseUDPPortResponseBody struct {
 // PlanComparisonFailedResponseBody is the type of the "ipam" service "plan"
 // endpoint HTTP response body for the "comparison_failed" error.
 type PlanComparisonFailedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// CheckPolicyPolicyCheckFailedResponseBody is the type of the "ipam" service
+// "check_policy" endpoint HTTP response body for the "policy_check_failed"
+// error.
+type CheckPolicyPolicyCheckFailedResponseBody struct {
 	// Name is the name of this class of errors.
 	Name string `form:"name" json:"name" xml:"name"`
 	// ID is a unique identifier for this particular occurrence of the problem.
@@ -484,6 +521,30 @@ type ComparisonEntryResponseBody struct {
 	Routes []string `form:"routes" json:"routes" xml:"routes"`
 }
 
+// PolicyAuthoredResponseBody is used to define fields on response body types.
+type PolicyAuthoredResponseBody struct {
+	// Defining ipset name.
+	IPSet string `form:"ipset" json:"ipset" xml:"ipset"`
+	// Canonical effective CIDR.
+	CIDR string `form:"cidr" json:"cidr" xml:"cidr"`
+	// Authored classification.
+	State string `form:"state" json:"state" xml:"state"`
+	// Sorted containing reservation CIDRs.
+	Pools []string `form:"pools" json:"pools" xml:"pools"`
+}
+
+// PolicyReservedResponseBody is used to define fields on response body types.
+type PolicyReservedResponseBody struct {
+	// Reserved CIDR.
+	CIDR string `form:"cidr" json:"cidr" xml:"cidr"`
+	// Registry site label.
+	Site string `form:"site" json:"site" xml:"site"`
+	// Reserved classification.
+	State string `form:"state" json:"state" xml:"state"`
+	// Sorted ipsets with overlapping effective address space.
+	IPSets []string `form:"ipsets" json:"ipsets" xml:"ipsets"`
+}
+
 // SiteIDReservationResponse is used to define fields on response body types.
 type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -570,6 +631,39 @@ func NewPlanResponseBody(res *ipam.ComparisonReport) *PlanResponseBody {
 		}
 	} else {
 		body.Excluded = []string{}
+	}
+	return body
+}
+
+// NewCheckPolicyResponseBody builds the HTTP response body from the result of
+// the "check_policy" endpoint of the "ipam" service.
+func NewCheckPolicyResponseBody(res *ipam.PolicyComparison) *CheckPolicyResponseBody {
+	body := &CheckPolicyResponseBody{
+		DriftCount: res.DriftCount,
+	}
+	if res.Authored != nil {
+		body.Authored = make([]*PolicyAuthoredResponseBody, len(res.Authored))
+		for i, val := range res.Authored {
+			if val == nil {
+				body.Authored[i] = nil
+				continue
+			}
+			body.Authored[i] = marshalIpamPolicyAuthoredToPolicyAuthoredResponseBody(val)
+		}
+	} else {
+		body.Authored = []*PolicyAuthoredResponseBody{}
+	}
+	if res.Reserved != nil {
+		body.Reserved = make([]*PolicyReservedResponseBody, len(res.Reserved))
+		for i, val := range res.Reserved {
+			if val == nil {
+				body.Reserved[i] = nil
+				continue
+			}
+			body.Reserved[i] = marshalIpamPolicyReservedToPolicyReservedResponseBody(val)
+		}
+	} else {
+		body.Reserved = []*PolicyReservedResponseBody{}
 	}
 	return body
 }
@@ -732,6 +826,20 @@ func NewReleaseUDPPortResponseBody(res *ipam.ReleaseUDPPortResult) *ReleaseUDPPo
 // result of the "plan" endpoint of the "ipam" service.
 func NewPlanComparisonFailedResponseBody(res *goa.ServiceError) *PlanComparisonFailedResponseBody {
 	body := &PlanComparisonFailedResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewCheckPolicyPolicyCheckFailedResponseBody builds the HTTP response body
+// from the result of the "check_policy" endpoint of the "ipam" service.
+func NewCheckPolicyPolicyCheckFailedResponseBody(res *goa.ServiceError) *CheckPolicyPolicyCheckFailedResponseBody {
+	body := &CheckPolicyPolicyCheckFailedResponseBody{
 		Name:      res.Name,
 		ID:        res.ID,
 		Message:   res.Message,
@@ -936,6 +1044,16 @@ func NewPlanPayload(tailnet string, liveTailnet string) *ipam.PlanPayload {
 	return v
 }
 
+// NewCheckPolicyPayload builds a ipam service check_policy endpoint payload.
+func NewCheckPolicyPayload(body *CheckPolicyRequestBody, tailnet string) *ipam.CheckPolicyPayload {
+	v := &ipam.CheckPolicyPayload{
+		Policy: *body.Policy,
+	}
+	v.Tailnet = tailnet
+
+	return v
+}
+
 // NewListSiteIdsPayload builds a ipam service list_site_ids endpoint payload.
 func NewListSiteIdsPayload(tailnet string) *ipam.ListSiteIdsPayload {
 	v := &ipam.ListSiteIdsPayload{}
@@ -1071,6 +1189,15 @@ func NewReleaseUDPPortPayload(tailnet string, site string, port string) *ipam.Re
 	v.Port = port
 
 	return v
+}
+
+// ValidateCheckPolicyRequestBody runs the validations defined on
+// check_policy_request_body
+func ValidateCheckPolicyRequestBody(body *CheckPolicyRequestBody) (err error) {
+	if body.Policy == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("policy", "body"))
+	}
+	return
 }
 
 // ValidateReserveSiteIDRequestBody runs the validations defined on

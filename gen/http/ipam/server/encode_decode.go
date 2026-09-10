@@ -85,6 +85,84 @@ func EncodePlanError(encoder func(context.Context, http.ResponseWriter) goahttp.
 	}
 }
 
+// EncodeCheckPolicyResponse returns an encoder for responses returned by the
+// ipam check_policy endpoint.
+func EncodeCheckPolicyResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.PolicyComparison)
+		enc := encoder(ctx, w)
+		body := NewCheckPolicyResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeCheckPolicyRequest returns a decoder for requests sent to the ipam
+// check_policy endpoint.
+func DecodeCheckPolicyRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.CheckPolicyPayload, error) {
+	return func(r *http.Request) (*ipam.CheckPolicyPayload, error) {
+		var payload *ipam.CheckPolicyPayload
+		var (
+			body CheckPolicyRequestBody
+			err  error
+		)
+		err = decoder(r).Decode(&body)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return payload, goa.MissingPayloadError()
+			}
+			var gerr *goa.ServiceError
+			if errors.As(err, &gerr) {
+				return payload, gerr
+			}
+			return payload, goa.DecodePayloadError(err.Error())
+		}
+		err = ValidateCheckPolicyRequestBody(&body)
+		if err != nil {
+			return payload, err
+		}
+
+		var (
+			tailnet string
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		payload = NewCheckPolicyPayload(&body, tailnet)
+
+		return payload, nil
+	}
+}
+
+// EncodeCheckPolicyError returns an encoder for errors returned by the
+// check_policy ipam endpoint.
+func EncodeCheckPolicyError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "policy_check_failed":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewCheckPolicyPolicyCheckFailedResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
 // EncodeListSiteIdsResponse returns an encoder for responses returned by the
 // ipam list_site_ids endpoint.
 func EncodeListSiteIdsResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
@@ -890,6 +968,46 @@ func marshalIpamComparisonEntryToComparisonEntryResponseBody(v *ipam.ComparisonE
 		}
 	} else {
 		res.Routes = []string{}
+	}
+
+	return res
+}
+
+// marshalIpamPolicyAuthoredToPolicyAuthoredResponseBody builds a value of type
+// *PolicyAuthoredResponseBody from a value of type *ipam.PolicyAuthored.
+func marshalIpamPolicyAuthoredToPolicyAuthoredResponseBody(v *ipam.PolicyAuthored) *PolicyAuthoredResponseBody {
+	res := &PolicyAuthoredResponseBody{
+		IPSet: v.IPSet,
+		CIDR:  v.CIDR,
+		State: v.State,
+	}
+	if v.Pools != nil {
+		res.Pools = make([]string, len(v.Pools))
+		for i, val := range v.Pools {
+			res.Pools[i] = val
+		}
+	} else {
+		res.Pools = []string{}
+	}
+
+	return res
+}
+
+// marshalIpamPolicyReservedToPolicyReservedResponseBody builds a value of type
+// *PolicyReservedResponseBody from a value of type *ipam.PolicyReserved.
+func marshalIpamPolicyReservedToPolicyReservedResponseBody(v *ipam.PolicyReserved) *PolicyReservedResponseBody {
+	res := &PolicyReservedResponseBody{
+		CIDR:  v.CIDR,
+		Site:  v.Site,
+		State: v.State,
+	}
+	if v.IPSets != nil {
+		res.IPSets = make([]string, len(v.IPSets))
+		for i, val := range v.IPSets {
+			res.IPSets[i] = val
+		}
+	} else {
+		res.IPSets = []string{}
 	}
 
 	return res

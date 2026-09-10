@@ -20,6 +20,10 @@ type Client struct {
 	// Plan Doer is the HTTP client used to make requests to the plan endpoint.
 	PlanDoer goahttp.Doer
 
+	// CheckPolicy Doer is the HTTP client used to make requests to the
+	// check_policy endpoint.
+	CheckPolicyDoer goahttp.Doer
+
 	// ListSiteIds Doer is the HTTP client used to make requests to the
 	// list_site_ids endpoint.
 	ListSiteIdsDoer goahttp.Doer
@@ -89,6 +93,7 @@ func NewClient(
 ) *Client {
 	return &Client{
 		PlanDoer:                  doer,
+		CheckPolicyDoer:           doer,
 		ListSiteIdsDoer:           doer,
 		ReserveSiteIDDoer:         doer,
 		ReleaseSiteIDDoer:         doer,
@@ -128,6 +133,30 @@ func (c *Client) Plan() goa.Endpoint {
 		resp, err := c.PlanDoer.Do(req)
 		if err != nil {
 			return nil, goahttp.ErrRequestError("ipam", "plan", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// CheckPolicy returns an endpoint that makes HTTP requests to the ipam service
+// check_policy server.
+func (c *Client) CheckPolicy() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeCheckPolicyRequest(c.encoder)
+		decodeResponse = DecodeCheckPolicyResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildCheckPolicyRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.CheckPolicyDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "check_policy", err)
 		}
 		return decodeResponse(resp)
 	}

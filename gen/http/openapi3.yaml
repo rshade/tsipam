@@ -7,6 +7,105 @@ servers:
     - url: http://localhost:80
       description: Default server for tail-ipam
 paths:
+    /tailnet/{tailnet}/ipam/check-policy:
+        post:
+            tags:
+                - ipam
+            summary: check_policy ipam
+            description: Compare static ipset definitions with subnet reservations without modifying either.
+            operationId: ipam#check_policy
+            parameters:
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry.
+                    example: Nulla doloribus aut illum.
+                  example: Tenetur eos qui.
+            requestBody:
+                description: Request body for check_policy.
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CheckPolicyRequestBody'
+                        example:
+                            policy: Corrupti magnam inventore.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PolicyComparison'
+                            example:
+                                authored:
+                                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                                      ipset: Quis exercitationem aperiam velit quia.
+                                      pools:
+                                        - Enim qui quia animi aut.
+                                        - Odit laudantium sunt incidunt neque.
+                                      state: matched
+                                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                                      ipset: Quis exercitationem aperiam velit quia.
+                                      pools:
+                                        - Enim qui quia animi aut.
+                                        - Odit laudantium sunt incidunt neque.
+                                      state: matched
+                                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                                      ipset: Quis exercitationem aperiam velit quia.
+                                      pools:
+                                        - Enim qui quia animi aut.
+                                        - Odit laudantium sunt incidunt neque.
+                                      state: matched
+                                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                                      ipset: Quis exercitationem aperiam velit quia.
+                                      pools:
+                                        - Enim qui quia animi aut.
+                                        - Odit laudantium sunt incidunt neque.
+                                      state: matched
+                                drift_count: 839643861232554501
+                                reserved:
+                                    - cidr: Quo quia ab qui laboriosam.
+                                      ipsets:
+                                        - Ratione qui.
+                                        - Dolorum enim dolore cupiditate deserunt nam.
+                                        - Fugiat officia.
+                                        - Qui asperiores sapiente minus.
+                                      site: Qui numquam exercitationem.
+                                      state: reserved_but_unreferenced
+                                    - cidr: Quo quia ab qui laboriosam.
+                                      ipsets:
+                                        - Ratione qui.
+                                        - Dolorum enim dolore cupiditate deserunt nam.
+                                        - Fugiat officia.
+                                        - Qui asperiores sapiente minus.
+                                      site: Qui numquam exercitationem.
+                                      state: reserved_but_unreferenced
+                                    - cidr: Quo quia ab qui laboriosam.
+                                      ipsets:
+                                        - Ratione qui.
+                                        - Dolorum enim dolore cupiditate deserunt nam.
+                                        - Fugiat officia.
+                                        - Qui asperiores sapiente minus.
+                                      site: Qui numquam exercitationem.
+                                      state: reserved_but_unreferenced
+                                    - cidr: Quo quia ab qui laboriosam.
+                                      ipsets:
+                                        - Ratione qui.
+                                        - Dolorum enim dolore cupiditate deserunt nam.
+                                        - Fugiat officia.
+                                        - Qui asperiores sapiente minus.
+                                      site: Qui numquam exercitationem.
+                                      state: reserved_but_unreferenced
+                "400":
+                    description: 'policy_check_failed: Policy or registry input could not be compared completely.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
     /tailnet/{tailnet}/ipam/plan:
         get:
             tags:
@@ -728,6 +827,18 @@ paths:
                                 $ref: '#/components/schemas/Error'
 components:
     schemas:
+        CheckPolicyRequestBody:
+            type: object
+            properties:
+                policy:
+                    type: string
+                    description: Local HuJSON policy contents; no server-side file path is accepted.
+                    example: Corrupti magnam inventore.
+            description: Request body for check_policy.
+            example:
+                policy: Corrupti magnam inventore.
+            required:
+                - policy
         ComparisonEntry:
             type: object
             properties:
@@ -989,6 +1100,232 @@ components:
                 - temporary
                 - timeout
                 - fault
+        PolicyAuthored:
+            type: object
+            properties:
+                cidr:
+                    type: string
+                    description: Canonical effective CIDR.
+                    example: Recusandae alias dolorem doloribus ea voluptas.
+                ipset:
+                    type: string
+                    description: Defining ipset name.
+                    example: Quis exercitationem aperiam velit quia.
+                pools:
+                    type: array
+                    items:
+                        type: string
+                        example: Enim qui quia animi aut.
+                    description: Sorted containing reservation CIDRs.
+                    example:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                state:
+                    type: string
+                    description: Authored classification.
+                    example: matched
+                    enum:
+                        - matched
+                        - authored_but_unreserved
+            description: One effective authored CIDR and its containing reservations.
+            example:
+                cidr: Recusandae alias dolorem doloribus ea voluptas.
+                ipset: Quis exercitationem aperiam velit quia.
+                pools:
+                    - Enim qui quia animi aut.
+                    - Odit laudantium sunt incidunt neque.
+                state: matched
+            required:
+                - ipset
+                - cidr
+                - state
+                - pools
+        PolicyComparison:
+            type: object
+            properties:
+                authored:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PolicyAuthored'
+                    description: Rows sorted by ipset name, then CIDR address and length.
+                    example:
+                        - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                          ipset: Quis exercitationem aperiam velit quia.
+                          pools:
+                            - Enim qui quia animi aut.
+                            - Odit laudantium sunt incidunt neque.
+                          state: matched
+                        - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                          ipset: Quis exercitationem aperiam velit quia.
+                          pools:
+                            - Enim qui quia animi aut.
+                            - Odit laudantium sunt incidunt neque.
+                          state: matched
+                        - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                          ipset: Quis exercitationem aperiam velit quia.
+                          pools:
+                            - Enim qui quia animi aut.
+                            - Odit laudantium sunt incidunt neque.
+                          state: matched
+                        - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                          ipset: Quis exercitationem aperiam velit quia.
+                          pools:
+                            - Enim qui quia animi aut.
+                            - Odit laudantium sunt incidunt neque.
+                          state: matched
+                drift_count:
+                    type: integer
+                    description: Number of unmatched rows in both directions.
+                    example: 839643861232554501
+                    format: int64
+                    minimum: 0
+                reserved:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PolicyReserved'
+                    description: Rows sorted by CIDR address and length.
+                    example:
+                        - cidr: Quo quia ab qui laboriosam.
+                          ipsets:
+                            - Ratione qui.
+                            - Dolorum enim dolore cupiditate deserunt nam.
+                            - Fugiat officia.
+                            - Qui asperiores sapiente minus.
+                          site: Qui numquam exercitationem.
+                          state: reserved_but_unreferenced
+                        - cidr: Quo quia ab qui laboriosam.
+                          ipsets:
+                            - Ratione qui.
+                            - Dolorum enim dolore cupiditate deserunt nam.
+                            - Fugiat officia.
+                            - Qui asperiores sapiente minus.
+                          site: Qui numquam exercitationem.
+                          state: reserved_but_unreferenced
+                        - cidr: Quo quia ab qui laboriosam.
+                          ipsets:
+                            - Ratione qui.
+                            - Dolorum enim dolore cupiditate deserunt nam.
+                            - Fugiat officia.
+                            - Qui asperiores sapiente minus.
+                          site: Qui numquam exercitationem.
+                          state: reserved_but_unreferenced
+                        - cidr: Quo quia ab qui laboriosam.
+                          ipsets:
+                            - Ratione qui.
+                            - Dolorum enim dolore cupiditate deserunt nam.
+                            - Fugiat officia.
+                            - Qui asperiores sapiente minus.
+                          site: Qui numquam exercitationem.
+                          state: reserved_but_unreferenced
+            description: Complete static comparison of authored ipsets and reserved subnet pools.
+            example:
+                authored:
+                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                      ipset: Quis exercitationem aperiam velit quia.
+                      pools:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                      state: matched
+                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                      ipset: Quis exercitationem aperiam velit quia.
+                      pools:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                      state: matched
+                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                      ipset: Quis exercitationem aperiam velit quia.
+                      pools:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                      state: matched
+                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
+                      ipset: Quis exercitationem aperiam velit quia.
+                      pools:
+                        - Enim qui quia animi aut.
+                        - Odit laudantium sunt incidunt neque.
+                      state: matched
+                drift_count: 839643861232554501
+                reserved:
+                    - cidr: Quo quia ab qui laboriosam.
+                      ipsets:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                      site: Qui numquam exercitationem.
+                      state: reserved_but_unreferenced
+                    - cidr: Quo quia ab qui laboriosam.
+                      ipsets:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                      site: Qui numquam exercitationem.
+                      state: reserved_but_unreferenced
+                    - cidr: Quo quia ab qui laboriosam.
+                      ipsets:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                      site: Qui numquam exercitationem.
+                      state: reserved_but_unreferenced
+                    - cidr: Quo quia ab qui laboriosam.
+                      ipsets:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                      site: Qui numquam exercitationem.
+                      state: reserved_but_unreferenced
+            required:
+                - drift_count
+                - authored
+                - reserved
+        PolicyReserved:
+            type: object
+            properties:
+                cidr:
+                    type: string
+                    description: Reserved CIDR.
+                    example: Quo quia ab qui laboriosam.
+                ipsets:
+                    type: array
+                    items:
+                        type: string
+                        example: Ratione qui.
+                    description: Sorted ipsets with overlapping effective address space.
+                    example:
+                        - Ratione qui.
+                        - Dolorum enim dolore cupiditate deserunt nam.
+                        - Fugiat officia.
+                        - Qui asperiores sapiente minus.
+                site:
+                    type: string
+                    description: Registry site label.
+                    example: Qui numquam exercitationem.
+                state:
+                    type: string
+                    description: Reserved classification.
+                    example: reserved_but_unreferenced
+                    enum:
+                        - matched
+                        - reserved_but_unreferenced
+            description: One reserved subnet pool and its referencing ipsets.
+            example:
+                cidr: Quo quia ab qui laboriosam.
+                ipsets:
+                    - Ratione qui.
+                    - Dolorum enim dolore cupiditate deserunt nam.
+                    - Fugiat officia.
+                    - Qui asperiores sapiente minus.
+                site: Qui numquam exercitationem.
+                state: reserved_but_unreferenced
+            required:
+                - cidr
+                - site
+                - state
+                - ipsets
         ReleaseServiceAddressResponseBody:
             type: object
             properties:

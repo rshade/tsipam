@@ -16,6 +16,11 @@ func PlanIpamPath(tailnet string) string {
 	return fmt.Sprintf("/tailnet/%v/ipam/plan", tailnet)
 }
 
+// CheckPolicyIpamPath returns the URL path to the ipam service check_policy HTTP endpoint.
+func CheckPolicyIpamPath(tailnet string) string {
+	return fmt.Sprintf("/tailnet/%v/ipam/check-policy", tailnet)
+}
+
 // ListSiteIdsIpamPath returns the URL path to the ipam service list_site_ids HTTP endpoint.
 func ListSiteIdsIpamPath(tailnet string) string {
 	return fmt.Sprintf("/tailnet/%v/ipam/site-ids", tailnet)

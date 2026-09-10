@@ -16,6 +16,7 @@ import (
 // Client is the "ipam" service client.
 type Client struct {
 	PlanEndpoint                  goa.Endpoint
+	CheckPolicyEndpoint           goa.Endpoint
 	ListSiteIdsEndpoint           goa.Endpoint
 	ReserveSiteIDEndpoint         goa.Endpoint
 	ReleaseSiteIDEndpoint         goa.Endpoint
@@ -31,9 +32,10 @@ type Client struct {
 }
 
 // NewClient initializes a "ipam" service client given the endpoints.
-func NewClient(plan, listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
+func NewClient(plan, checkPolicy, listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
 	return &Client{
 		PlanEndpoint:                  plan,
+		CheckPolicyEndpoint:           checkPolicy,
 		ListSiteIdsEndpoint:           listSiteIds,
 		ReserveSiteIDEndpoint:         reserveSiteID,
 		ReleaseSiteIDEndpoint:         releaseSiteID,
@@ -60,6 +62,19 @@ func (c *Client) Plan(ctx context.Context, p *PlanPayload) (res *ComparisonRepor
 		return
 	}
 	return ires.(*ComparisonReport), nil
+}
+
+// CheckPolicy calls the "check_policy" endpoint of the "ipam" service.
+// CheckPolicy may return the following errors:
+//   - "policy_check_failed" (type *goa.ServiceError): Policy or registry input could not be compared completely.
+//   - error: internal error
+func (c *Client) CheckPolicy(ctx context.Context, p *CheckPolicyPayload) (res *PolicyComparison, err error) {
+	var ires any
+	ires, err = c.CheckPolicyEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*PolicyComparison), nil
 }
 
 // ListSiteIds calls the "list_site_ids" endpoint of the "ipam" service.

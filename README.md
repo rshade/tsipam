@@ -154,6 +154,58 @@ IDs, states, counts, and exclusions remain visible. A fixed
 alias, including for live evidence. API error bodies are omitted from diagnostics;
 errors retain the collection operation and HTTP status when available.
 
+#### `check-policy <acl-file>`
+
+Compares every authored ipset definition in a local HuJSON policy with subnet
+pools in the selected registry. It runs offline without API credentials and
+leaves both files unchanged.
+
+```bash
+tail-ipam check-policy policy.hujson --registry-dir /etc/tail-ipam --tailnet production
+tail-ipam check-policy policy.hujson --registry-dir /etc/tail-ipam --tailnet production --format json
+```
+
+Each effective authored CIDR needs **one containing reservation**. For example,
+an authored `192.0.2.0/25` matches a reserved `192.0.2.0/24`. Two adjacent `/25`
+reservations do not jointly satisfy an authored `/24`. A reservation counts as
+referenced when it overlaps any effective authored CIDR, including a smaller
+subnet inside the pool. A broad authored CIDR can therefore be unreserved while
+the smaller pools it overlaps are referenced.
+
+The static resolver supports IPv4/IPv6 addresses, CIDRs, address ranges,
+`host:` aliases from the policy's `hosts` object, nested `ipset:` references,
+and ordered `add`/`remove` operations. When a set removes members, all its
+operations must be explicit. These forms follow the
+[Tailscale ipset syntax](https://tailscale.com/docs/features/tailnet-policy-file/ip-sets).
+Only addresses remaining after the operations participate. Adjacent authored
+additions remain separate, and duplicate effective CIDRs within one ipset are
+deduplicated. Host aliases must resolve to a literal address or CIDR.
+
+`autogroup:internet`, dynamic selectors, missing references, cycles, malformed
+definitions, and ambiguous duplicate keys produce an error. Expansion is
+limited to 128 nested levels and 65,536 materialized prefixes across definitions;
+large networks such as IPv6 `/0` do not enumerate hosts. There is no partial
+report on incomplete input. All ipset definitions participate even if unused
+by ACLs or grants. This command does not validate unrelated policy fields,
+assess grant reachability, or compare site IDs, service addresses, or UDP ports.
+
+Both output formats include matched and drifting rows. JSON adds
+`policy_comparison` to the standard envelope:
+
+- `authored`: rows with `ipset`, `cidr`, `state`, and containing `pools`.
+  States are `matched` or `authored_but_unreserved`.
+- `reserved`: rows with `cidr`, `site`, `state`, and referencing `ipsets`.
+  States are `matched` or `reserved_but_unreferenced`.
+- `drift_count`: the number of unmatched rows across both directions.
+
+Authored rows sort by ipset name, then network address and prefix length.
+Reserved rows sort by network address and prefix length; evidence sorts
+lexically. Empty arrays remain arrays. The command exits **0** for consistency,
+**1** after reporting drift, or **2** for invalid invocation, unreadable or
+incomplete input, or output failure. `--sanitize identity` and `strict` redact
+ipset names, CIDRs, site labels, and registry aliases consistently in both
+directions; counts and classifications remain visible.
+
 #### `site-id reserve <id> <site-name>`
 
 Reserves a 4via6 site ID in the local registry. Refuses with an error if the ID
@@ -709,7 +761,8 @@ top-level contract as the repository's other action-oriented CLI output:
 
 `site-id list` carries `site_ids`, `subnet list` carries `subnet_pools`,
 `service list` carries `service_addresses`, `port list` carries `udp_ports`,
-`devices list` carries `devices`, and `plan`/`check` carry `comparison`.
+`devices list` carries `devices`, `plan`/`check` carry `comparison`, and
+`check-policy` carries `policy_comparison`.
 Reserve/release results carry the
 applicable `changed`, `id`, `cidr`, `address`, `site`, `service`, `port`, and
 `device` fields, plus `owner`, `description`, `ticket`, and `reserved_at` when
