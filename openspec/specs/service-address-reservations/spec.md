@@ -167,6 +167,33 @@ remain an unreadable-registry error rather than being created by release.
 - **THEN** the operation exits 0, reports `changed=false`, and leaves the file
   unchanged
 
+### Requirement: Release best-effort repairs an undecodable registry
+
+When `service release <addr>` cannot build any canonical view of
+`serviceAddresses` at all (a decode or validation failure, not a benign
+absence), it SHALL NOT fail closed immediately. It SHALL search the raw
+on-file `serviceAddresses` keys for spellings that normalize to the canonical
+address, remove each candidate in memory, and keep only a removal that makes
+`serviceAddresses` decode cleanly with that address now absent; the file is
+written at most once, and only for a verified candidate. When no candidate
+repairs the map, release SHALL fail with an error and leave the file
+byte-for-byte unchanged.
+
+#### Scenario: Removing the malformed entry repairs the map
+
+- **WHEN** `serviceAddresses` fails to decode because the entry at the address
+  an operator releases has malformed metadata, including when its raw key
+  uses the exact `/32` spelling
+- **THEN** release removes that entry, `serviceAddresses` now decodes cleanly
+  without that address, and the operation reports `changed=true`
+
+#### Scenario: Removing a healthy entry cannot repair another entry
+
+- **WHEN** `serviceAddresses` cannot build a canonical view because one entry
+  has malformed metadata, and an operator releases a different, healthy entry
+- **THEN** release fails with an error and leaves the file byte-for-byte
+  unchanged because removing the healthy entry would not repair the map
+
 ### Requirement: Deterministic service-address listing
 
 `tail-ipam service list` and the corresponding API operation SHALL return all
