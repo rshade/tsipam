@@ -18,6 +18,73 @@ import (
 	goa "goa.design/goa/v3/pkg"
 )
 
+// EncodePlanResponse returns an encoder for responses returned by the ipam
+// plan endpoint.
+func EncodePlanResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.ComparisonReport)
+		enc := encoder(ctx, w)
+		body := NewPlanResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodePlanRequest returns a decoder for requests sent to the ipam plan
+// endpoint.
+func DecodePlanRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.PlanPayload, error) {
+	return func(r *http.Request) (*ipam.PlanPayload, error) {
+		var payload *ipam.PlanPayload
+		var (
+			tailnet     string
+			liveTailnet string
+			err         error
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		liveTailnet = r.URL.Query().Get("live_tailnet")
+		if liveTailnet == "" {
+			err = goa.MergeErrors(err, goa.MissingFieldError("live_tailnet", "query string"))
+		}
+		if err != nil {
+			return payload, err
+		}
+		payload = NewPlanPayload(tailnet, liveTailnet)
+
+		return payload, nil
+	}
+}
+
+// EncodePlanError returns an encoder for errors returned by the plan ipam
+// endpoint.
+func EncodePlanError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "comparison_failed":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewPlanComparisonFailedResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadGateway)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
 // EncodeListSiteIdsResponse returns an encoder for responses returned by the
 // ipam list_site_ids endpoint.
 func EncodeListSiteIdsResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
@@ -797,6 +864,35 @@ func EncodeReleaseUDPPortError(encoder func(context.Context, http.ResponseWriter
 			return encodeError(ctx, w, v)
 		}
 	}
+}
+
+// marshalIpamComparisonEntryToComparisonEntryResponseBody builds a value of
+// type *ComparisonEntryResponseBody from a value of type *ipam.ComparisonEntry.
+func marshalIpamComparisonEntryToComparisonEntryResponseBody(v *ipam.ComparisonEntry) *ComparisonEntryResponseBody {
+	res := &ComparisonEntryResponseBody{
+		Kind:     v.Kind,
+		State:    v.State,
+		Key:      v.Key,
+		Expected: v.Expected,
+	}
+	if v.Observed != nil {
+		res.Observed = make([]string, len(v.Observed))
+		for i, val := range v.Observed {
+			res.Observed[i] = val
+		}
+	} else {
+		res.Observed = []string{}
+	}
+	if v.Routes != nil {
+		res.Routes = make([]string, len(v.Routes))
+		for i, val := range v.Routes {
+			res.Routes[i] = val
+		}
+	} else {
+		res.Routes = []string{}
+	}
+
+	return res
 }
 
 // marshalIpamSiteIDReservationToSiteIDReservationResponse builds a value of

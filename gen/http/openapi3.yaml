@@ -7,6 +7,107 @@ servers:
     - url: http://localhost:80
       description: Default server for tail-ipam
 paths:
+    /tailnet/{tailnet}/ipam/plan:
+        get:
+            tags:
+                - ipam
+            summary: plan ipam
+            description: Compare declared allocations with live control-plane state without modifying either.
+            operationId: ipam#plan
+            parameters:
+                - name: live_tailnet
+                  in: query
+                  description: Tailscale tailnet whose live allocations are collected.
+                  allowEmptyValue: true
+                  required: true
+                  schema:
+                    type: string
+                    description: Tailscale tailnet whose live allocations are collected.
+                    example: Quis reiciendis animi provident.
+                  example: Quia et culpa animi.
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry.
+                    example: Quibusdam quidem ut.
+                  example: Possimus quis alias quae ea.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ComparisonReport'
+                            example:
+                                drift_count: 6510612366751535189
+                                entries:
+                                    - expected: Maxime et alias in.
+                                      key: Corporis iure et accusamus.
+                                      kind: subnet_pool
+                                      observed:
+                                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                                        - Enim praesentium.
+                                        - Omnis nisi quia modi qui quis.
+                                      routes:
+                                        - A voluptatem dolorum quasi sed rem.
+                                        - Qui ex ullam repellat mollitia.
+                                        - Ducimus aut consequatur rerum est.
+                                        - Voluptas eos at beatae.
+                                      state: unreserved_but_live
+                                    - expected: Maxime et alias in.
+                                      key: Corporis iure et accusamus.
+                                      kind: subnet_pool
+                                      observed:
+                                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                                        - Enim praesentium.
+                                        - Omnis nisi quia modi qui quis.
+                                      routes:
+                                        - A voluptatem dolorum quasi sed rem.
+                                        - Qui ex ullam repellat mollitia.
+                                        - Ducimus aut consequatur rerum est.
+                                        - Voluptas eos at beatae.
+                                      state: unreserved_but_live
+                                    - expected: Maxime et alias in.
+                                      key: Corporis iure et accusamus.
+                                      kind: subnet_pool
+                                      observed:
+                                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                                        - Enim praesentium.
+                                        - Omnis nisi quia modi qui quis.
+                                      routes:
+                                        - A voluptatem dolorum quasi sed rem.
+                                        - Qui ex ullam repellat mollitia.
+                                        - Ducimus aut consequatur rerum est.
+                                        - Voluptas eos at beatae.
+                                      state: unreserved_but_live
+                                    - expected: Maxime et alias in.
+                                      key: Corporis iure et accusamus.
+                                      kind: subnet_pool
+                                      observed:
+                                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                                        - Enim praesentium.
+                                        - Omnis nisi quia modi qui quis.
+                                      routes:
+                                        - A voluptatem dolorum quasi sed rem.
+                                        - Qui ex ullam repellat mollitia.
+                                        - Ducimus aut consequatur rerum est.
+                                        - Voluptas eos at beatae.
+                                      state: unreserved_but_live
+                                excluded:
+                                    - Eligendi et rerum.
+                                    - Voluptates ex.
+                                    - Consequatur at voluptas optio et.
+                                    - Qui dolorem.
+                                live_tailnet: Id aperiam fugit enim similique doloribus velit.
+                "502":
+                    description: 'comparison_failed: Registry or live inventory could not be compared completely.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
     /tailnet/{tailnet}/ipam/service-addresses:
         delete:
             tags:
@@ -627,6 +728,225 @@ paths:
                                 $ref: '#/components/schemas/Error'
 components:
     schemas:
+        ComparisonEntry:
+            type: object
+            properties:
+                expected:
+                    type: string
+                    description: Registry site label or service name, when reserved.
+                    example: Maxime et alias in.
+                key:
+                    type: string
+                    description: Numeric site ID, subnet CIDR, or service IPv4 address.
+                    example: Corporis iure et accusamus.
+                kind:
+                    type: string
+                    description: Allocation primitive.
+                    example: subnet_pool
+                    enum:
+                        - site_id
+                        - subnet_pool
+                        - service_address
+                observed:
+                    type: array
+                    items:
+                        type: string
+                        example: Perspiciatis ipsam reiciendis qui quod laudantium.
+                    description: Sorted unique live device or service names.
+                    example:
+                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                        - Enim praesentium.
+                        - Omnis nisi quia modi qui quis.
+                routes:
+                    type: array
+                    items:
+                        type: string
+                        example: A voluptatem dolorum quasi sed rem.
+                    description: Sorted unique advertised routes supporting the comparison.
+                    example:
+                        - A voluptatem dolorum quasi sed rem.
+                        - Qui ex ullam repellat mollitia.
+                        - Ducimus aut consequatur rerum est.
+                        - Voluptas eos at beatae.
+                state:
+                    type: string
+                    description: Comparison classification.
+                    example: unreserved_but_live
+                    enum:
+                        - matched
+                        - reserved_but_unadvertised
+                        - unreserved_but_live
+                        - conflict
+            description: One allocation and its registry-versus-live classification.
+            example:
+                expected: Maxime et alias in.
+                key: Corporis iure et accusamus.
+                kind: subnet_pool
+                observed:
+                    - Perspiciatis ipsam reiciendis qui quod laudantium.
+                    - Enim praesentium.
+                    - Omnis nisi quia modi qui quis.
+                routes:
+                    - A voluptatem dolorum quasi sed rem.
+                    - Qui ex ullam repellat mollitia.
+                    - Ducimus aut consequatur rerum est.
+                    - Voluptas eos at beatae.
+                state: unreserved_but_live
+            required:
+                - kind
+                - state
+                - key
+                - observed
+                - routes
+        ComparisonReport:
+            type: object
+            properties:
+                drift_count:
+                    type: integer
+                    description: Number of non-matched entries.
+                    example: 6510612366751535189
+                    format: int64
+                    minimum: 0
+                entries:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ComparisonEntry'
+                    description: Deterministically ordered comparison entries.
+                    example:
+                        - expected: Maxime et alias in.
+                          key: Corporis iure et accusamus.
+                          kind: subnet_pool
+                          observed:
+                            - Perspiciatis ipsam reiciendis qui quod laudantium.
+                            - Enim praesentium.
+                            - Omnis nisi quia modi qui quis.
+                          routes:
+                            - A voluptatem dolorum quasi sed rem.
+                            - Qui ex ullam repellat mollitia.
+                            - Ducimus aut consequatur rerum est.
+                            - Voluptas eos at beatae.
+                          state: unreserved_but_live
+                        - expected: Maxime et alias in.
+                          key: Corporis iure et accusamus.
+                          kind: subnet_pool
+                          observed:
+                            - Perspiciatis ipsam reiciendis qui quod laudantium.
+                            - Enim praesentium.
+                            - Omnis nisi quia modi qui quis.
+                          routes:
+                            - A voluptatem dolorum quasi sed rem.
+                            - Qui ex ullam repellat mollitia.
+                            - Ducimus aut consequatur rerum est.
+                            - Voluptas eos at beatae.
+                          state: unreserved_but_live
+                        - expected: Maxime et alias in.
+                          key: Corporis iure et accusamus.
+                          kind: subnet_pool
+                          observed:
+                            - Perspiciatis ipsam reiciendis qui quod laudantium.
+                            - Enim praesentium.
+                            - Omnis nisi quia modi qui quis.
+                          routes:
+                            - A voluptatem dolorum quasi sed rem.
+                            - Qui ex ullam repellat mollitia.
+                            - Ducimus aut consequatur rerum est.
+                            - Voluptas eos at beatae.
+                          state: unreserved_but_live
+                        - expected: Maxime et alias in.
+                          key: Corporis iure et accusamus.
+                          kind: subnet_pool
+                          observed:
+                            - Perspiciatis ipsam reiciendis qui quod laudantium.
+                            - Enim praesentium.
+                            - Omnis nisi quia modi qui quis.
+                          routes:
+                            - A voluptatem dolorum quasi sed rem.
+                            - Qui ex ullam repellat mollitia.
+                            - Ducimus aut consequatur rerum est.
+                            - Voluptas eos at beatae.
+                          state: unreserved_but_live
+                excluded:
+                    type: array
+                    items:
+                        type: string
+                        example: Eligendi et rerum.
+                    description: 'Allocation kinds with no live counterpart: udp_port.'
+                    example:
+                        - Eligendi et rerum.
+                        - Voluptates ex.
+                        - Consequatur at voluptas optio et.
+                        - Qui dolorem.
+                live_tailnet:
+                    type: string
+                    description: Live control-plane tailnet, independent of the registry alias.
+                    example: Id aperiam fugit enim similique doloribus velit.
+            description: A complete comparison of one registry snapshot and live allocation inventory.
+            example:
+                drift_count: 6510612366751535189
+                entries:
+                    - expected: Maxime et alias in.
+                      key: Corporis iure et accusamus.
+                      kind: subnet_pool
+                      observed:
+                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                        - Enim praesentium.
+                        - Omnis nisi quia modi qui quis.
+                      routes:
+                        - A voluptatem dolorum quasi sed rem.
+                        - Qui ex ullam repellat mollitia.
+                        - Ducimus aut consequatur rerum est.
+                        - Voluptas eos at beatae.
+                      state: unreserved_but_live
+                    - expected: Maxime et alias in.
+                      key: Corporis iure et accusamus.
+                      kind: subnet_pool
+                      observed:
+                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                        - Enim praesentium.
+                        - Omnis nisi quia modi qui quis.
+                      routes:
+                        - A voluptatem dolorum quasi sed rem.
+                        - Qui ex ullam repellat mollitia.
+                        - Ducimus aut consequatur rerum est.
+                        - Voluptas eos at beatae.
+                      state: unreserved_but_live
+                    - expected: Maxime et alias in.
+                      key: Corporis iure et accusamus.
+                      kind: subnet_pool
+                      observed:
+                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                        - Enim praesentium.
+                        - Omnis nisi quia modi qui quis.
+                      routes:
+                        - A voluptatem dolorum quasi sed rem.
+                        - Qui ex ullam repellat mollitia.
+                        - Ducimus aut consequatur rerum est.
+                        - Voluptas eos at beatae.
+                      state: unreserved_but_live
+                    - expected: Maxime et alias in.
+                      key: Corporis iure et accusamus.
+                      kind: subnet_pool
+                      observed:
+                        - Perspiciatis ipsam reiciendis qui quod laudantium.
+                        - Enim praesentium.
+                        - Omnis nisi quia modi qui quis.
+                      routes:
+                        - A voluptatem dolorum quasi sed rem.
+                        - Qui ex ullam repellat mollitia.
+                        - Ducimus aut consequatur rerum est.
+                        - Voluptas eos at beatae.
+                      state: unreserved_but_live
+                excluded:
+                    - Eligendi et rerum.
+                    - Voluptates ex.
+                    - Consequatur at voluptas optio et.
+                    - Qui dolorem.
+                live_tailnet: Id aperiam fugit enim similique doloribus velit.
+            required:
+                - live_tailnet
+                - drift_count
+                - entries
+                - excluded
         Error:
             type: object
             properties:
@@ -654,7 +974,7 @@ components:
                     type: boolean
                     description: Is the error a timeout?
                     example: false
-            description: id, site, or reservation metadata is invalid.
+            description: Registry or live inventory could not be compared completely.
             example:
                 fault: true
                 id: 123abc

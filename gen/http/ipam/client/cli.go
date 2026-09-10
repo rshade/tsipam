@@ -15,6 +15,24 @@ import (
 	goa "goa.design/goa/v3/pkg"
 )
 
+// BuildPlanPayload builds the payload for the ipam plan endpoint from CLI
+// flags.
+func BuildPlanPayload(ipamPlanTailnet string, ipamPlanLiveTailnet string) (*ipam.PlanPayload, error) {
+	var tailnet string
+	{
+		tailnet = ipamPlanTailnet
+	}
+	var liveTailnet string
+	{
+		liveTailnet = ipamPlanLiveTailnet
+	}
+	v := &ipam.PlanPayload{}
+	v.Tailnet = tailnet
+	v.LiveTailnet = liveTailnet
+
+	return v, nil
+}
+
 // BuildListSiteIdsPayload builds the payload for the ipam list_site_ids
 // endpoint from CLI flags.
 func BuildListSiteIdsPayload(ipamListSiteIdsTailnet string) (*ipam.ListSiteIdsPayload, error) {

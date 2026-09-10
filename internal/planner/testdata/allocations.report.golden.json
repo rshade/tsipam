@@ -1,0 +1,125 @@
+{
+  "Entries": [
+    {
+      "Kind": "site_id",
+      "State": "matched",
+      "Key": "2",
+      "Expected": "branch",
+      "Observed": [
+        "router-a",
+        "router-z"
+      ],
+      "Routes": [
+        "fd7a:115c:a1e0:b1a:0:2:a00:0/120"
+      ]
+    },
+    {
+      "Kind": "site_id",
+      "State": "reserved_but_unadvertised",
+      "Key": "10",
+      "Expected": "absent",
+      "Observed": [],
+      "Routes": []
+    },
+    {
+      "Kind": "subnet_pool",
+      "State": "matched",
+      "Key": "10.0.0.0/16",
+      "Expected": "branch",
+      "Observed": [
+        "router-a",
+        "router-z"
+      ],
+      "Routes": [
+        "10.0.1.0/24"
+      ]
+    },
+    {
+      "Kind": "subnet_pool",
+      "State": "reserved_but_unadvertised",
+      "Key": "192.0.2.0/24",
+      "Expected": "absent",
+      "Observed": [],
+      "Routes": []
+    },
+    {
+      "Kind": "subnet_pool",
+      "State": "unreserved_but_live",
+      "Key": "198.51.100.0/24",
+      "Expected": "",
+      "Observed": [
+        "router-a"
+      ],
+      "Routes": [
+        "198.51.100.0/24"
+      ]
+    },
+    {
+      "Kind": "subnet_pool",
+      "State": "matched",
+      "Key": "2001:db8::/32",
+      "Expected": "branch",
+      "Observed": [
+        "router-a"
+      ],
+      "Routes": [
+        "2001:db8:1::/48"
+      ]
+    },
+    {
+      "Kind": "subnet_pool",
+      "State": "matched",
+      "Key": "fd7a:115c:a1e0:b1a::/64",
+      "Expected": "branch",
+      "Observed": [
+        "router-a",
+        "router-z"
+      ],
+      "Routes": [
+        "fd7a:115c:a1e0:b1a:0:2:a00:0/120"
+      ]
+    },
+    {
+      "Kind": "service_address",
+      "State": "matched",
+      "Key": "100.100.100.1",
+      "Expected": "svc:one",
+      "Observed": [
+        "svc:one"
+      ],
+      "Routes": []
+    },
+    {
+      "Kind": "service_address",
+      "State": "reserved_but_unadvertised",
+      "Key": "100.100.100.2",
+      "Expected": "svc:two",
+      "Observed": [],
+      "Routes": []
+    },
+    {
+      "Kind": "service_address",
+      "State": "conflict",
+      "Key": "100.100.100.3",
+      "Expected": "svc:three",
+      "Observed": [
+        "svc:wrong"
+      ],
+      "Routes": []
+    },
+    {
+      "Kind": "service_address",
+      "State": "unreserved_but_live",
+      "Key": "100.100.100.4",
+      "Expected": "",
+      "Observed": [
+        "svc:wrong"
+      ],
+      "Routes": []
+    }
+  ],
+  "DriftCount": 6,
+  "Excluded": [
+    "udp_port"
+  ]
+}

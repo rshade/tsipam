@@ -162,6 +162,7 @@ type outputEnvelope struct {
 	Supernets        *[]string               `json:"supernets,omitempty"`
 	FreeBlocks       *[]string               `json:"free_blocks,omitempty"`
 	BlockInfo        *blockInfoOutput        `json:"block_info,omitempty"`
+	Comparison       *comparisonOutput       `json:"comparison,omitempty"`
 
 	// messageBuilder, when set, renders Message from this envelope's own
 	// exported fields at emit time instead of Message being pre-formatted
@@ -198,6 +199,9 @@ func renderOutput(writer io.Writer, format string, result *outputEnvelope) error
 	}
 	if result.SiteIDs != nil {
 		return renderSiteIDs(writer, *result.SiteIDs)
+	}
+	if result.Comparison != nil {
+		return renderComparison(writer, result.Tailnet, result.Comparison)
 	}
 	if result.SubnetPools != nil {
 		return renderSubnetPools(writer, *result.SubnetPools)
@@ -411,6 +415,7 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		result.Supernets = &supernets
 	}
 	result.BlockInfo = input.BlockInfo
+	result.Comparison = sanitizeComparison(input.Comparison, output)
 	if input.FreeBlocks != nil {
 		blocks := make([]string, len(*input.FreeBlocks))
 		for index, block := range *input.FreeBlocks {

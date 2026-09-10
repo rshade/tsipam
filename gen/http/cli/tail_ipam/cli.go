@@ -23,13 +23,13 @@ import (
 //	command (subcommand1|subcommand2|...)
 func UsageCommands() []string {
 	return []string{
-		"ipam (list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
+		"ipam (plan|list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
 	}
 }
 
 // UsageExamples produces an example of a valid invocation of the CLI tool.
 func UsageExamples() string {
-	return os.Args[0] + " " + "ipam list-site-ids --tailnet \"Quia suscipit itaque rem eligendi atque.\"" + "\n" +
+	return os.Args[0] + " " + "ipam plan --tailnet \"Quibusdam quidem ut.\" --live-tailnet \"Quis reiciendis animi provident.\"" + "\n" +
 		""
 }
 
@@ -44,6 +44,10 @@ func ParseEndpoint(
 ) (goa.Endpoint, any, error) {
 	var (
 		ipamFlags = flag.NewFlagSet("ipam", flag.ContinueOnError)
+
+		ipamPlanFlags           = flag.NewFlagSet("plan", flag.ExitOnError)
+		ipamPlanTailnetFlag     = ipamPlanFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
+		ipamPlanLiveTailnetFlag = ipamPlanFlags.String("live-tailnet", "REQUIRED", "")
 
 		ipamListSiteIdsFlags       = flag.NewFlagSet("list-site-ids", flag.ExitOnError)
 		ipamListSiteIdsTailnetFlag = ipamListSiteIdsFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.")
@@ -92,6 +96,7 @@ func ParseEndpoint(
 		ipamReleaseUDPPortPortFlag    = ipamReleaseUDPPortFlags.String("port", "REQUIRED", "")
 	)
 	ipamFlags.Usage = ipamUsage
+	ipamPlanFlags.Usage = ipamPlanUsage
 	ipamListSiteIdsFlags.Usage = ipamListSiteIdsUsage
 	ipamReserveSiteIDFlags.Usage = ipamReserveSiteIDUsage
 	ipamReleaseSiteIDFlags.Usage = ipamReleaseSiteIDUsage
@@ -139,6 +144,9 @@ func ParseEndpoint(
 		switch svcn {
 		case "ipam":
 			switch epn {
+			case "plan":
+				epf = ipamPlanFlags
+
 			case "list-site-ids":
 				epf = ipamListSiteIdsFlags
 
@@ -200,6 +208,9 @@ func ParseEndpoint(
 		case "ipam":
 			c := ipamc.NewClient(scheme, host, doer, enc, dec, restore)
 			switch epn {
+			case "plan":
+				endpoint = c.Plan()
+				data, err = ipamc.BuildPlanPayload(*ipamPlanTailnetFlag, *ipamPlanLiveTailnetFlag)
 			case "list-site-ids":
 				endpoint = c.ListSiteIds()
 				data, err = ipamc.BuildListSiteIdsPayload(*ipamListSiteIdsTailnetFlag)
@@ -251,6 +262,7 @@ func ipamUsage() {
 	fmt.Fprintln(os.Stderr, `Reserve, release, and list address-space and UDP-port allocations for one tailnet's registry.`)
 	fmt.Fprintf(os.Stderr, "Usage:\n    %s [globalflags] ipam COMMAND [flags]\n\n", os.Args[0])
 	fmt.Fprintln(os.Stderr, "COMMAND:")
+	fmt.Fprintln(os.Stderr, `    plan: Compare declared allocations with live control-plane state without modifying either.`)
 	fmt.Fprintln(os.Stderr, `    list-site-ids: ListSiteIds implements list_site_ids.`)
 	fmt.Fprintln(os.Stderr, `    reserve-site-id: ReserveSiteID implements reserve_site_id.`)
 	fmt.Fprintln(os.Stderr, `    release-site-id: ReleaseSiteID implements release_site_id.`)
@@ -267,6 +279,26 @@ func ipamUsage() {
 	fmt.Fprintln(os.Stderr, "Additional help:")
 	fmt.Fprintf(os.Stderr, "    %s ipam COMMAND --help\n", os.Args[0])
 }
+func ipamPlanUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam plan", os.Args[0])
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprint(os.Stderr, " -live-tailnet STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Compare declared allocations with live control-plane state without modifying either.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+	fmt.Fprintln(os.Stderr, `    -live-tailnet STRING: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam plan --tailnet \"Quibusdam quidem ut.\" --live-tailnet \"Quis reiciendis animi provident.\"")
+}
+
 func ipamListSiteIdsUsage() {
 	// Header with flags
 	fmt.Fprintf(os.Stderr, "%s [flags] ipam list-site-ids", os.Args[0])

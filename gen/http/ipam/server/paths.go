@@ -11,6 +11,11 @@ import (
 	"fmt"
 )
 
+// PlanIpamPath returns the URL path to the ipam service plan HTTP endpoint.
+func PlanIpamPath(tailnet string) string {
+	return fmt.Sprintf("/tailnet/%v/ipam/plan", tailnet)
+}
+
 // ListSiteIdsIpamPath returns the URL path to the ipam service list_site_ids HTTP endpoint.
 func ListSiteIdsIpamPath(tailnet string) string {
 	return fmt.Sprintf("/tailnet/%v/ipam/site-ids", tailnet)

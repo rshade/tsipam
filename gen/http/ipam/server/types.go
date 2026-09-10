@@ -74,6 +74,19 @@ type ReserveUDPPortRequestBody struct {
 	Device *string `form:"device,omitempty" json:"device,omitempty" xml:"device,omitempty"`
 }
 
+// PlanResponseBody is the type of the "ipam" service "plan" endpoint HTTP
+// response body.
+type PlanResponseBody struct {
+	// Live control-plane tailnet, independent of the registry alias.
+	LiveTailnet string `form:"live_tailnet" json:"live_tailnet" xml:"live_tailnet"`
+	// Number of non-matched entries.
+	DriftCount int `form:"drift_count" json:"drift_count" xml:"drift_count"`
+	// Deterministically ordered comparison entries.
+	Entries []*ComparisonEntryResponseBody `form:"entries" json:"entries" xml:"entries"`
+	// Allocation kinds with no live counterpart: udp_port.
+	Excluded []string `form:"excluded" json:"excluded" xml:"excluded"`
+}
+
 // ListSiteIdsResponseBody is the type of the "ipam" service "list_site_ids"
 // endpoint HTTP response body.
 type ListSiteIdsResponseBody []*SiteIDReservationResponse
@@ -196,6 +209,24 @@ type ReleaseUDPPortResponseBody struct {
 	Port string `form:"port" json:"port" xml:"port"`
 	// False when the site and port were not reserved.
 	Changed bool `form:"changed" json:"changed" xml:"changed"`
+}
+
+// PlanComparisonFailedResponseBody is the type of the "ipam" service "plan"
+// endpoint HTTP response body for the "comparison_failed" error.
+type PlanComparisonFailedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
 }
 
 // ReserveSiteIDInvalidInputResponseBody is the type of the "ipam" service
@@ -437,6 +468,22 @@ type ReleaseUDPPortInvalidInputResponseBody struct {
 	Fault bool `form:"fault" json:"fault" xml:"fault"`
 }
 
+// ComparisonEntryResponseBody is used to define fields on response body types.
+type ComparisonEntryResponseBody struct {
+	// Allocation primitive.
+	Kind string `form:"kind" json:"kind" xml:"kind"`
+	// Comparison classification.
+	State string `form:"state" json:"state" xml:"state"`
+	// Numeric site ID, subnet CIDR, or service IPv4 address.
+	Key string `form:"key" json:"key" xml:"key"`
+	// Registry site label or service name, when reserved.
+	Expected *string `form:"expected,omitempty" json:"expected,omitempty" xml:"expected,omitempty"`
+	// Sorted unique live device or service names.
+	Observed []string `form:"observed" json:"observed" xml:"observed"`
+	// Sorted unique advertised routes supporting the comparison.
+	Routes []string `form:"routes" json:"routes" xml:"routes"`
+}
+
 // SiteIDReservationResponse is used to define fields on response body types.
 type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -495,6 +542,36 @@ type UDPPortReservationResponse struct {
 	Port string `form:"port" json:"port" xml:"port"`
 	// Canonical device label that owns the port within the site.
 	Device string `form:"device" json:"device" xml:"device"`
+}
+
+// NewPlanResponseBody builds the HTTP response body from the result of the
+// "plan" endpoint of the "ipam" service.
+func NewPlanResponseBody(res *ipam.ComparisonReport) *PlanResponseBody {
+	body := &PlanResponseBody{
+		LiveTailnet: res.LiveTailnet,
+		DriftCount:  res.DriftCount,
+	}
+	if res.Entries != nil {
+		body.Entries = make([]*ComparisonEntryResponseBody, len(res.Entries))
+		for i, val := range res.Entries {
+			if val == nil {
+				body.Entries[i] = nil
+				continue
+			}
+			body.Entries[i] = marshalIpamComparisonEntryToComparisonEntryResponseBody(val)
+		}
+	} else {
+		body.Entries = []*ComparisonEntryResponseBody{}
+	}
+	if res.Excluded != nil {
+		body.Excluded = make([]string, len(res.Excluded))
+		for i, val := range res.Excluded {
+			body.Excluded[i] = val
+		}
+	} else {
+		body.Excluded = []string{}
+	}
+	return body
 }
 
 // NewListSiteIdsResponseBody builds the HTTP response body from the result of
@@ -647,6 +724,20 @@ func NewReleaseUDPPortResponseBody(res *ipam.ReleaseUDPPortResult) *ReleaseUDPPo
 		Site:    res.Site,
 		Port:    res.Port,
 		Changed: res.Changed,
+	}
+	return body
+}
+
+// NewPlanComparisonFailedResponseBody builds the HTTP response body from the
+// result of the "plan" endpoint of the "ipam" service.
+func NewPlanComparisonFailedResponseBody(res *goa.ServiceError) *PlanComparisonFailedResponseBody {
+	body := &PlanComparisonFailedResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
 	}
 	return body
 }
@@ -834,6 +925,15 @@ func NewReleaseUDPPortInvalidInputResponseBody(res *goa.ServiceError) *ReleaseUD
 		Fault:     res.Fault,
 	}
 	return body
+}
+
+// NewPlanPayload builds a ipam service plan endpoint payload.
+func NewPlanPayload(tailnet string, liveTailnet string) *ipam.PlanPayload {
+	v := &ipam.PlanPayload{}
+	v.Tailnet = tailnet
+	v.LiveTailnet = liveTailnet
+
+	return v
 }
 
 // NewListSiteIdsPayload builds a ipam service list_site_ids endpoint payload.

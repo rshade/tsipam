@@ -15,6 +15,7 @@ import (
 
 // Endpoints wraps the "ipam" service endpoints.
 type Endpoints struct {
+	Plan                  goa.Endpoint
 	ListSiteIds           goa.Endpoint
 	ReserveSiteID         goa.Endpoint
 	ReleaseSiteID         goa.Endpoint
@@ -32,6 +33,7 @@ type Endpoints struct {
 // NewEndpoints wraps the methods of the "ipam" service with endpoints.
 func NewEndpoints(s Service) *Endpoints {
 	return &Endpoints{
+		Plan:                  NewPlanEndpoint(s),
 		ListSiteIds:           NewListSiteIdsEndpoint(s),
 		ReserveSiteID:         NewReserveSiteIDEndpoint(s),
 		ReleaseSiteID:         NewReleaseSiteIDEndpoint(s),
@@ -49,6 +51,7 @@ func NewEndpoints(s Service) *Endpoints {
 
 // Use applies the given middleware to all the "ipam" service endpoints.
 func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
+	e.Plan = m(e.Plan)
 	e.ListSiteIds = m(e.ListSiteIds)
 	e.ReserveSiteID = m(e.ReserveSiteID)
 	e.ReleaseSiteID = m(e.ReleaseSiteID)
@@ -61,6 +64,15 @@ func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
 	e.ListUDPPorts = m(e.ListUDPPorts)
 	e.ReserveUDPPort = m(e.ReserveUDPPort)
 	e.ReleaseUDPPort = m(e.ReleaseUDPPort)
+}
+
+// NewPlanEndpoint returns an endpoint function that calls the method "plan" of
+// service "ipam".
+func NewPlanEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*PlanPayload)
+		return s.Plan(ctx, p)
+	}
 }
 
 // NewListSiteIdsEndpoint returns an endpoint function that calls the method

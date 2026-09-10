@@ -19,6 +19,103 @@ import (
 	goa "goa.design/goa/v3/pkg"
 )
 
+// BuildPlanRequest instantiates a HTTP request object with method and path set
+// to call the "ipam" service "plan" endpoint
+func (c *Client) BuildPlanRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.PlanPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "plan", "*ipam.PlanPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: PlanIpamPath(tailnet)}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "plan", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodePlanRequest returns an encoder for requests sent to the ipam plan
+// server.
+func EncodePlanRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.PlanPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "plan", "*ipam.PlanPayload", v)
+		}
+		values := req.URL.Query()
+		values.Add("live_tailnet", p.LiveTailnet)
+		req.URL.RawQuery = values.Encode()
+		return nil
+	}
+}
+
+// DecodePlanResponse returns a decoder for responses returned by the ipam plan
+// endpoint. restoreBody controls whether the response body should be restored
+// after having been read.
+// DecodePlanResponse may return the following errors:
+//   - "comparison_failed" (type *goa.ServiceError): http.StatusBadGateway
+//   - error: internal error
+func DecodePlanResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body PlanResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "plan", err)
+			}
+			err = ValidatePlanResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "plan", err)
+			}
+			res := NewPlanComparisonReportOK(&body)
+			return res, nil
+		case http.StatusBadGateway:
+			var (
+				body PlanComparisonFailedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "plan", err)
+			}
+			err = ValidatePlanComparisonFailedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "plan", err)
+			}
+			return nil, NewPlanComparisonFailed(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "plan", resp.StatusCode, string(body))
+		}
+	}
+}
+
 // BuildListSiteIdsRequest instantiates a HTTP request object with method and
 // path set to call the "ipam" service "list_site_ids" endpoint
 func (c *Client) BuildListSiteIdsRequest(ctx context.Context, v any) (*http.Request, error) {
@@ -1166,6 +1263,27 @@ func DecodeReleaseUDPPortResponse(decoder func(*http.Response) goahttp.Decoder, 
 			return nil, goahttp.ErrInvalidResponse("ipam", "release_udp_port", resp.StatusCode, string(body))
 		}
 	}
+}
+
+// unmarshalComparisonEntryResponseBodyToIpamComparisonEntry builds a value of
+// type *ipam.ComparisonEntry from a value of type *ComparisonEntryResponseBody.
+func unmarshalComparisonEntryResponseBodyToIpamComparisonEntry(v *ComparisonEntryResponseBody) *ipam.ComparisonEntry {
+	res := &ipam.ComparisonEntry{
+		Kind:     *v.Kind,
+		State:    *v.State,
+		Key:      *v.Key,
+		Expected: v.Expected,
+	}
+	res.Observed = make([]string, len(v.Observed))
+	for i, val := range v.Observed {
+		res.Observed[i] = val
+	}
+	res.Routes = make([]string, len(v.Routes))
+	for i, val := range v.Routes {
+		res.Routes[i] = val
+	}
+
+	return res
 }
 
 // unmarshalSiteIDReservationResponseToIpamSiteIDReservation builds a value of

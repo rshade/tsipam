@@ -20,9 +20,9 @@ design rationale.
 with no allocation or conflict detection), and `tailnet-audit`'s
 `subnet-route-overlap` ([#221](https://github.com/rshade/tailscale-utils/issues/221))
 and `4via6-site-id-collision`
-([#222](https://github.com/rshade/tailscale-utils/issues/222)) checks detect
-collisions in what is already live. `tail-ipam` is the planning half: reserving
-address space before it is ever advertised.
+([#222](https://github.com/rshade/tailscale-utils/issues/222)) roadmap checks
+own collision detection in what is already live. `tail-ipam` reserves address
+space before it is advertised and compares those reservations with live use.
 
 ## Status
 
@@ -55,6 +55,104 @@ Human output is tab-separated (device name, addresses, advertised routes).
 Use `-format json` for the versioned machine contract. Set
 `TAILSCALE_SANITIZE=identity` or `strict` when the output must not expose
 device names, addresses, routes, or the tailnet name.
+
+#### `plan` and `check`
+
+Compare the local registry with live advertised routes and Tailscale Services.
+Both commands are read-only: they read one registry snapshot and collect devices
+and Services through the API without changing either source. Use the credentials
+shown under `devices list`, with permission to read both devices and Services.
+`TAILSCALE_TAILNET` is required and always selects the live source. `--tailnet`
+selects the registry alias, defaulting to `TAILSCALE_TAILNET` when omitted.
+
+```bash
+export TAILSCALE_TAILNET=myorg
+tail-ipam plan --registry-dir /etc/tail-ipam --tailnet production
+tail-ipam check --registry-dir /etc/tail-ipam --tailnet production --format json
+```
+
+The commands use these matching rules:
+
+| Allocation | A reservation matches when… |
+| --- | --- |
+| Site ID | Its numeric ID appears in an advertised 4via6 route. |
+| Subnet pool | It contains an entire advertised route of the same address family. |
+| Service address | The reserved IPv4 address belongs to the reserved `svc:` identity. |
+
+A `/16` pool can therefore match an advertised `/24`; a `/24` reservation does
+not match a broader `/16` route. IPv4-mapped prefixes are normalized to IPv4.
+4via6 routes contribute their encoded site ID and their actual IPv6 prefix;
+they do not implicitly advertise their embedded IPv4 range. Multiple routers
+advertising the same route are grouped as evidence. Site labels are registry
+annotations, so a matching numeric ID does not prove physical-site ownership.
+
+Each report row has an allocation `kind`, a `key` (ID, CIDR, or address), and
+one of four states:
+
+- `matched`: the reservation has matching live evidence.
+- `reserved_but_unadvertised`: the reservation has no matching evidence.
+- `unreserved_but_live`: live use has no covering reservation.
+- `conflict`: a reserved service address is assigned to a different service,
+  or to multiple distinct services.
+
+`plan` exits **0** after any complete comparison. `check` emits the same report
+and exits **1** when at least one row differs; it exits **0** when all rows match.
+Both exit **2**, with diagnostics on stderr and no report on stdout, if the
+registry, credentials, either API request, or live allocation data is invalid.
+An unavailable Services endpoint is an error even when the registry has no
+service reservations. Empty lists from both endpoints are valid observations.
+Each API request has a 30-second timeout and honors command cancellation.
+
+Human output is tab-separated with quoted evidence and a final drift count.
+JSON adds a `comparison` object to the versioned envelope:
+
+```json
+{
+  "schema_version": "1",
+  "tool": "tail-ipam",
+  "command": "check",
+  "status": "drift",
+  "message": "found 1 allocation drift(s)",
+  "tailnet": "production",
+  "comparison": {
+    "live_tailnet": "myorg",
+    "drift_count": 1,
+    "entries": [
+      {
+        "kind": "subnet_pool",
+        "state": "reserved_but_unadvertised",
+        "key": "10.20.0.0/16",
+        "expected": "branch-office",
+        "observed": [],
+        "routes": []
+      }
+    ],
+    "excluded": ["udp_port"]
+  }
+}
+```
+
+Entries are ordered by kind (site IDs, subnet pools, service addresses), then
+numeric ID or network address and prefix length. Evidence is sorted and
+deduplicated. Empty results and evidence remain JSON arrays. `expected` is
+omitted for unreserved live entries. `drift_count` counts non-matching rows;
+it is not a count of affected devices.
+
+UDP listen ports are explicitly excluded because the API does not expose live
+listen-port configuration. Service IPv6 addresses are outside the IPv4 service
+registry's scope. Advertised routes, including default routes, participate even
+if not approved or currently usable. A match does not establish reachability,
+policy approval, or operational health. The two API reads are consecutive
+observations, not an atomic control-plane snapshot. Live-only overlap and 4via6
+collision analysis remains owned by `tailnet-audit`; these commands compare
+registry intent with live evidence.
+
+Use `--sanitize identity` or `strict` to redact registry and live tailnet names,
+site labels, device and service identities, addresses, and routes. Numeric site
+IDs, states, counts, and exclusions remain visible. A fixed
+`TAILSCALE_SANITIZE_KEY` produces stable placeholders scoped to the registry
+alias, including for live evidence. API error bodies are omitted from diagnostics;
+errors retain the collection operation and HTTP status when available.
 
 #### `site-id reserve <id> <site-name>`
 
@@ -611,7 +709,8 @@ top-level contract as the repository's other action-oriented CLI output:
 
 `site-id list` carries `site_ids`, `subnet list` carries `subnet_pools`,
 `service list` carries `service_addresses`, `port list` carries `udp_ports`,
-and `devices list` carries `devices`. Reserve/release results carry the
+`devices list` carries `devices`, and `plan`/`check` carry `comparison`.
+Reserve/release results carry the
 applicable `changed`, `id`, `cidr`, `address`, `site`, `service`, `port`, and
 `device` fields, plus `owner`, `description`, `ticket`, and `reserved_at` when
 the reservation shape supports and carries that metadata (a reserve echoes
@@ -657,8 +756,7 @@ placeholders are artifact-scoped.
 The following commands and features are planned future work per
 [`../ROADMAP.md`](../ROADMAP.md) ("Future Vision" → `tail-ipam`):
 
-- `allocate` and `plan` commands for address-space planning against live state
-- `check` command for validating the registry against live tailnet usage
+- `allocate` command for address-space planning against live state
 - On-prem CIDR planning (address space not yet advertised as live routes)
 
 ## Build

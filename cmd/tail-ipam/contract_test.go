@@ -394,11 +394,22 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 		"SchemaVersion", "Tool", "Sanitization", "Command", "Status", "Message", "Tailnet",
 		"Changed", "ID", "CIDR", "Address", "Site", "Service", "SiteIDs", "SubnetPools",
 		"ServiceAddresses", "Port", "Device", "UDPPorts", "Devices", "Subnets", "Supernets", "FreeBlocks", "BlockInfo",
+		"Comparison",
 	); len(missing) != 0 {
 		t.Errorf("outputEnvelope fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[siteIDOutput]("ID", "Site"); len(missing) != 0 {
 		t.Errorf("siteIDOutput fields without an explicit sanitization decision: %v", missing)
+	}
+	if missing := sanitize.UnhandledFields[comparisonOutput](
+		"LiveTailnet", "DriftCount", "Entries", "Excluded",
+	); len(missing) != 0 {
+		t.Errorf("comparisonOutput fields without an explicit sanitization decision: %v", missing)
+	}
+	if missing := sanitize.UnhandledFields[comparisonEntryOutput](
+		"Kind", "State", "Key", "Expected", "Observed", "Routes",
+	); len(missing) != 0 {
+		t.Errorf("comparisonEntryOutput fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[subnetPoolOutput]("CIDR", "Site"); len(missing) != 0 {
 		t.Errorf("subnetPoolOutput fields without an explicit sanitization decision: %v", missing)

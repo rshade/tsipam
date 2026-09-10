@@ -16,6 +16,9 @@ import (
 // Reserve, release, and list address-space and UDP-port allocations for one
 // tailnet's registry.
 type Service interface {
+	// Compare declared allocations with live control-plane state without modifying
+	// either.
+	Plan(context.Context, *PlanPayload) (res *ComparisonReport, err error)
 	// ListSiteIds implements list_site_ids.
 	ListSiteIds(context.Context, *ListSiteIdsPayload) (res []*SiteIDReservation, err error)
 	// ReserveSiteID implements reserve_site_id.
@@ -56,7 +59,35 @@ const ServiceName = "ipam"
 // MethodNames lists the service method names as defined in the design. These
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
-var MethodNames = [12]string{"list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
+var MethodNames = [13]string{"plan", "list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
+
+// One allocation and its registry-versus-live classification.
+type ComparisonEntry struct {
+	// Allocation primitive.
+	Kind string
+	// Comparison classification.
+	State string
+	// Numeric site ID, subnet CIDR, or service IPv4 address.
+	Key string
+	// Registry site label or service name, when reserved.
+	Expected *string
+	// Sorted unique live device or service names.
+	Observed []string
+	// Sorted unique advertised routes supporting the comparison.
+	Routes []string
+}
+
+// ComparisonReport is the result type of the ipam service plan method.
+type ComparisonReport struct {
+	// Live control-plane tailnet, independent of the registry alias.
+	LiveTailnet string
+	// Number of non-matched entries.
+	DriftCount int
+	// Deterministically ordered comparison entries.
+	Entries []*ComparisonEntry
+	// Allocation kinds with no live counterpart: udp_port.
+	Excluded []string
+}
 
 // ListServiceAddressesPayload is the payload type of the ipam service
 // list_service_addresses method.
@@ -91,6 +122,14 @@ type ListUDPPortsPayload struct {
 	// Optional site/firewall-boundary label to filter. An absent or empty site
 	// parameter means no filter: returns reservations from all sites.
 	Site *string
+}
+
+// PlanPayload is the payload type of the ipam service plan method.
+type PlanPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Tailscale tailnet whose live allocations are collected.
+	LiveTailnet string
 }
 
 // ReleaseServiceAddressPayload is the payload type of the ipam service
@@ -365,6 +404,11 @@ type UDPPortReservation struct {
 	Port string
 	// Canonical device label that owns the port within the site.
 	Device string
+}
+
+// MakeComparisonFailed builds a goa.ServiceError from an error.
+func MakeComparisonFailed(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "comparison_failed", false, false, false)
 }
 
 // MakeCollision builds a goa.ServiceError from an error.

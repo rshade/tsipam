@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	"github.com/rshade/tailscale-utils/tail-ipam/internal/devices"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
@@ -21,6 +22,9 @@ type Service struct {
 	RegistryDir string
 	// Logger receives identity-free I/O diagnostics. nil is quiet.
 	Logger diagnostics.Logger
+	// CollectLive reads a complete live allocation snapshot for the requested tailnet.
+	// nil disables plan while retaining the registry-only methods.
+	CollectLive func(context.Context, string, diagnostics.Logger) (devices.Snapshot, error)
 }
 
 var _ ipam.Service = (*Service)(nil)

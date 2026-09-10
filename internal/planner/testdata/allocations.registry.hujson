@@ -1,0 +1,17 @@
+{
+  "siteIDs": {
+    "2": "branch",
+    "10": "absent"
+  },
+  "subnetPools": {
+    "10.0.0.0/16": "branch",
+    "192.0.2.0/24": "absent",
+    "2001:db8::/32": "branch",
+    "fd7a:115c:a1e0:b1a::/64": "branch"
+  },
+  "serviceAddresses": {
+    "100.100.100.1": "svc:one",
+    "100.100.100.2": "svc:two",
+    "100.100.100.3": "svc:three"
+  }
+}

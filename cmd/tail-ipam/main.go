@@ -1,16 +1,15 @@
 // Command tail-ipam manages a declarative registry of Tailscale address
 // space -- 4via6 site IDs, subnet CIDR pools, per-service IPv4 addresses, and
-// per-device UDP listen ports -- and will plan/check that
+// per-device UDP listen ports -- and plans/checks that
 // registry against live control-plane state.
 //
 // "site-id reserve/release/list", "subnet reserve/release/list",
 // "service reserve/release/list", and "port reserve/release/list" edit and
 // read the local registry file
 // (comment-preserving HuJSON, see
-// internal/registry); "devices list" is a read-only proof that the
-// tscli-backed client construction works. Neither cross-checks the registry
-// against live state yet -- that's the "plan"/"check" surface, still future
-// work. See ../../README.md and
+// internal/registry); "devices list" reads live inventory through tscli.
+// "plan" and "check" compare the registry with live allocation evidence.
+// See ../../README.md and
 // ../../../ROADMAP.md ("Future Vision" -> tail-ipam) for the design this will
 // grow into.
 //
@@ -273,6 +272,7 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 type commandDependencies struct {
 	getenv      func(string) string
 	listDevices devicesListFunc
+	collectLive liveSnapshotFunc
 }
 
 func main() { os.Exit(realMain()) }
@@ -308,7 +308,11 @@ func runCLI(
 	if err != nil {
 		// SilenceErrors on every command hands printing to the caller so
 		// cobra never writes to stdout on failure; this is that print.
-		registerKnownIdentityInventory(executed, state)
+		// The drift sentinel contains no identities and the report is already
+		// rendered. Avoid reopening registry data for this completed comparison.
+		if !errors.Is(err, errRegistryDrift) {
+			registerKnownIdentityInventory(executed, state)
+		}
 		_, _ = fmt.Fprintf(stderr, "%s: %v\n", toolName, sanitizeErrorIfNeeded(err, state.sanitizer))
 		return exitCodeFor(err)
 	}
@@ -565,6 +569,9 @@ const collisionErrorName = "collision"
 // that concrete Go type does not cross the wire. Both domain checks stay for
 // in-process callers.
 func exitCodeFor(err error) int {
+	if errors.Is(err, errRegistryDrift) {
+		return exitFailure
+	}
 	var svcErr *goa.ServiceError
 	if errors.As(err, &svcErr) && svcErr.Name == collisionErrorName {
 		return exitFailure
@@ -605,7 +612,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 			"Exit codes:\n" +
 			"  0  success\n" +
 			"  1  a valid operation was refused (for example, a registry collision or\n" +
-			"     a calc split producing too many subnets to materialize)\n" +
+			"     a calc split producing too many subnets to materialize), or check found drift\n" +
 			"  2  invalid invocation, collection failure, or unreadable registry",
 		Example: "  tail-ipam site-id reserve 1 hq-vpc\n" +
 			"  tail-ipam subnet reserve 10.0.0.0/24 hq-vpc\n" +
@@ -677,6 +684,8 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	root.AddCommand(newServiceCommand(state))
 	root.AddCommand(newUDPPortCommand(state))
 	root.AddCommand(newCalcCommand(state, deps.listDevices))
+	root.AddCommand(newPlanningCommand(state, commandPlan, deps.collectLive))
+	root.AddCommand(newPlanningCommand(state, commandCheck, deps.collectLive))
 	root.InitDefaultHelpFlag()
 	return root
 }

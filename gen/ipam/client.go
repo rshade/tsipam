@@ -15,6 +15,7 @@ import (
 
 // Client is the "ipam" service client.
 type Client struct {
+	PlanEndpoint                  goa.Endpoint
 	ListSiteIdsEndpoint           goa.Endpoint
 	ReserveSiteIDEndpoint         goa.Endpoint
 	ReleaseSiteIDEndpoint         goa.Endpoint
@@ -30,8 +31,9 @@ type Client struct {
 }
 
 // NewClient initializes a "ipam" service client given the endpoints.
-func NewClient(listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
+func NewClient(plan, listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
 	return &Client{
+		PlanEndpoint:                  plan,
 		ListSiteIdsEndpoint:           listSiteIds,
 		ReserveSiteIDEndpoint:         reserveSiteID,
 		ReleaseSiteIDEndpoint:         releaseSiteID,
@@ -45,6 +47,19 @@ func NewClient(listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reser
 		ReserveUDPPortEndpoint:        reserveUDPPort,
 		ReleaseUDPPortEndpoint:        releaseUDPPort,
 	}
+}
+
+// Plan calls the "plan" endpoint of the "ipam" service.
+// Plan may return the following errors:
+//   - "comparison_failed" (type *goa.ServiceError): Registry or live inventory could not be compared completely.
+//   - error: internal error
+func (c *Client) Plan(ctx context.Context, p *PlanPayload) (res *ComparisonReport, err error) {
+	var ires any
+	ires, err = c.PlanEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*ComparisonReport), nil
 }
 
 // ListSiteIds calls the "list_site_ids" endpoint of the "ipam" service.

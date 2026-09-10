@@ -3,7 +3,7 @@
   "version": "tail-ipam dev",
   "schema_version": "1",
   "description": "Allocate and plan Tailscale address space through a local, comment-preserving registry and read-only control-plane inventory.",
-  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; reserved service addresses; and UDP-port site and device labels are replaced. UDP port numbers remain visible. strict is accepted for cross-tool flag compatibility and is currently equivalent to identity for tail-ipam. calc split, positional aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; calc aggregate --from-registry and calc next-free output reflects registry or live-route data and is sanitized. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
+  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; reserved service addresses; and UDP-port site and device labels are replaced. UDP port numbers remain visible. strict is accepted for cross-tool flag compatibility and is currently equivalent to identity for tail-ipam. calc split, positional aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; calc aggregate --from-registry and calc next-free output reflects registry or live-route data and is sanitized. plan/check redact comparison identities and both tailnet sources; numeric site IDs and drift counts remain visible. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
   "flags": [
     {
       "name": "format",
@@ -111,6 +111,23 @@
       ]
     },
     {
+      "name": "check",
+      "summary": "Check registry allocations against live state; exit 1 on drift.",
+      "usage": "check",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
       "name": "devices",
       "summary": "Inspect devices on the tailnet (read-only).",
       "usage": "devices"
@@ -119,6 +136,23 @@
       "name": "devices list",
       "summary": "List devices with their addresses and advertised routes.",
       "usage": "devices list"
+    },
+    {
+      "name": "plan",
+      "summary": "Compare registry allocations with live state (read-only).",
+      "usage": "plan",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
     },
     {
       "name": "port",
@@ -429,7 +463,7 @@
     },
     {
       "code": 1,
-      "description": "a valid operation was refused, such as a registry collision or a calc split producing too many subnets to materialize"
+      "description": "a valid operation was refused, such as a registry collision or a calc split producing too many subnets to materialize, or check found allocation drift"
     },
     {
       "code": 2,

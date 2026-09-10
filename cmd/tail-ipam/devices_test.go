@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -99,6 +100,7 @@ func newDevicesAPIServer(t *testing.T) *httptest.Server {
 		},
 	}
 
+	maps.Copy(fixtures, planningAPIFixtures())
 	return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path == oauthTokenPath {
 			serveOAuthToken(t, writer, request)
@@ -115,7 +117,7 @@ func newDevicesAPIServer(t *testing.T) *httptest.Server {
 			t.Errorf("request method = %q, want %q", request.Method, http.MethodGet)
 			return
 		}
-		if got := request.URL.Query().Get("fields"); got != "all" {
+		if got := request.URL.Query().Get("fields"); strings.HasSuffix(request.URL.Path, "/devices") && got != "all" {
 			http.Error(writer, "missing all-fields selection", http.StatusBadRequest)
 			t.Errorf("fields query = %q, want %q", got, "all")
 			return
@@ -239,6 +241,7 @@ func TestDevicesListTSCLIPath(t *testing.T) {
 	testDevicesParallelClientConstruction(t)
 	testDevicesOAuthSuccess(t)
 	testDevicesAPIErrorIsSanitized(t)
+	testPlanningTSCLIPath(t)
 }
 
 func testDevicesCredentialValidation(t *testing.T) {

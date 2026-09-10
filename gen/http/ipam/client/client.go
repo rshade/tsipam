@@ -17,6 +17,9 @@ import (
 
 // Client lists the ipam service endpoint HTTP clients.
 type Client struct {
+	// Plan Doer is the HTTP client used to make requests to the plan endpoint.
+	PlanDoer goahttp.Doer
+
 	// ListSiteIds Doer is the HTTP client used to make requests to the
 	// list_site_ids endpoint.
 	ListSiteIdsDoer goahttp.Doer
@@ -85,6 +88,7 @@ func NewClient(
 	restoreBody bool,
 ) *Client {
 	return &Client{
+		PlanDoer:                  doer,
 		ListSiteIdsDoer:           doer,
 		ReserveSiteIDDoer:         doer,
 		ReleaseSiteIDDoer:         doer,
@@ -102,6 +106,30 @@ func NewClient(
 		host:                      host,
 		decoder:                   dec,
 		encoder:                   enc,
+	}
+}
+
+// Plan returns an endpoint that makes HTTP requests to the ipam service plan
+// server.
+func (c *Client) Plan() goa.Endpoint {
+	var (
+		encodeRequest  = EncodePlanRequest(c.encoder)
+		decodeResponse = DecodePlanResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildPlanRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.PlanDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "plan", err)
+		}
+		return decodeResponse(resp)
 	}
 }
 

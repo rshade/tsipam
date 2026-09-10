@@ -74,6 +74,19 @@ type ReserveUDPPortRequestBody struct {
 	Device string `form:"device" json:"device" xml:"device"`
 }
 
+// PlanResponseBody is the type of the "ipam" service "plan" endpoint HTTP
+// response body.
+type PlanResponseBody struct {
+	// Live control-plane tailnet, independent of the registry alias.
+	LiveTailnet *string `form:"live_tailnet,omitempty" json:"live_tailnet,omitempty" xml:"live_tailnet,omitempty"`
+	// Number of non-matched entries.
+	DriftCount *int `form:"drift_count,omitempty" json:"drift_count,omitempty" xml:"drift_count,omitempty"`
+	// Deterministically ordered comparison entries.
+	Entries []*ComparisonEntryResponseBody `form:"entries,omitempty" json:"entries,omitempty" xml:"entries,omitempty"`
+	// Allocation kinds with no live counterpart: udp_port.
+	Excluded []string `form:"excluded,omitempty" json:"excluded,omitempty" xml:"excluded,omitempty"`
+}
+
 // ReserveSiteIDResponseBody is the type of the "ipam" service
 // "reserve_site_id" endpoint HTTP response body.
 type ReserveSiteIDResponseBody struct {
@@ -180,6 +193,24 @@ type ReleaseUDPPortResponseBody struct {
 	Port *string `form:"port,omitempty" json:"port,omitempty" xml:"port,omitempty"`
 	// False when the site and port were not reserved.
 	Changed *bool `form:"changed,omitempty" json:"changed,omitempty" xml:"changed,omitempty"`
+}
+
+// PlanComparisonFailedResponseBody is the type of the "ipam" service "plan"
+// endpoint HTTP response body for the "comparison_failed" error.
+type PlanComparisonFailedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
 }
 
 // ReserveSiteIDInvalidInputResponseBody is the type of the "ipam" service
@@ -421,6 +452,22 @@ type ReleaseUDPPortInvalidInputResponseBody struct {
 	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
 }
 
+// ComparisonEntryResponseBody is used to define fields on response body types.
+type ComparisonEntryResponseBody struct {
+	// Allocation primitive.
+	Kind *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
+	// Comparison classification.
+	State *string `form:"state,omitempty" json:"state,omitempty" xml:"state,omitempty"`
+	// Numeric site ID, subnet CIDR, or service IPv4 address.
+	Key *string `form:"key,omitempty" json:"key,omitempty" xml:"key,omitempty"`
+	// Registry site label or service name, when reserved.
+	Expected *string `form:"expected,omitempty" json:"expected,omitempty" xml:"expected,omitempty"`
+	// Sorted unique live device or service names.
+	Observed []string `form:"observed,omitempty" json:"observed,omitempty" xml:"observed,omitempty"`
+	// Sorted unique advertised routes supporting the comparison.
+	Routes []string `form:"routes,omitempty" json:"routes,omitempty" xml:"routes,omitempty"`
+}
+
 // SiteIDReservationResponse is used to define fields on response body types.
 type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -532,6 +579,44 @@ func NewReserveUDPPortRequestBody(p *ipam.ReserveUDPPortPayload) *ReserveUDPPort
 		Device: p.Device,
 	}
 	return body
+}
+
+// NewPlanComparisonReportOK builds a "ipam" service "plan" endpoint result
+// from a HTTP "OK" response.
+func NewPlanComparisonReportOK(body *PlanResponseBody) *ipam.ComparisonReport {
+	v := &ipam.ComparisonReport{
+		LiveTailnet: *body.LiveTailnet,
+		DriftCount:  *body.DriftCount,
+	}
+	v.Entries = make([]*ipam.ComparisonEntry, len(body.Entries))
+	for i, val := range body.Entries {
+		if val == nil {
+			v.Entries[i] = nil
+			continue
+		}
+		v.Entries[i] = unmarshalComparisonEntryResponseBodyToIpamComparisonEntry(val)
+	}
+	v.Excluded = make([]string, len(body.Excluded))
+	for i, val := range body.Excluded {
+		v.Excluded[i] = val
+	}
+
+	return v
+}
+
+// NewPlanComparisonFailed builds a ipam service plan endpoint
+// comparison_failed error.
+func NewPlanComparisonFailed(body *PlanComparisonFailedResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
 }
 
 // NewListSiteIdsSiteIDReservationOK builds a "ipam" service "list_site_ids"
@@ -895,6 +980,35 @@ func NewReleaseUDPPortInvalidInput(body *ReleaseUDPPortInvalidInputResponseBody)
 	return v
 }
 
+// ValidatePlanResponseBody runs the validations defined on PlanResponseBody
+func ValidatePlanResponseBody(body *PlanResponseBody) (err error) {
+	if body.LiveTailnet == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("live_tailnet", "body"))
+	}
+	if body.DriftCount == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("drift_count", "body"))
+	}
+	if body.Entries == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("entries", "body"))
+	}
+	if body.Excluded == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("excluded", "body"))
+	}
+	if body.DriftCount != nil {
+		if *body.DriftCount < 0 {
+			err = goa.MergeErrors(err, goa.InvalidRangeError("body.drift_count", *body.DriftCount, 0, true))
+		}
+	}
+	for _, e := range body.Entries {
+		if e != nil {
+			if err2 := ValidateComparisonEntryResponseBody(e); err2 != nil {
+				err = goa.MergeErrors(err, err2)
+			}
+		}
+	}
+	return
+}
+
 // ValidateReserveSiteIDResponseBody runs the validations defined on
 // reserve_site_id_response_body
 func ValidateReserveSiteIDResponseBody(body *ReserveSiteIDResponseBody) (err error) {
@@ -1014,6 +1128,30 @@ func ValidateReleaseUDPPortResponseBody(body *ReleaseUDPPortResponseBody) (err e
 	}
 	if body.Changed == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("changed", "body"))
+	}
+	return
+}
+
+// ValidatePlanComparisonFailedResponseBody runs the validations defined on
+// plan_comparison_failed_response_body
+func ValidatePlanComparisonFailedResponseBody(body *PlanComparisonFailedResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
 	}
 	return
 }
@@ -1326,6 +1464,37 @@ func ValidateReleaseUDPPortInvalidInputResponseBody(body *ReleaseUDPPortInvalidI
 	}
 	if body.Fault == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateComparisonEntryResponseBody runs the validations defined on
+// ComparisonEntryResponseBody
+func ValidateComparisonEntryResponseBody(body *ComparisonEntryResponseBody) (err error) {
+	if body.Kind == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
+	}
+	if body.State == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("state", "body"))
+	}
+	if body.Key == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("key", "body"))
+	}
+	if body.Observed == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("observed", "body"))
+	}
+	if body.Routes == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("routes", "body"))
+	}
+	if body.Kind != nil {
+		if !(*body.Kind == "site_id" || *body.Kind == "subnet_pool" || *body.Kind == "service_address") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"site_id", "subnet_pool", "service_address"}))
+		}
+	}
+	if body.State != nil {
+		if !(*body.State == "matched" || *body.State == "reserved_but_unadvertised" || *body.State == "unreserved_but_live" || *body.State == "conflict") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.state", *body.State, []any{"matched", "reserved_but_unadvertised", "unreserved_but_live", "conflict"}))
+		}
 	}
 	return
 }

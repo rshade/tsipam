@@ -57,6 +57,17 @@ func RunWithLogger(
 	logger diagnostics.Logger,
 	fn func(context.Context, *ipamclient.Client) error,
 ) error {
+	return RunWithService(ctx, &ipamsvc.Service{RegistryDir: registryDir, Logger: logger}, fn)
+}
+
+// RunWithService uses a configured service, including its optional live
+// collector, over the same ephemeral generated HTTP transport as registry calls.
+func RunWithService(
+	ctx context.Context,
+	svc *ipamsvc.Service,
+	fn func(context.Context, *ipamclient.Client) error,
+) error {
+	logger := svc.Logger
 	diagnostics.Debug(logger, "starting loopback registry transport")
 	socketDir, err := os.MkdirTemp("", "tail-ipam-*")
 	if err != nil {
@@ -74,7 +85,6 @@ func RunWithLogger(
 		return fmt.Errorf("listening on %s: %w", socketPath, err)
 	}
 
-	svc := &ipamsvc.Service{RegistryDir: registryDir, Logger: logger}
 	endpoints := ipam.NewEndpoints(svc)
 	mux := goahttp.NewMuxer()
 	httpSrv := ipamserver.New(endpoints, mux, goahttp.RequestDecoder, goahttp.ResponseEncoder, nil, nil)
