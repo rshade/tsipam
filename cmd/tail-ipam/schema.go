@@ -89,8 +89,8 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 			"reserved service addresses; and UDP-port site and device labels are replaced. " +
 			"UDP port numbers remain visible. strict is accepted for cross-tool " +
 			"flag compatibility and is currently equivalent to identity for tail-ipam. " +
-			"calc split, aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; " +
-			"calc next-free output reflects registry and live-route data and is sanitized. " +
+			"calc split, positional aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; " +
+			"calc aggregate --from-registry and calc next-free output reflects registry or live-route data and is sanitized. " +
 			"Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; " +
 			"without it placeholders are artifact-scoped.",
 		Flags:    flagSchemaFor(root.Flags()),

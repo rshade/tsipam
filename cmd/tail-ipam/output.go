@@ -173,6 +173,10 @@ type outputEnvelope struct {
 	// mode on the error path). Unexported: excluded from JSON and from the
 	// UnhandledFields reflection guard, since it carries no data of its own.
 	messageBuilder func(*outputEnvelope) string
+
+	// Registry-derived aggregates contain allocation identities; positional
+	// aggregates are stateless arithmetic. This provenance is not a JSON field.
+	supernetsFromRegistry bool
 }
 
 func newOutput(command, status, message, tailnet string) *outputEnvelope {
@@ -334,6 +338,7 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		Status:                    input.Status,
 		Message:                   output.Text(input.Message),
 		messageBuilder:            input.messageBuilder,
+		supernetsFromRegistry:     input.supernetsFromRegistry,
 		Tailnet:                   output.Value(kindTailnet, input.Tailnet),
 		Changed:                   input.Changed,
 		ID:                        input.ID,
@@ -398,10 +403,13 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 		}
 		result.Devices = &devices
 	}
-	// Subnets, Supernets, and BlockInfo are computed only from a CLI-supplied CIDR, so they
-	// have no tailnet-derived identity to sweep.
+	// Split subnets and block facts are computed only from CLI-supplied CIDRs.
 	result.Subnets = input.Subnets
 	result.Supernets = input.Supernets
+	if input.Supernets != nil && input.supernetsFromRegistry {
+		supernets := sanitizeNetworkValues(*input.Supernets, output)
+		result.Supernets = &supernets
+	}
 	result.BlockInfo = input.BlockInfo
 	if input.FreeBlocks != nil {
 		blocks := make([]string, len(*input.FreeBlocks))
@@ -458,7 +466,10 @@ func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer)
 			output.Value(kindHostname, entry.Device)
 		}
 	}
-	registerFreeBlocks(input.FreeBlocks, output)
+	registerCIDRBlocks(input.FreeBlocks, output)
+	if input.supernetsFromRegistry {
+		registerCIDRBlocks(input.Supernets, output)
+	}
 	if input.Devices == nil {
 		return
 	}
@@ -473,7 +484,7 @@ func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer)
 	}
 }
 
-func registerFreeBlocks(blocks *[]string, output *sanitize.Sanitizer) {
+func registerCIDRBlocks(blocks *[]string, output *sanitize.Sanitizer) {
 	if blocks == nil {
 		return
 	}

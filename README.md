@@ -311,9 +311,10 @@ example, `tail-ipam calc split '::ffff:10.0.0.0/104' --prefix 20` normalizes to
 
 #### `calc aggregate`
 
-Stateless IPv4 and IPv6 CIDR summarization: merges supplied CIDRs into the
-smallest set of supernets that covers exactly the same addresses. It needs no
-registry, network I/O, or Tailscale API credentials. Duplicate or covered
+IPv4 and IPv6 CIDR summarization: merges supplied CIDRs into the
+smallest set of supernets that covers exactly the same addresses. With
+positional CIDRs it is stateless, requiring no registry, network I/O, or
+Tailscale API credentials. Duplicate or covered
 CIDRs collapse, and adjacent siblings merge recursively; non-adjacent CIDRs
 remain separate. Human output is one bare CIDR per line in network-address
 order, making it safe to compose in a shell:
@@ -343,6 +344,30 @@ versioned envelope. IPv4-mapped prefixes of `/96` or longer are normalized to
 their plain IPv4 equivalents before aggregation, exactly as `calc split` and
 `calc info` do; shorter mapped-looking prefixes cannot be exclusively
 IPv4-mapped and are aggregated as native IPv6.
+
+To summarize the subnet pools already reserved in a local registry, use
+`--from-registry`:
+
+```bash
+tail-ipam calc aggregate --from-registry \
+  --registry-dir /etc/tail-ipam --tailnet production
+tail-ipam calc aggregate --from-registry \
+  --registry-dir /etc/tail-ipam --tailnet production --format json
+```
+
+For example, reservations for `10.0.0.0/25` and `10.0.0.128/25` produce
+`10.0.0.0/24`. This reads the subnet-pool registry through the local API;
+it does not modify reservations or collect live routes. The registry
+directory defaults to `.`, and the tailnet resolves from `--tailnet`, then
+`TAILSCALE_TAILNET`, then `local`, matching the other registry commands.
+
+`--from-registry` cannot be combined with positional CIDRs. Explicit
+`--registry-dir` and `--tailnet` flags require registry mode. An existing
+registry with no subnet reservations succeeds with empty human output or
+`"supernets": []` in JSON. A missing or invalid registry is an error (exit 2),
+with no result on stdout. Registry JSON includes the selected `tailnet`;
+registry-derived supernets and the tailnet are redacted when sanitization
+is active. Positional aggregation retains its unredacted output.
 
 #### `calc next-free`
 
@@ -601,10 +626,11 @@ including identity labels whose quoted representation contains escapes.
 free-form operator text and a timestamp, not tailnet-derived identities the
 sanitizer's exact-token replacement can meaningfully sweep. A non-`off`
 environment value overrides `--sanitize` and is announced on stderr. `calc
-split`, `calc aggregate`, and `calc info` output is not sanitized because those commands perform
-stateless arithmetic over CLI-supplied CIDRs. `calc next-free` reflects
-registry and live-route data, so its suggested CIDRs are sanitized when
-sanitization is active. Placeholders for other commands are
+split`, positional `calc aggregate`, and `calc info` output is not sanitized
+because those modes perform stateless arithmetic over CLI-supplied CIDRs.
+`calc aggregate --from-registry` and `calc next-free` reflect registry or
+live-route data, so their derived CIDRs are sanitized when sanitization is
+active. Placeholders for registry and inventory output are
 scoped to the artifact's routing/storage key (the `--tailnet` alias for
 registry commands, or the live tailnet from `TAILSCALE_TAILNET` for `devices`
 commands), so passing an explicit `--tailnet` alias to a registry command

@@ -222,6 +222,11 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 	if state.sanitizer == nil || executed == nil {
 		return
 	}
+	// Aggregate exposes registry selectors in both modes, but positional
+	// arithmetic must remain independent of registry data even on failure.
+	if flag := executed.Flags().Lookup("from-registry"); flag != nil && flag.Value.String() != "true" {
+		return
+	}
 	registryDirFlag := executed.Flags().Lookup("registry-dir")
 	if registryDirFlag == nil {
 		return
@@ -240,13 +245,17 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 	registerSweepValue(state.sanitizer, kindPath, registryPath)
 	registerSweepValue(state.sanitizer, kindPath, filename)
 
-	siteIDs, subnetPools, serviceAddresses := registry.RawEntries(registryPath)
+	siteIDs, subnetPools, serviceAddresses, owners := registry.RawEntries(registryPath)
 	for _, site := range siteIDs {
 		registerSweepValue(state.sanitizer, kindSite, site)
 	}
 	for cidr, site := range subnetPools {
-		registerSweepValue(state.sanitizer, kindCIDR, cidr)
+		registerSweepValueWithCanonical(state.sanitizer, kindCIDR, cidr, registry.NormalizeSubnetCIDR)
+		registerCanonicalCIDRSuggestion(state.sanitizer, cidr)
 		registerSweepValue(state.sanitizer, kindSite, site)
+	}
+	for _, owner := range owners {
+		registerSweepValue(state.sanitizer, kindOwner, owner)
 	}
 	for address, service := range serviceAddresses {
 		// Service-address keys and identities each have two legal spellings

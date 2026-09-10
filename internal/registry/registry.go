@@ -612,44 +612,47 @@ func identityFreePathError(err error) error {
 	return err
 }
 
-// RawEntries returns best-effort, unvalidated identity values from all three
-// registry maps. It reads both concise string entries and metadata-bearing
+// RawEntries returns best-effort, unvalidated subjects and owners from all
+// three registry maps. It reads concise strings and metadata-bearing
 // object entries so a caller can pre-register every value that might surface
 // in a Load error. Returned values are sweep candidates, not validated state.
 // It never returns an error — any read, parse, or decode failure at any stage
 // yields a nil map for the affected side. This preserves sweep candidates even
 // when Load itself would fail on that very file: values must be registrable
 // even in the presence of validation errors.
-func RawEntries(path string) (map[string]string, map[string]string, map[string]string) {
+func RawEntries(path string) (map[string]string, map[string]string, map[string]string, []string) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	value, err := hujson.Parse(raw)
 	if err != nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	value.Standardize()
 	object, ok := value.Value.(*hujson.Object)
 	if !ok {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
-	siteIDs := rawReservationMapMember(object, siteIDsKey, "site")
-	subnetPools := rawReservationMapMember(object, subnetPoolsKey, "site")
-	serviceAddresses := rawReservationMapMember(object, serviceAddressesKey, "service")
-	return siteIDs, subnetPools, serviceAddresses
+	siteIDs, owners := rawReservationMapMember(object, siteIDsKey, "site")
+	subnetPools, subnetOwners := rawReservationMapMember(object, subnetPoolsKey, "site")
+	serviceAddresses, serviceOwners := rawReservationMapMember(object, serviceAddressesKey, "service")
+	owners = append(owners, subnetOwners...)
+	owners = append(owners, serviceOwners...)
+	return siteIDs, subnetPools, serviceAddresses, owners
 }
 
 // rawReservationMapMember best-effort extracts either a string value or the
-// named subject field from an object value. On an ambiguous top-level match it
-// uses the last member; this is sufficient for a sanitizer candidate list.
+// named subject field and owner from an object value. On an ambiguous
+// top-level match it uses the last member; this is sufficient for a sanitizer
+// candidate list.
 //
 // Every entry key is returned unconditionally -- with whatever subject
 // string was extractable, or "" when the entry is an object missing
 // subjectField or carrying a non-string value for it -- regardless of
 // whether the value validated; it is each caller's choice whether that key
 // is itself an identity value worth registering as a sweep candidate.
-func rawReservationMapMember(object *hujson.Object, key, subjectField string) map[string]string {
+func rawReservationMapMember(object *hujson.Object, key, subjectField string) (map[string]string, []string) {
 	idx := -1
 	for i := range object.Members {
 		literal, isLiteral := object.Members[i].Name.Value.(hujson.Literal)
@@ -659,13 +662,14 @@ func rawReservationMapMember(object *hujson.Object, key, subjectField string) ma
 		idx = i
 	}
 	if idx < 0 {
-		return nil
+		return nil, nil
 	}
 	entryObject, ok := object.Members[idx].Value.Value.(*hujson.Object)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	entries := make(map[string]string, len(entryObject.Members))
+	var owners []string
 	for i := range entryObject.Members {
 		literal, isLiteral := entryObject.Members[i].Name.Value.(hujson.Literal)
 		if !isLiteral {
@@ -684,9 +688,18 @@ func rawReservationMapMember(object *hujson.Object, key, subjectField string) ma
 				_ = json.Unmarshal(rawSubject, &subject)
 			}
 		}
+		// Decode owner independently of the subject's type and with the same
+		// case-insensitive field matching as Entry and ServiceEntry.
+		var metadata struct {
+			Owner string `json:"owner"`
+		}
+		_ = json.Unmarshal(packed, &metadata)
+		if metadata.Owner != "" {
+			owners = append(owners, metadata.Owner)
+		}
 		entries[entryKey] = subject
 	}
-	return entries
+	return entries, owners
 }
 
 // loadOrCreate loads the registry at path, creating it as an empty "{}\n"

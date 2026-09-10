@@ -274,48 +274,6 @@ func newCalcInfoCommand(state *commandState) *cobra.Command {
 	return cmd
 }
 
-func newCalcAggregateCommand(state *commandState) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:           "aggregate <cidr...>",
-		Short:         "Summarize IPv4 and IPv6 CIDRs into their minimal covering set.",
-		Args:          cobra.MinimumNArgs(1),
-		SilenceErrors: true,
-		SilenceUsage:  true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			outputSanitizer, err := state.outputSanitizer("")
-			if err != nil {
-				return err
-			}
-
-			prefixes := make([]netip.Prefix, len(args))
-			for i, cidrArg := range args {
-				prefix, parseErr := netip.ParsePrefix(cidrArg)
-				if parseErr != nil {
-					return fmt.Errorf("invalid CIDR %q: %w", cidrArg, parseErr)
-				}
-				if normalized, ok := ipcalc.Unmap4In6(prefix); ok {
-					prefix = normalized
-				}
-				prefixes[i] = prefix.Masked()
-			}
-
-			aggregated := ipcalc.Aggregate(prefixes)
-			supernets := make([]string, len(aggregated))
-			for i, prefix := range aggregated {
-				supernets[i] = prefix.String()
-			}
-
-			output := newOutput(
-				commandCalcAggregate, statusOK,
-				fmt.Sprintf("aggregated %d CIDR(s) into %d supernet(s)", len(args), len(supernets)), "",
-			)
-			output.Supernets = &supernets
-			return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
-		},
-	}
-	return cmd
-}
-
 func newCalcSplitCommand(state *commandState) *cobra.Command {
 	var prefixFlag int
 
