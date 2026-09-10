@@ -37,26 +37,47 @@ func writeAggregateRegistry(t *testing.T, dir, tailnet, content string) string {
 
 func TestCalcAggregateFromRegistryMatchesPositionalAndPreservesFile(t *testing.T) {
 	t.Parallel()
-	for _, format := range []string{formatHuman, formatJSON} {
-		t.Run(format, func(t *testing.T) {
-			t.Parallel()
-			testAggregateFromRegistryPreservesFile(t, format)
-		})
+	tests := []struct {
+		name  string
+		cidrs []string
+		want  []string
+	}{
+		{
+			name:  "ipv4",
+			cidrs: []string{"10.2.0.0/24", "10.0.0.128/25", "10.0.0.0/25"},
+			want:  []string{"10.0.0.0/24", "10.2.0.0/24"},
+		},
+		{
+			name:  "ipv6",
+			cidrs: []string{"2001:db8:2::/48", "2001:db8:0:8000::/49", "2001:db8::/49"},
+			want:  []string{"2001:db8::/48", "2001:db8:2::/48"},
+		},
+		{
+			name: "mixed",
+			cidrs: []string{
+				"2001:db8:2::/48", "10.2.0.0/24", "2001:db8:0:8000::/49",
+				"10.0.0.128/25", "2001:db8::/49", "10.0.0.0/25",
+			},
+			want: []string{"10.0.0.0/24", "10.2.0.0/24", "2001:db8::/48", "2001:db8:2::/48"},
+		},
+	}
+	for _, test := range tests {
+		for _, format := range []string{formatHuman, formatJSON} {
+			t.Run(test.name+"/"+format, func(t *testing.T) {
+				t.Parallel()
+				content, err := os.ReadFile(filepath.Join("testdata", "aggregate_registry_"+test.name+".hujson"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				testAggregateFromRegistryPreservesFile(t, format, string(content), test.cidrs, test.want)
+			})
+		}
 	}
 }
 
-func testAggregateFromRegistryPreservesFile(t *testing.T, format string) {
+func testAggregateFromRegistryPreservesFile(t *testing.T, format, content string, cidrs, want []string) {
 	t.Helper()
 	dir := t.TempDir()
-	const content = `{
-	// Keep this allocation note and the unrelated map unchanged.
-	"subnetPools": {
-		"10.2.0.0/24": "remote",
-		"10.0.0.128/25": "branch",
-		"10.0.0.0/25": "hq",
-	},
-	"siteIDs": {"7": "hq"},
-}` + "\n"
 	path := writeAggregateRegistry(t, dir, "production", content)
 	before, err := os.Stat(path)
 	if err != nil {
@@ -68,11 +89,11 @@ func testAggregateFromRegistryPreservesFile(t *testing.T, format string) {
 		t.Fatalf("aggregate exit=%d, stderr=%q", code, errOut)
 	}
 	positional, positionalErr, runErr := runCalcAggregate(t,
-		"10.2.0.0/24", "10.0.0.128/25", "10.0.0.0/25", "--format", format)
+		append(slices.Clone(cidrs), "--format", format)...)
 	if runErr != nil || positionalErr != "" {
 		t.Fatalf("positional aggregate: %v, stderr=%q", runErr, positionalErr)
 	}
-	assertAggregateSourcesEquivalent(t, format, out, positional)
+	assertAggregateSourcesEquivalent(t, format, out, positional, want)
 	after, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -86,11 +107,11 @@ func testAggregateFromRegistryPreservesFile(t *testing.T, format string) {
 	}
 }
 
-func assertAggregateSourcesEquivalent(t *testing.T, format, out, positional string) {
+func assertAggregateSourcesEquivalent(t *testing.T, format, out, positional string, want []string) {
 	t.Helper()
 	if format == formatHuman {
-		if out != "10.0.0.0/24\n10.2.0.0/24\n" || out != positional {
-			t.Errorf("registry=%q, positional=%q, want the same ordered supernets", out, positional)
+		if out != strings.Join(want, "\n")+"\n" || out != positional {
+			t.Errorf("registry=%q, positional=%q, want ordered supernets %v", out, positional, want)
 		}
 		return
 	}
@@ -103,6 +124,9 @@ func assertAggregateSourcesEquivalent(t *testing.T, format, out, positional stri
 	}
 	if result.Supernets == nil || supplied.Supernets == nil || !slices.Equal(*result.Supernets, *supplied.Supernets) {
 		t.Errorf("registry=%s, positional=%s, want matching supernets", out, positional)
+	}
+	if result.Supernets == nil || !slices.Equal(*result.Supernets, want) {
+		t.Errorf("registry=%s, want ordered supernets %v", out, want)
 	}
 	if result.Tailnet != "production" || result.Command != commandCalcAggregate ||
 		result.SchemaVersion != outputSchemaVersion || result.Status != statusOK {
@@ -253,7 +277,10 @@ func TestCalcAggregateFromRegistrySanitization(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
 			writeAggregateRegistry(t, dir, "production",
-				`{"subnetPools":{"10.0.0.0/25":"hq","10.0.0.128/25":"branch"}}`)
+				`{"subnetPools":{
+					"10.0.0.0/25":"hq","10.0.0.128/25":"branch",
+					"2001:db8::/49":"hq","2001:db8:0:8000::/49":"branch"
+				}}`)
 			env := map[string]string{sanitize.KeyEnv: strings.Repeat("ab", 32)}
 			for _, format := range []string{formatHuman, formatJSON} {
 				args := []string{"--from-registry", "--registry-dir", dir, "--tailnet", "production",
@@ -275,7 +302,7 @@ func TestCalcAggregateFromRegistrySanitization(t *testing.T) {
 
 func assertRegistryAggregateSanitized(t *testing.T, format, dir, out, errOut string) {
 	t.Helper()
-	for _, secret := range []string{"10.0.0", "production", "hq", "branch", dir} {
+	for _, secret := range []string{"10.0.0", "2001:db8", "production", "hq", "branch", dir} {
 		if strings.Contains(out+errOut, secret) {
 			t.Errorf("sanitized output leaked %q: stdout=%s, stderr=%s", secret, out, errOut)
 		}
@@ -291,7 +318,7 @@ func assertRegistryAggregateSanitized(t *testing.T, format, dir, out, errOut str
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(result.Tailnet, "tailnet-") || result.Sanitization == nil ||
-		result.Supernets == nil || len(*result.Supernets) != 1 {
+		result.Supernets == nil || len(*result.Supernets) != 2 {
 		t.Errorf("unexpected sanitized envelope: %s", out)
 	}
 }

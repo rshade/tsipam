@@ -1,0 +1,9 @@
+{
+	// Keep this allocation note and the unrelated map unchanged.
+	"subnetPools": {
+		"10.2.0.0/24": "remote",
+		"10.0.0.128/25": "branch",
+		"10.0.0.0/25": "hq",
+	},
+	"siteIDs": {"7": "hq"},
+}

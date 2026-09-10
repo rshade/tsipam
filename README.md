@@ -355,8 +355,21 @@ tail-ipam calc aggregate --from-registry \
   --registry-dir /etc/tail-ipam --tailnet production --format json
 ```
 
-For example, reservations for `10.0.0.0/25` and `10.0.0.128/25` produce
-`10.0.0.0/24`. This reads the subnet-pool registry through the local API;
+Registry aggregation supports IPv4-only, IPv6-only, and mixed-family subnet
+pools. For example, reservations for `10.0.0.0/25` and `10.0.0.128/25` produce
+`10.0.0.0/24`; IPv6 reservations for `2001:db8::/49` and
+`2001:db8:0:8000::/49` produce `2001:db8::/48`. If the selected registry
+contains all four reservations, human output is:
+
+```text
+10.0.0.0/24
+2001:db8::/48
+```
+
+Each family aggregates independently, with IPv4 supernets first and address
+order within each family. JSON carries the same order in `supernets`:
+`["10.0.0.0/24", "2001:db8::/48"]` for the mixed example above. Registry
+aggregation reads subnet pools through the local API;
 it does not modify reservations or collect live routes. The registry
 directory defaults to `.`, and the tailnet resolves from `--tailnet`, then
 `TAILSCALE_TAILNET`, then `local`, matching the other registry commands.
