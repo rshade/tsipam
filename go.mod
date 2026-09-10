@@ -9,7 +9,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f
-	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
+	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
 	goa.design/goa/v3 v3.30.0
 	tailscale.com/client/tailscale/v2 v2.10.1
 )
