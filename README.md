@@ -13,7 +13,8 @@ design rationale.
 > conventions in [`../AGENTS.md`](../AGENTS.md#ax-conventions-the-shared-standard):
 > command results are written to **stdout** as human text by default or a
 > versioned JSON envelope with `-format json`; structured logs and errors go
-> to **stderr**.
+> to **stderr**. Task-oriented guides, reference pages, and a tutorial live
+> under [`docs/`](./docs/README.md).
 
 `tail-ipam` complements, and does not duplicate, two existing tools: `tail-acl`'s
 `ipset`/`autoApprovers` are authoring-only (they label or edit ACL policy text,
