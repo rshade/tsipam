@@ -44,9 +44,8 @@
   exhaustion error only happens in `runCLI`'s `sanitizeErrorIfNeeded`, not in
   `emitOutput` (which the exhaustion path no longer calls at all).
 
-- [ ] 3.2 Smoke test `TestLiveNextFreeEdges` does not exist (file not found
-  in `tail-ipam/smoke/live_test.go`). Skip this task — can be added in future
-  when live smoke tests are implemented.
+- [x] 3.2 `TestLiveNextFreeEdges` in `tail-ipam/smoke/live_test.go` (merged
+  in #352) pins exit 2 with the message on stderr in both formats as of #357.
 
 - [x] 3.3 Checked `tail-ipam/testdata/` recursively — no golden fixtures
   found containing "no free" or referencing
@@ -74,15 +73,16 @@
 - [x] 5.1 Ran full tail-ipam test suite: `go test ./...` — all tests pass.
   No goldens required regeneration.
 
-- [ ] 5.2 Repo-wide gates not yet run (gate requires commit and push). Will
-  run in phase 6.
+- [x] 5.2 Repo-wide gates (test, lint, build, cross) passed in CI on #356
+  before merge.
 
-- [ ] 5.3 Live tailnet verification requires active tailnet access. Skip for
-  now — can be verified manually post-merge with live registry.
+- [x] 5.3 Live verification 2026-09-11: the released `tail-ipam/v0.1.0`
+  archive passed the full smoke suite (87/87) against a subnet router on the
+  phase-2 tailnet, exhaustion cases included.
 
 ## 6. Deliverables
 
-- [ ] 6.1 Ready for commit. Changes implemented:
+- [x] 6.1 Merged as cfa657c (#356). Changes implemented:
   - Modified `calc.go` to use `statusExhausted` when no blocks found
   - Modified call site to return the exhaustion error before ever calling
     `emitOutput`, so nothing reaches stdout
@@ -94,8 +94,8 @@
   - Commit message: `fix(tail-ipam): exit 2 when pool exhausted in calc
     next-free`
 
-- [ ] 6.2 PR checklist:
-  - [ ] Push branch to origin/issue-347
-  - [ ] Create PR with changes
-  - [ ] Verify CI gates pass (test, lint, build, cross-compile)
-  - [ ] Merge once CI passes
+- [x] 6.2 PR checklist (#356, merged 2026-09-11, closes #347):
+  - [x] Push branch to origin/issue-347
+  - [x] Create PR with changes
+  - [x] Verify CI gates pass (test, lint, build, cross-compile)
+  - [x] Merge once CI passes
