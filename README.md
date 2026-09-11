@@ -25,6 +25,68 @@ and `4via6-site-id-collision`
 own collision detection in what is already live. `tail-ipam` reserves address
 space before it is advertised and compares those reservations with live use.
 
+## Contents
+
+- [Documentation](#documentation)
+- [Status](#status)
+  - [Shipped](#shipped)
+    - [`devices list`](#devices-list)
+    - [`plan` and `check`](#plan-and-check)
+    - [`check-policy <acl-file>`](#check-policy-acl-file)
+    - [`site-id reserve <id> <site-name>`](#site-id-reserve-id-site-name)
+    - [`site-id release <id>`](#site-id-release-id)
+    - [`site-id list`](#site-id-list)
+    - [`subnet reserve <cidr> <site-name>`](#subnet-reserve-cidr-site-name)
+    - [`subnet release <cidr>`](#subnet-release-cidr)
+    - [`subnet list`](#subnet-list)
+    - [`service reserve <address> <service-name>`](#service-reserve-address-service-name)
+    - [`service release <address>`](#service-release-address)
+    - [`service list`](#service-list)
+    - [`port reserve <port> <device> --site <site>`](#port-reserve-port-device---site-site)
+    - [`port release <port> --site <site>`](#port-release-port---site-site)
+    - [`port list [--site <site>]`](#port-list---site-site)
+    - [`calc split`](#calc-split)
+    - [`calc aggregate`](#calc-aggregate)
+    - [`calc next-free`](#calc-next-free)
+    - [`calc info`](#calc-info)
+  - [Registry format](#registry-format)
+  - [Machine-readable and diagnostic output](#machine-readable-and-diagnostic-output)
+  - [Not yet implemented](#not-yet-implemented)
+- [Build](#build)
+- [License](#license)
+
+## Documentation
+
+The pages under [`docs/`](./docs/README.md) are organized by the task they
+help with; this README stays the command and flag reference.
+
+- Tutorials
+  - [Reserve your first address space](../docs/tutorials/first-address-plan.md):
+    build a registry from nothing, watch it refuse a conflicting reservation,
+    and finish with an offline policy check that passes.
+- How-to guides
+  - [Adopt tail-ipam for an existing tailnet](./docs/how-to/adopt-existing-tailnet.md):
+    record routes, site IDs, and Services that are already live so `check`
+    catches later drift.
+  - [Gate address space in CI](./docs/how-to/gate-address-space-in-ci.md):
+    run `check-policy` on pull requests and a credentialed `check` after
+    merge or on a schedule.
+  - [Redact output for sharing](./docs/how-to/redact-output-for-sharing.md):
+    sanitize a report before it leaves the team.
+  - [Smoke-test a release](./docs/how-to/release-smoke.md): exercise a built
+    binary and the release archives before merging a release PR.
+- Reference
+  - [Exit codes](./docs/reference/exit-codes.md): the three exit codes and
+    what each leaves on stdout.
+  - [Registry format](./docs/reference/registry-format.md): the
+    `<tailnet>.ipam.hujson` shape, metadata fields, and validation rules.
+  - [JSON envelope](./docs/reference/json-envelope.md): the `--format json`
+    contract and the fields each command adds.
+- Explanation
+  - [Registry and live state](./docs/explanation/registry-and-live-state.md):
+    why the registry exists, what a comparison can and cannot conclude, and
+    where sibling tools take over.
+
 ## Status
 
 ### Shipped
@@ -65,6 +127,8 @@ and Services through the API without changing either source. Use the credentials
 shown under `devices list`, with permission to read both devices and Services.
 `TAILSCALE_TAILNET` is required and always selects the live source. `--tailnet`
 selects the registry alias, defaulting to `TAILSCALE_TAILNET` when omitted.
+See also the [adoption guide](./docs/how-to/adopt-existing-tailnet.md) and
+[Registry and live state](./docs/explanation/registry-and-live-state.md).
 
 ```bash
 export TAILSCALE_TAILNET=myorg
@@ -160,6 +224,7 @@ errors retain the collection operation and HTTP status when available.
 Compares every authored ipset definition in a local HuJSON policy with subnet
 pools in the selected registry. It runs offline without API credentials and
 leaves both files unchanged.
+See also [Gate address space in CI](./docs/how-to/gate-address-space-in-ci.md).
 
 ```bash
 tail-ipam check-policy policy.hujson --registry-dir /etc/tail-ipam --tailnet production
@@ -638,8 +703,9 @@ and are treated as native IPv6.
 The registry is a comment-preserving HuJSON file named
 `<tailnet>.ipam.hujson` under `--registry-dir` (default `.`). The routing/storage
 key resolves from `--tailnet`, then `TAILSCALE_TAILNET`, then `local`; it may be
-an operator-defined alias rather than the live tailnet name. The structure is
-straightforward:
+an operator-defined alias rather than the live tailnet name. See also the
+[registry format reference](./docs/reference/registry-format.md). The
+structure is straightforward:
 
 ```hujson
 {
@@ -744,8 +810,12 @@ other entries, are preserved.
 
 ### Machine-readable and diagnostic output
 
-Every successful command supports `-format human|json`. JSON uses the same
-top-level contract as the repository's other action-oriented CLI output:
+Every successful command supports `-format human|json`. See also the
+[JSON envelope](./docs/reference/json-envelope.md) and
+[exit codes](./docs/reference/exit-codes.md) references, and
+[Redact output for sharing](./docs/how-to/redact-output-for-sharing.md). JSON
+uses the same top-level contract as the repository's other action-oriented CLI
+output:
 
 ```json
 {
@@ -820,7 +890,9 @@ The following commands and features are planned future work per
 go build -o tail-ipam ./cmd/tail-ipam
 ```
 
-`make build` at the monorepo root builds all tool binaries into `bin/`.
+`make build` at the monorepo root builds all tool binaries into `bin/`. See
+also [Smoke-test a release](./docs/how-to/release-smoke.md), which exercises
+a built binary against the contract this README documents.
 
 Releases are not discovery-based: this module is registered in
 `release-please-config.json`, `.release-please-manifest.json`, and the release
