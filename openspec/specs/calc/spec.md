@@ -90,9 +90,11 @@ current requirement during archive. The changed behavior is defined below. -->
 
 ### Requirement: Calc output is never sanitized
 
-Because `calc` operates only on CLI-supplied CIDRs with no tailnet-derived
-identity, its output SHALL be emitted unredacted regardless of the active
-`--sanitize` level.
+Stateless `calc split`, `calc info`, and positional `calc aggregate` operate
+only on CLI-supplied CIDRs with no tailnet-derived identity. Their output
+SHALL be emitted unredacted regardless of the active `--sanitize` level.
+This exemption SHALL NOT apply to registry-derived aggregate results or
+`calc next-free` output.
 
 #### Scenario: Sanitize identity does not redact calc output
 
@@ -113,13 +115,16 @@ address ranges cannot silently overflow a consumer's integer parsing.
 - **THEN** the JSON envelope carries `"usable_hosts": "2"` as a string value,
   not a bare number
 
-### Requirement: Calc suggests available IPv4 child blocks
+### Requirement: Calc suggests available IPv4 and IPv6 child blocks
 
 `tail-ipam calc next-free <pool-cidr> --size <prefix>` SHALL return the first
-available IPv4 child CIDR of the requested size within the pool. It SHALL
-exclude every overlapping subnet-pool reservation for the selected registry
-tailnet and every overlapping route advertised by a live device. It SHALL
-perform no registry write or other mutation.
+available IPv4 or IPv6 child CIDR of the requested size within the canonical
+pool. It SHALL exclude every overlapping same-family subnet-pool reservation
+for the selected registry tailnet and every overlapping same-family route
+advertised by a live device. Other-family and outside-pool prefixes SHALL be
+ignored. It SHALL perform no registry write or other mutation. IPv4-mapped
+prefixes of `/96` or longer SHALL normalize to IPv4 before target validation;
+shorter mapped-looking prefixes SHALL remain IPv6.
 
 #### Scenario: Registry and live routes both exclude candidates
 
@@ -133,19 +138,33 @@ perform no registry write or other mutation.
   overlaps the first requested child
 - **THEN** the command does not return that child
 
+#### Scenario: IPv6 allocation ignores IPv4 exclusions
+
+- **WHEN** the registry reserves `2001:db8::/48` and `10.0.0.0/8`, and live
+  routes include `2001:db8:1::/48` and `0.0.0.0/0`
+- **THEN** searching `2001:db8::/32` for `/48` returns `2001:db8:2::/48`
+
+#### Scenario: IPv4 allocation ignores IPv6 exclusions
+
+- **WHEN** the registry and live routes contain IPv6 prefixes alongside IPv4
+  prefixes that exclude the first two IPv4 children
+- **THEN** an IPv4 search returns the third IPv4 child
+
 ### Requirement: Calc next-free renders composable CIDR output
 
 A successful single suggestion SHALL write exactly one bare CIDR followed by a
 newline in human format. `--format json` SHALL expose the suggested CIDRs in
-the versioned envelope. `--all` SHALL return every available child and
-`--count` (short form `-n`) SHALL return up to its positive requested count,
-with one CIDR per human-output line in ascending address order.
+the versioned envelope's `free_blocks` array. `--all` SHALL return every
+available child and `--count` (short form `-n`) SHALL return up to its positive
+requested count, with one CIDR per human-output line in ascending address
+order. These rules SHALL apply to both families. Configured sanitization
+SHALL replace IPv6 suggestions and pool identifiers in exhaustion messages.
 
 #### Scenario: Single suggestion is usable in shell substitution
 
 - **WHEN** an operator runs `tail-ipam calc next-free 10.0.0.0/24 --size 26`
   and the first child is available
-- **THEN** human stdout is exactly `10.0.0.0/26\\n`
+- **THEN** human stdout is exactly `10.0.0.0/26` followed by a newline
 
 #### Scenario: Count limits returned suggestions
 
@@ -153,22 +172,21 @@ with one CIDR per human-output line in ascending address order.
   `--count 2`
 - **THEN** the command returns the first two available CIDRs only
 
-### Requirement: Calc next-free handles exhaustion and unsupported families
+#### Scenario: IPv6 single suggestion is a bare CIDR
 
-When no requested IPv4 child is available, `calc next-free` SHALL return a
-normal successful result describing that no free block exists. It SHALL reject
-native IPv6 input as a usage error that references the IPv6 follow-up issue.
+- **WHEN** `calc next-free 2001:db8::/32 --size 48` finds the first child free
+- **THEN** stdout is exactly `2001:db8::/48` followed by a newline, with no
+  diagnostic text on stderr
 
-#### Scenario: Exhausted pool is not a command failure
+#### Scenario: IPv6 host children are ordered
 
-- **WHEN** exclusions cover every requested child of the pool
-- **THEN** the command exits successfully and reports that no free block is
-  available
+- **WHEN** `calc next-free 2001:db8::/127 --size 128 --all` has no exclusions
+- **THEN** it returns `2001:db8::/128` and `2001:db8::1/128` in that order
 
-#### Scenario: IPv6 waits for the follow-up capability
+#### Scenario: JSON and sanitized output support IPv6
 
-- **WHEN** an operator supplies an IPv6 pool
-- **THEN** the command exits with a usage error that names IPv6 and issue #257
+- **WHEN** an IPv6 search uses JSON output with identity sanitization
+- **THEN** `free_blocks` contains CIDR placeholders rather than raw addresses
 
 ### Requirement: Aggregate supplied CIDRs
 
@@ -223,8 +241,11 @@ read a registry, tailnet, or external API.
 
 Successful aggregate JSON output SHALL use the versioned output envelope with
 the command identifier and a `supernets` array containing the same ordered
-CIDRs as human output. Aggregate CIDRs SHALL remain unredacted at every
-sanitize level, consistent with other stateless calc output.
+CIDRs as human output. Positional aggregate CIDRs SHALL remain unredacted at every
+sanitize level. Registry-derived supernets and the resolved tailnet SHALL
+be redacted under identity and strict sanitization; off SHALL emit the
+original values. Registry mode SHALL include the resolved tailnet without
+adding internal source markers to the JSON envelope.
 
 #### Scenario: JSON preserves the aggregate result
 
@@ -338,3 +359,111 @@ that stateless calc output is exempt from sanitization.
 - **WHEN** `tail-ipam -schema` runs
 - **THEN** the catalog includes `calc info` and its sanitization description
   explains that stateless calc output remains unredacted
+
+### Requirement: Calc next-free handles exhaustion and invalid target sizes
+
+When no requested IPv4 or IPv6 child is available, `calc next-free` SHALL
+return a normal successful result describing that no free block exists, with
+an empty JSON `free_blocks` array. Target widths shorter than the canonical
+pool or greater than the address-family width SHALL be usage errors.
+
+#### Scenario: Exhausted pool is not a command failure
+
+- **WHEN** exclusions cover every requested child of the pool
+- **THEN** the command exits successfully and reports that no free block is
+  available
+
+#### Scenario: IPv6 host pool can be exhausted
+
+- **WHEN** a `/128` pool is entirely excluded
+- **THEN** the command succeeds with no suggestions
+
+#### Scenario: IPv6 target width exceeds its address width
+
+- **WHEN** an IPv6 pool is searched with `--size 129`
+- **THEN** the command rejects the target with a usage error
+
+### Requirement: Aggregate subnet reservations from the selected registry
+
+`tail-ipam calc aggregate --from-registry` SHALL summarize all subnet-pool
+reservations in the selected registry using the same normalization and
+minimal-cover calculation as positional aggregation. It SHALL perform the
+read through the registry API, without collecting live device routes or
+mutating the registry. `--registry-dir` SHALL use the shared directory
+selection (default `.`); the tailnet SHALL resolve from `--tailnet`, then
+`TAILSCALE_TAILNET`, then `local`.
+
+#### Scenario: Reserved IPv4 siblings aggregate like supplied CIDRs
+
+- **WHEN** the selected registry reserves `10.0.0.0/25`, `10.0.0.128/25`,
+  and `10.2.0.0/24`, and `calc aggregate --from-registry` runs
+- **THEN** human stdout is `10.0.0.0/24` followed by `10.2.0.0/24`, each
+  on its own line, matching positional aggregation of those reservations
+- **AND** the registry bytes are unchanged and no live device read occurs
+
+#### Scenario: Tailnet selection uses the existing precedence
+
+- **WHEN** both `--tailnet production` and `TAILSCALE_TAILNET=staging` apply
+- **THEN** registry aggregation reads `production.ipam.hujson` from the
+  selected directory
+
+#### Scenario: Empty reservations are a successful empty result
+
+- **WHEN** the selected registry exists with an empty or absent subnet-pool map
+- **THEN** the command exits 0, human stdout is empty, and JSON output
+  contains `"supernets": []` with status `ok`
+
+#### Scenario: Registry errors do not become empty successes
+
+- **WHEN** the selected registry is missing, unreadable, or has an invalid
+  subnet-pool map
+- **THEN** the command exits 2, stdout is empty, stderr reports the error,
+  and no registry state is written
+
+#### Scenario: Registry-derived output is sanitized
+
+- **WHEN** registry aggregation runs with identity or strict sanitization
+- **THEN** human and JSON supernets use CIDR placeholders, JSON replaces
+  the tailnet with its placeholder, and diagnostics do not reveal registry
+  identities
+- **AND** a configured sanitization key produces stable placeholders scoped
+  to the selected tailnet
+
+#### Scenario: Invalid registry entries retain safe diagnostics
+
+- **WHEN** registry aggregation with identity or strict sanitization rejects
+  a non-canonical stored CIDR or invalid reservation owner metadata
+- **THEN** diagnostics retain the validation reason while replacing raw and
+  trimmed CIDRs, canonical CIDR suggestions, and owner values with placeholders
+- **AND** the command exits 2 with empty stdout and leaves registry bytes unchanged
+
+### Requirement: Aggregate sources are mutually exclusive
+
+`--from-registry` SHALL accept no positional CIDRs. Without registry mode,
+aggregate SHALL require at least one positional CIDR and SHALL reject
+explicit `--registry-dir` or `--tailnet` flags. Invalid source combinations
+SHALL fail with exit 2 and empty stdout before registry or live-state access.
+Explicit `--from-registry=false` SHALL retain positional mode. Single-dash
+long flags SHALL behave identically to their double-dash spellings.
+
+#### Scenario: Registry mode rejects positional CIDRs
+
+- **WHEN** `calc aggregate --from-registry 10.0.0.0/24` runs
+- **THEN** it exits 2 with an error identifying the conflicting sources
+  and performs no registry read
+
+#### Scenario: Positional mode still requires input
+
+- **WHEN** `calc aggregate` runs without positional CIDRs or registry mode
+- **THEN** it exits 2 and stdout is empty
+
+#### Scenario: Registry selectors require registry mode
+
+- **WHEN** positional aggregation includes an explicit registry selector
+  without enabling `--from-registry`
+- **THEN** it exits 2 with an error naming `--from-registry`
+
+#### Scenario: Explicit false preserves stateless aggregation
+
+- **WHEN** `calc aggregate --from-registry=false 10.0.0.0/24` runs
+- **THEN** it returns the positional aggregate without registry access

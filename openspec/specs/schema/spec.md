@@ -14,7 +14,7 @@ tree so it cannot drift from what the CLI actually accepts.
 command as its full dotted path (for example `site-id reserve`), each
 command's summary and usage line, and that command's own non-persistent
 flags. Every registry-backed command (`site-id`, `subnet`, and `service`
-subcommands) SHALL include `registry-dir` and `tailnet` in its flag list.
+subcommands, plus `calc aggregate` and `calc next-free`) SHALL include `registry-dir` and `tailnet` in its flag list.
 Root-level flags (`format`, `sanitize`, `schema`, `verbose`, `version`) SHALL
 appear in the document's top-level flags list.
 
@@ -34,12 +34,19 @@ appear in the document's top-level flags list.
 - **THEN** that command's flag list includes both `registry-dir` and
   `tailnet`
 
+#### Scenario: Schema exposes registry aggregation
+
+- **WHEN** the schema document is inspected for `calc aggregate`
+- **THEN** it lists `from-registry`, `registry-dir`, and `tailnet`, and
+  command help explains the mutually exclusive input sources
+
 ### Requirement: Schema documents exit codes and sanitization behavior
 
 The schema document SHALL include exactly three exit-code entries (0, 1, 2)
 with human-readable descriptions matching the tool's documented exit-code
 scheme, and a `sanitization` field describing what `TAILSCALE_SANITIZE`
-redacts and that `calc` output is exempt.
+redacts. It SHALL distinguish exempt stateless calc output from sanitized
+registry-derived aggregation and allocation-planning output.
 
 #### Scenario: Exit codes are fully enumerated
 
@@ -77,3 +84,16 @@ conventional flag-parsing leniency.
 
 - **WHEN** `tail-ipam -schema` and `tail-ipam --schema` are both run
 - **THEN** both exit 0 and print non-empty, ASCII-only stdout
+
+### Requirement: Discover registry comparisons and drift semantics
+
+The schema SHALL include `plan` and `check` with their `registry-dir` and
+`tailnet` flags. Help and schema SHALL explain that check drift returns exit
+1, collection failures return exit 2, and comparison identities are sanitized.
+Both single- and double-dash long flags SHALL work for these commands.
+
+#### Scenario: An agent discovers comparison commands
+
+- **WHEN** `tail-ipam --schema` runs
+- **THEN** the commands array includes plan and check with both registry selectors
+- **AND** exit-code 1 describes check drift as well as existing refusals
