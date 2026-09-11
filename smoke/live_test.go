@@ -194,11 +194,8 @@ func TestLiveNextFree(t *testing.T) {
 	}
 
 	res = run(t, env, reg.args("calc", "next-free", suggestion, "--size", "24", flagFormat, formatJSON)...)
-	expect(t, res, exitOK)
-	decodeEnvelope(t, res.stdout).field(t, "free_blocks", &blocks)
-	if len(blocks) != 0 {
-		t.Errorf("exhausted pool returned %v", blocks)
-	}
+	expect(t, res, exitInvalid)
+	containsAll(t, res.stderr, "no free /24 block in "+suggestion)
 
 	res = run(t, env, reg.args("calc", "next-free", "2001:db8::/32", "--size", "48", "--count", "2")...)
 	expect(t, res, exitOK)
@@ -283,7 +280,9 @@ func TestLiveMatchingRules(t *testing.T) {
 }
 
 // TestLiveNextFreeEdges pins next-free's validation and exhaustion behavior
-// against the live route set.
+// against the live route set. Exhaustion exits 2 with nothing on stdout so
+// the README's `subnet reserve "$(tail-ipam calc next-free ...)"` composition
+// fails at the right command (#347, #356).
 func TestLiveNextFreeEdges(t *testing.T) {
 	t.Parallel()
 	env := liveEnv(t)
@@ -326,11 +325,13 @@ func TestLiveNextFreeEdges(t *testing.T) {
 			containsAll(t, res.stderr, tc.want)
 		})
 	}
-	t.Run("exhausted pool reports it on stdout with exit 0", func(t *testing.T) {
+	t.Run("exhausted pool exits 2 with the message on stderr", func(t *testing.T) {
 		t.Parallel()
 		expect(t, run(t, nil, reg.args("subnet", "reserve", "203.0.113.0/24", "taken")...), exitOK)
-		res := run(t, env, reg.args("calc", "next-free", "203.0.113.0/24", "--size", "25")...)
-		expect(t, res, exitOK)
-		containsAll(t, res.stdout, "no free /25 block in 203.0.113.0/24")
+		for _, format := range []string{"human", formatJSON} {
+			res := run(t, env, reg.args("calc", "next-free", "203.0.113.0/24", "--size", "25", flagFormat, format)...)
+			expect(t, res, exitInvalid)
+			containsAll(t, res.stderr, "no free /25 block in 203.0.113.0/24")
+		}
 	})
 }

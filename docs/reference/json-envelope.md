@@ -46,7 +46,7 @@ Failures write nothing to stdout in either format; see
 | `calc info` | `block_info` | `{prefix, network, broadcast?, first_usable, last_usable, usable_hosts}` |
 | `calc split` | `subnets` | array of CIDR strings |
 | `calc aggregate` | `supernets` | array of CIDR strings, IPv4 before IPv6 |
-| `calc next-free` | `free_blocks` | array of CIDR strings, empty when the pool is exhausted |
+| `calc next-free` | `free_blocks` | array of CIDR strings; an exhausted pool exits 2 with no document |
 | `plan`, `check` | `comparison` | see below |
 | `check-policy` | `policy_comparison` | see below |
 

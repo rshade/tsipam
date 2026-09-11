@@ -34,6 +34,10 @@ catalog in machine-readable form.
   check, aggregate, and next-free do not.
 - `plan`, `check`, `devices list`, or `calc next-free` without
   `TAILSCALE_TAILNET` and credentials, or when an API request fails.
+- `calc next-free` when the pool has no free block of the requested size:
+  the message goes to stderr and stdout stays empty, so
+  `subnet reserve "$(tail-ipam calc next-free …)"` fails at `reserve` with
+  `subnet CIDR must not be empty` rather than passing text as a CIDR.
 - `check-policy` with a missing or malformed policy, an ipset reference
   cycle, a `host:` alias that is not a literal address, `autogroup:internet`
   or another dynamic selector, or expansion beyond 128 levels or 65,536
