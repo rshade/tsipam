@@ -46,7 +46,7 @@ func TestDiscovery(t *testing.T) {
 		for _, want := range []string{
 			"calc info", "calc split", "calc aggregate", "calc next-free",
 			"site-id reserve", "site-id release", "site-id list",
-			"subnet reserve", "subnet release", "subnet list",
+			"subnet reserve", "subnet release", "subnet list", "subnet allocate",
 			"service reserve", "service release", "service list",
 			"port reserve", "port release", "port list",
 			"devices list", "plan", "check", "check-policy",

@@ -10,6 +10,7 @@ import (
 
 	"github.com/rshade/tailscale-utils/policycore/addrspace"
 	"github.com/rshade/tailscale-utils/policycore/hujsonedit"
+	"github.com/rshade/tailscale-utils/policycore/ipcalc"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 )
 
@@ -42,6 +43,19 @@ func (e *SubnetPoolCollisionError) Error() string {
 		"subnet CIDR %s overlaps %s reserved for %q, not %q",
 		e.CIDR, e.ExistingCIDR, e.ExistingSite, e.WantedSite,
 	)
+}
+
+// SubnetPoolExhaustedError reports that no child of Size bits is free inside
+// Pool once registry reservations and live routes are excluded. The text
+// matches calc next-free's exhaustion message so operators and scripts see
+// one wording for one condition.
+type SubnetPoolExhaustedError struct {
+	Pool string
+	Size int
+}
+
+func (e *SubnetPoolExhaustedError) Error() string {
+	return fmt.Sprintf("no free /%d block in %s", e.Size, e.Pool)
 }
 
 // NormalizeSubnetCIDR validates cidr as a canonical IPv4 or IPv6 prefix.
@@ -207,6 +221,157 @@ func ReserveSubnetPoolWithLogger(
 		return "", "", ReservationMetadata{}, false, lockErr
 	}
 	return cidr, site, resultMetadata, changed, nil
+}
+
+// AllocateSubnetPoolWithLogger reserves the first free size-bit child of
+// pool for site in the registry at path, creating the file if needed. The
+// pick runs inside the registry lock, after the file is loaded, so two
+// concurrent allocations from one pool cannot receive the same block: each
+// sees the other's write. Every subnet-pool reservation for any site and
+// every prefix in liveTaken (routes advertised by live devices, collected by
+// the caller because they are not registry state) counts as taken, exactly
+// as calc next-free counts them. pool is unmapped from 4-in-6 and masked
+// rather than held to NormalizeSubnetCIDR's canonical spelling: it is a
+// search space, not a stored key, and the allocated child is canonical by
+// construction.
+//
+// metadata follows the same merge and auto-stamp rules as
+// ReserveSubnetPoolWithLogger. An exhausted pool is reported as
+// *SubnetPoolExhaustedError with no reservation written.
+func AllocateSubnetPoolWithLogger(
+	path, pool string,
+	size int,
+	site string,
+	liveTaken []string,
+	metadata ReservationMetadata,
+	logger diagnostics.Logger,
+) (string, string, ReservationMetadata, bool, error) {
+	poolPrefix, err := NormalizeAllocationPool(pool, size)
+	if err != nil {
+		return "", "", ReservationMetadata{}, false, err
+	}
+	taken, err := parseLiveTaken(liveTaken)
+	if err != nil {
+		return "", "", ReservationMetadata{}, false, err
+	}
+	site, err = NormalizeSiteName(site)
+	if err != nil {
+		return "", "", ReservationMetadata{}, false, err
+	}
+	metadata, err = normalizeMetadata(metadata)
+	if err != nil {
+		return "", "", ReservationMetadata{}, false, err
+	}
+
+	var cidr string
+	var resultMetadata ReservationMetadata
+	changed := false
+	lockErr := withRegistryLock(path, logger, func() error {
+		reg, loadErr := loadOrCreate(path, subnetPoolsKey, logger)
+		if loadErr != nil {
+			return loadErr
+		}
+		if replay, ok := findTicketReplay(reg.SubnetPools, poolPrefix, site, metadata.Ticket); ok {
+			cidr = replay.CIDR
+			resultMetadata = replay.ReservationMetadata
+			diagnostics.Debug(logger, "subnet-pool allocation replayed by ticket")
+			return nil
+		}
+		for reserved := range reg.SubnetPools {
+			prefix, parseErr := netip.ParsePrefix(reserved)
+			if parseErr != nil {
+				return fmt.Errorf("stored subnet CIDR %s: %w", reserved, parseErr)
+			}
+			taken = append(taken, prefix)
+		}
+		block, ok := ipcalc.NextFree(poolPrefix, size, taken)
+		if !ok {
+			return &SubnetPoolExhaustedError{Pool: poolPrefix.String(), Size: size}
+		}
+		cidr = block.String()
+
+		newEntry, _ := resolveReservationEntry(Entry{}, false, site, metadata, time.Now)
+		op, opErr := reservePatchOp(reg, subnetPoolsKey, cidr, newEntry)
+		if opErr != nil {
+			return opErr
+		}
+		if patchErr := hujsonedit.WritePatch(path, nil, op); patchErr != nil {
+			return fmt.Errorf("allocating subnet CIDR %s: %w", cidr, patchErr)
+		}
+		changed = true
+		resultMetadata = newEntry.ReservationMetadata
+		diagnostics.Debug(logger, "subnet-pool allocation written")
+		return nil
+	})
+	if lockErr != nil {
+		return "", "", ReservationMetadata{}, false, lockErr
+	}
+	return cidr, site, resultMetadata, changed, nil
+}
+
+// findTicketReplay implements allocate's idempotency key: a non-empty ticket
+// that already names a reservation for the same site inside pool means the
+// caller is re-running an allocation that succeeded, so that reservation is
+// returned as-is. Unlike reserve's repeat path, nothing is merged or
+// re-stamped -- a CI retry with a tweaked description must not churn the
+// file. The scan runs in subnet list's order so the lowest matching block
+// wins deterministically when several share the ticket.
+func findTicketReplay(pools map[string]Entry, pool netip.Prefix, site, ticket string) (SubnetPoolEntry, bool) {
+	if ticket == "" {
+		return SubnetPoolEntry{}, false
+	}
+	for _, entry := range sortedSubnetPoolEntries(pools) {
+		if entry.Site != site || entry.Ticket != ticket {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(entry.CIDR)
+		if err != nil || prefix.Addr().BitLen() != pool.Addr().BitLen() {
+			continue
+		}
+		if prefix.Bits() >= pool.Bits() && pool.Contains(prefix.Addr()) {
+			return entry, true
+		}
+	}
+	return SubnetPoolEntry{}, false
+}
+
+// NormalizeAllocationPool parses pool the way calc next-free does -- 4-in-6
+// unmapped, then masked -- and validates size against it. It is exported so
+// the CLI can fail fast on the same rule, with the same wording, before it
+// reads devices; AllocateSubnetPoolWithLogger applies it again because the
+// service method is a contract of its own. Errors are invalidInput.
+func NormalizeAllocationPool(pool string, size int) (netip.Prefix, error) {
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(pool))
+	if err != nil {
+		return netip.Prefix{}, invalidInput(fmt.Errorf("pool CIDR %q is not a valid prefix: %w", pool, err))
+	}
+	if normalized, ok := ipcalc.Unmap4In6(prefix); ok {
+		prefix = normalized
+	}
+	prefix = prefix.Masked()
+	if size < prefix.Bits() || size > prefix.Addr().BitLen() {
+		return netip.Prefix{}, invalidInput(fmt.Errorf(
+			"target prefix length /%d must be between pool /%d and address length /%d",
+			size, prefix.Bits(), prefix.Addr().BitLen()))
+	}
+	return prefix, nil
+}
+
+// parseLiveTaken fails closed on a live route that does not parse: a taken
+// set missing one advertised route could hand out space a router already
+// serves. The CLI parses routes before sending them (nextFreeTaken), so
+// from that caller this is a contract check; it exists for any caller that
+// hands the service raw strings.
+func parseLiveTaken(liveTaken []string) ([]netip.Prefix, error) {
+	taken := make([]netip.Prefix, 0, len(liveTaken))
+	for _, route := range liveTaken {
+		prefix, err := netip.ParsePrefix(route)
+		if err != nil {
+			return nil, invalidInput(fmt.Errorf("live route %q is not a valid prefix: %w", route, err))
+		}
+		taken = append(taken, prefix)
+	}
+	return taken, nil
 }
 
 // checkSubnetPoolConflict refuses cidr against reg's existing subnet pools:

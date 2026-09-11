@@ -204,6 +204,50 @@ func TestLiveNextFree(t *testing.T) {
 	}
 }
 
+func TestLiveSubnetAllocate(t *testing.T) {
+	t.Parallel()
+	env := liveEnv(t)
+	reg := liveRegistry(t)
+	const pool = "10.251.0.0/16"
+	allocate := reg.args("subnet", "allocate", pool, "composed", "--size", "24", "--ticket", "SMOKE-1",
+		flagFormat, formatJSON)
+
+	first := run(t, env, allocate...)
+	expect(t, first, exitOK)
+	var cidr string
+	var changed bool
+	firstEnvelope := decodeEnvelope(t, first.stdout)
+	firstEnvelope.field(t, "cidr", &cidr)
+	firstEnvelope.field(t, "changed", &changed)
+	if !strings.HasPrefix(cidr, "10.251.") || !strings.HasSuffix(cidr, "/24") || !changed {
+		t.Fatalf("allocate = cidr %q changed %t, want a fresh /24 inside %s", cidr, changed, pool)
+	}
+	listed := run(t, nil, reg.args("subnet", "list")...)
+	expect(t, listed, exitOK)
+	containsAll(t, listed.stdout, cidr+"\tcomposed", "ticket=SMOKE-1")
+	before := reg.contents(t)
+
+	replay := run(t, env, allocate...)
+	expect(t, replay, exitOK)
+	var replayCIDR string
+	replayEnvelope := decodeEnvelope(t, replay.stdout)
+	replayEnvelope.field(t, "cidr", &replayCIDR)
+	replayEnvelope.field(t, "changed", &changed)
+	if replayCIDR != cidr || changed {
+		t.Errorf("ticket replay = cidr %q changed %t, want %q unchanged", replayCIDR, changed, cidr)
+	}
+	if after := reg.contents(t); after != before {
+		t.Errorf("ticket replay rewrote the registry:\nbefore: %s\nafter:  %s", before, after)
+	}
+
+	exhausted := run(t, env, reg.args("subnet", "allocate", cidr, "other", "--size", "24")...)
+	expect(t, exhausted, exitInvalid)
+	containsAll(t, exhausted.stderr, "no free /24 block in "+cidr)
+	if after := reg.contents(t); after != before {
+		t.Errorf("exhaustion rewrote the registry:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
 const (
 	supernetBits = 16
 	narrowerBits = 1

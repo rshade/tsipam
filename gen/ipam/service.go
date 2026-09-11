@@ -32,6 +32,10 @@ type Service interface {
 	ListSubnetPools(context.Context, *ListSubnetPoolsPayload) (res []*SubnetPoolReservation, err error)
 	// ReserveSubnetPool implements reserve_subnet_pool.
 	ReserveSubnetPool(context.Context, *ReserveSubnetPoolPayload) (res *ReserveSubnetPoolResult, err error)
+	// Reserve the first free child CIDR of a pool for a site in one locked
+	// read-decide-write transaction. Registry reservations for every site and the
+	// caller-supplied live routes both count as taken.
+	AllocateSubnetPool(context.Context, *AllocateSubnetPoolPayload) (res *AllocateSubnetPoolResult, err error)
 	// ReleaseSubnetPool implements release_subnet_pool.
 	ReleaseSubnetPool(context.Context, *ReleaseSubnetPoolPayload) (res *ReleaseSubnetPoolResult, err error)
 	// ListServiceAddresses implements list_service_addresses.
@@ -62,7 +66,52 @@ const ServiceName = "ipam"
 // MethodNames lists the service method names as defined in the design. These
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
-var MethodNames = [14]string{"plan", "check_policy", "list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
+var MethodNames = [15]string{"plan", "check_policy", "list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "allocate_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
+
+// AllocateSubnetPoolPayload is the payload type of the ipam service
+// allocate_subnet_pool method.
+type AllocateSubnetPoolPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// IPv4 or IPv6 CIDR prefix to allocate from; masked to its network address.
+	Pool string
+	// Prefix length of the child to allocate, between the pool's length and the
+	// address width.
+	Size int
+	// Site name to reserve the child for.
+	Site string
+	// CIDR prefixes advertised by live devices, counted as taken alongside
+	// registry reservations.
+	LiveTaken []string
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
+}
+
+// AllocateSubnetPoolResult is the result type of the ipam service
+// allocate_subnet_pool method.
+type AllocateSubnetPoolResult struct {
+	// Canonical subnet CIDR actually reserved.
+	CIDR string
+	// Canonical site name actually written.
+	Site string
+	// False when ticket named an existing reservation for the site inside the
+	// pool, which was returned unchanged.
+	Changed bool
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
+}
 
 // CheckPolicyPayload is the payload type of the ipam service check_policy
 // method.
@@ -470,4 +519,9 @@ func MakeCollision(err error) *goa.ServiceError {
 // MakeInvalidInput builds a goa.ServiceError from an error.
 func MakeInvalidInput(err error) *goa.ServiceError {
 	return goa.NewServiceError(err, "invalid_input", false, false, false)
+}
+
+// MakeExhausted builds a goa.ServiceError from an error.
+func MakeExhausted(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "exhausted", false, false, false)
 }

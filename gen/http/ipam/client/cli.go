@@ -168,6 +168,47 @@ func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody string, ipamReserve
 	return v, nil
 }
 
+// BuildAllocateSubnetPoolPayload builds the payload for the ipam
+// allocate_subnet_pool endpoint from CLI flags.
+func BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBody string, ipamAllocateSubnetPoolTailnet string) (*ipam.AllocateSubnetPoolPayload, error) {
+	var err error
+	var body AllocateSubnetPoolRequestBody
+	{
+		err = json.Unmarshal([]byte(ipamAllocateSubnetPoolBody), &body)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Nam quia et distinctio necessitatibus.\",\n      \"live_taken\": [\n         \"Beatae molestiae aut aliquam.\",\n         \"In molestias.\"\n      ],\n      \"owner\": \"Hic aut et adipisci omnis ipsam sapiente.\",\n      \"pool\": \"Nemo laudantium dolores neque veniam doloremque eos.\",\n      \"reserved_at\": \"1981-11-04T12:49:58Z\",\n      \"site\": \"Cupiditate voluptatum.\",\n      \"size\": 4227288391465765948,\n      \"ticket\": \"Aut libero quam explicabo unde a.\"\n   }'")
+		}
+		if body.ReservedAt != nil {
+			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	var tailnet string
+	{
+		tailnet = ipamAllocateSubnetPoolTailnet
+	}
+	v := &ipam.AllocateSubnetPoolPayload{
+		Pool:        body.Pool,
+		Size:        body.Size,
+		Site:        body.Site,
+		Owner:       body.Owner,
+		Description: body.Description,
+		Ticket:      body.Ticket,
+		ReservedAt:  body.ReservedAt,
+	}
+	if body.LiveTaken != nil {
+		v.LiveTaken = make([]string, len(body.LiveTaken))
+		for i, val := range body.LiveTaken {
+			v.LiveTaken[i] = val
+		}
+	}
+	v.Tailnet = tailnet
+
+	return v, nil
+}
+
 // BuildReleaseSubnetPoolPayload builds the payload for the ipam
 // release_subnet_pool endpoint from CLI flags.
 func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet string, ipamReleaseSubnetPoolCidr string) (*ipam.ReleaseSubnetPoolPayload, error) {

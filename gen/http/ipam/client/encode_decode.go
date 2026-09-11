@@ -666,6 +666,120 @@ func DecodeReserveSubnetPoolResponse(decoder func(*http.Response) goahttp.Decode
 	}
 }
 
+// BuildAllocateSubnetPoolRequest instantiates a HTTP request object with
+// method and path set to call the "ipam" service "allocate_subnet_pool"
+// endpoint
+func (c *Client) BuildAllocateSubnetPoolRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.AllocateSubnetPoolPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "allocate_subnet_pool", "*ipam.AllocateSubnetPoolPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: AllocateSubnetPoolIpamPath(tailnet)}
+	req, err := http.NewRequest("POST", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "allocate_subnet_pool", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeAllocateSubnetPoolRequest returns an encoder for requests sent to the
+// ipam allocate_subnet_pool server.
+func EncodeAllocateSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.AllocateSubnetPoolPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "allocate_subnet_pool", "*ipam.AllocateSubnetPoolPayload", v)
+		}
+		body := NewAllocateSubnetPoolRequestBody(p)
+		if err := encoder(req).Encode(&body); err != nil {
+			return goahttp.ErrEncodingError("ipam", "allocate_subnet_pool", err)
+		}
+		return nil
+	}
+}
+
+// DecodeAllocateSubnetPoolResponse returns a decoder for responses returned by
+// the ipam allocate_subnet_pool endpoint. restoreBody controls whether the
+// response body should be restored after having been read.
+// DecodeAllocateSubnetPoolResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - "exhausted" (type *goa.ServiceError): http.StatusUnprocessableEntity
+//   - error: internal error
+func DecodeAllocateSubnetPoolResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (any, error) {
+		if restoreBody {
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer resp.Body.Close()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body AllocateSubnetPoolResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "allocate_subnet_pool", err)
+			}
+			err = ValidateAllocateSubnetPoolResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "allocate_subnet_pool", err)
+			}
+			res := NewAllocateSubnetPoolResultOK(&body)
+			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body AllocateSubnetPoolInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "allocate_subnet_pool", err)
+			}
+			err = ValidateAllocateSubnetPoolInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "allocate_subnet_pool", err)
+			}
+			return nil, NewAllocateSubnetPoolInvalidInput(&body)
+		case http.StatusUnprocessableEntity:
+			var (
+				body AllocateSubnetPoolExhaustedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "allocate_subnet_pool", err)
+			}
+			err = ValidateAllocateSubnetPoolExhaustedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "allocate_subnet_pool", err)
+			}
+			return nil, NewAllocateSubnetPoolExhausted(&body)
+		default:
+			body, _ := io.ReadAll(resp.Body)
+			return nil, goahttp.ErrInvalidResponse("ipam", "allocate_subnet_pool", resp.StatusCode, string(body))
+		}
+	}
+}
+
 // BuildReleaseSubnetPoolRequest instantiates a HTTP request object with method
 // and path set to call the "ipam" service "release_subnet_pool" endpoint
 func (c *Client) BuildReleaseSubnetPoolRequest(ctx context.Context, v any) (*http.Request, error) {

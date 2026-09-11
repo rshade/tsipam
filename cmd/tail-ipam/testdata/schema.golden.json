@@ -402,6 +402,49 @@
       "usage": "subnet"
     },
     {
+      "name": "subnet allocate",
+      "summary": "Reserve the next free child CIDR of a pool for a site.",
+      "usage": "subnet allocate \u003cpool-cidr\u003e \u003csite-name\u003e",
+      "flags": [
+        {
+          "name": "description",
+          "usage": "free-text description of why this address space is reserved",
+          "default": ""
+        },
+        {
+          "name": "owner",
+          "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "reserved-at",
+          "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "size",
+          "usage": "prefix length of the child subnet to allocate",
+          "default": "0",
+          "required": true
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        },
+        {
+          "name": "ticket",
+          "usage": "tracking ticket or issue reference for this reservation",
+          "default": ""
+        }
+      ]
+    },
+    {
       "name": "subnet list",
       "summary": "List reserved subnet CIDR pools.",
       "usage": "subnet list",

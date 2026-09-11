@@ -53,6 +53,29 @@ type ReserveSubnetPoolRequestBody struct {
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
 }
 
+// AllocateSubnetPoolRequestBody is the type of the "ipam" service
+// "allocate_subnet_pool" endpoint HTTP request body.
+type AllocateSubnetPoolRequestBody struct {
+	// IPv4 or IPv6 CIDR prefix to allocate from; masked to its network address.
+	Pool *string `form:"pool,omitempty" json:"pool,omitempty" xml:"pool,omitempty"`
+	// Prefix length of the child to allocate, between the pool's length and the
+	// address width.
+	Size *int `form:"size,omitempty" json:"size,omitempty" xml:"size,omitempty"`
+	// Site name to reserve the child for.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// CIDR prefixes advertised by live devices, counted as taken alongside
+	// registry reservations.
+	LiveTaken []string `form:"live_taken,omitempty" json:"live_taken,omitempty" xml:"live_taken,omitempty"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+}
+
 // ReserveServiceAddressRequestBody is the type of the "ipam" service
 // "reserve_service_address" endpoint HTTP request body.
 type ReserveServiceAddressRequestBody struct {
@@ -149,6 +172,26 @@ type ReserveSubnetPoolResponseBody struct {
 	// Canonical site name actually written.
 	Site string `form:"site" json:"site" xml:"site"`
 	// False when the exact CIDR, site, and metadata were already reserved.
+	Changed bool `form:"changed" json:"changed" xml:"changed"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+}
+
+// AllocateSubnetPoolResponseBody is the type of the "ipam" service
+// "allocate_subnet_pool" endpoint HTTP response body.
+type AllocateSubnetPoolResponseBody struct {
+	// Canonical subnet CIDR actually reserved.
+	CIDR string `form:"cidr" json:"cidr" xml:"cidr"`
+	// Canonical site name actually written.
+	Site string `form:"site" json:"site" xml:"site"`
+	// False when ticket named an existing reservation for the site inside the
+	// pool, which was returned unchanged.
 	Changed bool `form:"changed" json:"changed" xml:"changed"`
 	// Operator or team that owns this reservation.
 	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
@@ -342,6 +385,43 @@ type ReserveSubnetPoolInvalidInputResponseBody struct {
 // ReserveSubnetPoolCollisionResponseBody is the type of the "ipam" service
 // "reserve_subnet_pool" endpoint HTTP response body for the "collision" error.
 type ReserveSubnetPoolCollisionResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// AllocateSubnetPoolInvalidInputResponseBody is the type of the "ipam" service
+// "allocate_subnet_pool" endpoint HTTP response body for the "invalid_input"
+// error.
+type AllocateSubnetPoolInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// AllocateSubnetPoolExhaustedResponseBody is the type of the "ipam" service
+// "allocate_subnet_pool" endpoint HTTP response body for the "exhausted" error.
+type AllocateSubnetPoolExhaustedResponseBody struct {
 	// Name is the name of this class of errors.
 	Name string `form:"name" json:"name" xml:"name"`
 	// ID is a unique identifier for this particular occurrence of the problem.
@@ -736,6 +816,21 @@ func NewReserveSubnetPoolResponseBody(res *ipam.ReserveSubnetPoolResult) *Reserv
 	return body
 }
 
+// NewAllocateSubnetPoolResponseBody builds the HTTP response body from the
+// result of the "allocate_subnet_pool" endpoint of the "ipam" service.
+func NewAllocateSubnetPoolResponseBody(res *ipam.AllocateSubnetPoolResult) *AllocateSubnetPoolResponseBody {
+	body := &AllocateSubnetPoolResponseBody{
+		CIDR:        res.CIDR,
+		Site:        res.Site,
+		Changed:     res.Changed,
+		Owner:       res.Owner,
+		Description: res.Description,
+		Ticket:      res.Ticket,
+		ReservedAt:  res.ReservedAt,
+	}
+	return body
+}
+
 // NewReleaseSubnetPoolResponseBody builds the HTTP response body from the
 // result of the "release_subnet_pool" endpoint of the "ipam" service.
 func NewReleaseSubnetPoolResponseBody(res *ipam.ReleaseSubnetPoolResult) *ReleaseSubnetPoolResponseBody {
@@ -910,6 +1005,34 @@ func NewReserveSubnetPoolInvalidInputResponseBody(res *goa.ServiceError) *Reserv
 // the result of the "reserve_subnet_pool" endpoint of the "ipam" service.
 func NewReserveSubnetPoolCollisionResponseBody(res *goa.ServiceError) *ReserveSubnetPoolCollisionResponseBody {
 	body := &ReserveSubnetPoolCollisionResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewAllocateSubnetPoolInvalidInputResponseBody builds the HTTP response body
+// from the result of the "allocate_subnet_pool" endpoint of the "ipam" service.
+func NewAllocateSubnetPoolInvalidInputResponseBody(res *goa.ServiceError) *AllocateSubnetPoolInvalidInputResponseBody {
+	body := &AllocateSubnetPoolInvalidInputResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewAllocateSubnetPoolExhaustedResponseBody builds the HTTP response body
+// from the result of the "allocate_subnet_pool" endpoint of the "ipam" service.
+func NewAllocateSubnetPoolExhaustedResponseBody(res *goa.ServiceError) *AllocateSubnetPoolExhaustedResponseBody {
+	body := &AllocateSubnetPoolExhaustedResponseBody{
 		Name:      res.Name,
 		ID:        res.ID,
 		Message:   res.Message,
@@ -1113,6 +1236,29 @@ func NewReserveSubnetPoolPayload(body *ReserveSubnetPoolRequestBody, tailnet str
 	return v
 }
 
+// NewAllocateSubnetPoolPayload builds a ipam service allocate_subnet_pool
+// endpoint payload.
+func NewAllocateSubnetPoolPayload(body *AllocateSubnetPoolRequestBody, tailnet string) *ipam.AllocateSubnetPoolPayload {
+	v := &ipam.AllocateSubnetPoolPayload{
+		Pool:        *body.Pool,
+		Size:        *body.Size,
+		Site:        *body.Site,
+		Owner:       body.Owner,
+		Description: body.Description,
+		Ticket:      body.Ticket,
+		ReservedAt:  body.ReservedAt,
+	}
+	if body.LiveTaken != nil {
+		v.LiveTaken = make([]string, len(body.LiveTaken))
+		for i, val := range body.LiveTaken {
+			v.LiveTaken[i] = val
+		}
+	}
+	v.Tailnet = tailnet
+
+	return v
+}
+
 // NewReleaseSubnetPoolPayload builds a ipam service release_subnet_pool
 // endpoint payload.
 func NewReleaseSubnetPoolPayload(tailnet string, cidr string) *ipam.ReleaseSubnetPoolPayload {
@@ -1220,6 +1366,24 @@ func ValidateReserveSiteIDRequestBody(body *ReserveSiteIDRequestBody) (err error
 func ValidateReserveSubnetPoolRequestBody(body *ReserveSubnetPoolRequestBody) (err error) {
 	if body.CIDR == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
+	}
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
+// ValidateAllocateSubnetPoolRequestBody runs the validations defined on
+// allocate_subnet_pool_request_body
+func ValidateAllocateSubnetPoolRequestBody(body *AllocateSubnetPoolRequestBody) (err error) {
+	if body.Pool == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("pool", "body"))
+	}
+	if body.Size == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("size", "body"))
 	}
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))

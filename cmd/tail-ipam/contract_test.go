@@ -136,7 +136,7 @@ func assertSchemaCatalog(t *testing.T, document struct {
 	wantCommands := []string{
 		commandDevices, commandDevicesList, commandSiteID,
 		commandSiteIDList, commandSiteIDRelease, commandSiteIDReserve,
-		commandSubnet, commandSubnetList, commandSubnetRelease, commandSubnetReserve,
+		commandSubnet, commandSubnetList, commandSubnetRelease, commandSubnetReserve, commandSubnetAllocate,
 		commandService, commandServiceList, commandServiceRelease, commandServiceReserve,
 		commandCalc, commandCalcSplit, commandCalcInfo, commandCalcAggregate,
 	}

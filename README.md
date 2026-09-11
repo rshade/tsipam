@@ -37,6 +37,7 @@ space before it is advertised and compares those reservations with live use.
     - [`site-id release <id>`](#site-id-release-id)
     - [`site-id list`](#site-id-list)
     - [`subnet reserve <cidr> <site-name>`](#subnet-reserve-cidr-site-name)
+    - [`subnet allocate <pool-cidr> --size <n> <site-name>`](#subnet-allocate-pool-cidr---size-n-site-name)
     - [`subnet release <cidr>`](#subnet-release-cidr)
     - [`subnet list`](#subnet-list)
     - [`service reserve <address> <service-name>`](#service-reserve-address-service-name)
@@ -358,6 +359,45 @@ CIDRs must already be in `net/netip`'s canonical form. For example,
 `10.20.0.1/16` is rejected with a suggestion to use `10.20.0.0/16`, rather
 than silently reserving a different network from the one written.
 
+#### `subnet allocate <pool-cidr> --size <n> <site-name>`
+
+Reserves the first free `/n` child of `<pool-cidr>` for a site in one
+locked registry transaction, so two operators or CI jobs allocating from the
+same pool at the same time receive different blocks. It is `calc next-free`
+and `subnet reserve` composed correctly: the pick happens inside the same
+lock as the write, instead of between two commands. Every subnet-pool
+reservation in the registry, regardless of site, and every route advertised
+by a live device count as taken, exactly as `calc next-free` counts them, so
+the command needs the Tailscale API credentials used by `devices list` and
+has no offline mode.
+
+```bash
+tail-ipam subnet allocate 10.20.0.0/16 --size 24 branch-office \
+  --registry-dir /etc/tail-ipam --tailnet production
+tail-ipam subnet allocate 2001:db8::/32 --size 48 branch-office --ticket NET-412
+tail-ipam subnet allocate 10.20.0.0/16 --size 24 branch-office --format json | jq -r .cidr
+```
+
+Human output is one message line in the shape `subnet reserve` prints,
+naming the reserved CIDR and site (`allocated subnet CIDR 10.20.1.0/24 for
+"branch-office"`); `-format json` carries `cidr`, `site`, `changed`, and
+any metadata in the versioned envelope. `subnet allocate` accepts the same
+`--owner`, `--description`, `--ticket`, and `--reserved-at` flags as `subnet
+reserve`.
+
+`--ticket` is the idempotency key. When a reservation already exists inside
+the pool for the same site and ticket, the command reports it with
+`changed=false` and exits 0 without writing anything, so a retried CI job
+gets its original block back rather than a second one. Without `--ticket`,
+every run allocates a fresh block. The pool argument follows `calc
+next-free`'s rules rather than `subnet reserve`'s: host bits are masked and
+IPv4-mapped prefixes of `/96` or longer are normalized to IPv4, and the
+allocated child is always canonical.
+
+If the pool is exhausted, the command exits with code 2, writes nothing to
+stdout in either format, and writes `no free /n block in <pool>` to stderr,
+matching `calc next-free`.
+
 #### `subnet release <cidr>`
 
 Releases an exact subnet-pool reservation. Errors if the registry file does
@@ -617,7 +657,10 @@ tail-ipam subnet reserve "$(tail-ipam calc next-free 2001:db8::/48 --size 64)" b
 ```
 
 One result is exactly one bare CIDR followed by a newline, which makes the
-second command safe to compose through shell substitution. Use `--count` (or
+second command safe to compose through shell substitution. That composition
+picks outside the registry lock, so two concurrent callers can be handed the
+same suggestion; `subnet allocate` performs the same pick inside the lock
+when the block is going to be reserved. Use `--count` (or
 `-n`) for the first several suggestions, or `--all` to print every available
 child; multiple results are one CIDR per line in address order. JSON output
 carries the same suggestions as the `free_blocks` array in the versioned
@@ -881,7 +924,6 @@ placeholders are artifact-scoped.
 The following commands and features are planned future work per
 [`../ROADMAP.md`](../ROADMAP.md) ("Future Vision" → `tail-ipam`):
 
-- `allocate` command for address-space planning against live state
 - On-prem CIDR planning (address space not yet advertised as live routes)
 
 ## Build

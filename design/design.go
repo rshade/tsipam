@@ -188,6 +188,46 @@ var _ = Service("ipam", func() {
 		})
 	})
 
+	Method("allocate_subnet_pool", func() {
+		Description("Reserve the first free child CIDR of a pool for a site in one locked " +
+			"read-decide-write transaction. Registry reservations for every site and the " +
+			"caller-supplied live routes both count as taken.")
+		Payload(func() {
+			Attribute("tailnet", String, "Routing/storage key for the registry.")
+			Attribute("pool", String, "IPv4 or IPv6 CIDR prefix to allocate from; masked to its network address.")
+			Attribute("size", Int,
+				"Prefix length of the child to allocate, between the pool's length and the address width.")
+			Attribute("site", String, "Site name to reserve the child for.")
+			Attribute("live_taken", ArrayOf(String),
+				"CIDR prefixes advertised by live devices, counted as taken alongside registry reservations.")
+			reservationMetadataAttributes()
+			Required("tailnet", "pool", "size", "site")
+		})
+		Result(func() {
+			Attribute("cidr", String, "Canonical subnet CIDR actually reserved.", func() {
+				Meta("struct:field:name", "CIDR")
+			})
+			Attribute("site", String, "Canonical site name actually written.")
+			Attribute("changed", Boolean,
+				"False when ticket named an existing reservation for the site inside the pool, "+
+					"which was returned unchanged.")
+			reservationMetadataAttributes()
+			Required("cidr", "site", "changed")
+		})
+		Error("exhausted", func() {
+			Description("No child of the requested size is free inside the pool.")
+		})
+		Error("invalid_input", func() {
+			Description("pool, size, site, a live route, or reservation metadata is invalid.")
+		})
+		HTTP(func() {
+			POST("/tailnet/{tailnet}/ipam/subnet-pools/allocate")
+			Response(StatusOK)
+			Response("invalid_input", StatusBadRequest)
+			Response("exhausted", StatusUnprocessableEntity)
+		})
+	})
+
 	Method("release_subnet_pool", func() {
 		Payload(func() {
 			Attribute("tailnet", String, "Routing/storage key for the registry.")

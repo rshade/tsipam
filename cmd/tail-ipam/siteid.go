@@ -73,6 +73,11 @@ func addRegistryFlags(cmd *cobra.Command, registryDir, tailnet *string) {
 		"routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")")
 }
 
+// newSiteIDReserveCommand structurally mirrors newSubnetReserveCommand
+// (subnet.go) by design: each reserves its own registry entry shape through
+// the shared leaf-command plumbing.
+//
+//nolint:dupl // mirrors newSubnetReserveCommand (subnet.go) by design; unifying needs a generic beyond this file's scope
 func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 	var metadataFlags reservationMetadataFlags
 	cmd := newSiteIDLeafCommand(

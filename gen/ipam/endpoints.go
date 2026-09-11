@@ -22,6 +22,7 @@ type Endpoints struct {
 	ReleaseSiteID         goa.Endpoint
 	ListSubnetPools       goa.Endpoint
 	ReserveSubnetPool     goa.Endpoint
+	AllocateSubnetPool    goa.Endpoint
 	ReleaseSubnetPool     goa.Endpoint
 	ListServiceAddresses  goa.Endpoint
 	ReserveServiceAddress goa.Endpoint
@@ -41,6 +42,7 @@ func NewEndpoints(s Service) *Endpoints {
 		ReleaseSiteID:         NewReleaseSiteIDEndpoint(s),
 		ListSubnetPools:       NewListSubnetPoolsEndpoint(s),
 		ReserveSubnetPool:     NewReserveSubnetPoolEndpoint(s),
+		AllocateSubnetPool:    NewAllocateSubnetPoolEndpoint(s),
 		ReleaseSubnetPool:     NewReleaseSubnetPoolEndpoint(s),
 		ListServiceAddresses:  NewListServiceAddressesEndpoint(s),
 		ReserveServiceAddress: NewReserveServiceAddressEndpoint(s),
@@ -60,6 +62,7 @@ func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
 	e.ReleaseSiteID = m(e.ReleaseSiteID)
 	e.ListSubnetPools = m(e.ListSubnetPools)
 	e.ReserveSubnetPool = m(e.ReserveSubnetPool)
+	e.AllocateSubnetPool = m(e.AllocateSubnetPool)
 	e.ReleaseSubnetPool = m(e.ReleaseSubnetPool)
 	e.ListServiceAddresses = m(e.ListServiceAddresses)
 	e.ReserveServiceAddress = m(e.ReserveServiceAddress)
@@ -129,6 +132,15 @@ func NewReserveSubnetPoolEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*ReserveSubnetPoolPayload)
 		return s.ReserveSubnetPool(ctx, p)
+	}
+}
+
+// NewAllocateSubnetPoolEndpoint returns an endpoint function that calls the
+// method "allocate_subnet_pool" of service "ipam".
+func NewAllocateSubnetPoolEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*AllocateSubnetPoolPayload)
+		return s.AllocateSubnetPool(ctx, p)
 	}
 }
 

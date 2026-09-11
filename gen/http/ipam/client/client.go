@@ -44,6 +44,10 @@ type Client struct {
 	// reserve_subnet_pool endpoint.
 	ReserveSubnetPoolDoer goahttp.Doer
 
+	// AllocateSubnetPool Doer is the HTTP client used to make requests to the
+	// allocate_subnet_pool endpoint.
+	AllocateSubnetPoolDoer goahttp.Doer
+
 	// ReleaseSubnetPool Doer is the HTTP client used to make requests to the
 	// release_subnet_pool endpoint.
 	ReleaseSubnetPoolDoer goahttp.Doer
@@ -99,6 +103,7 @@ func NewClient(
 		ReleaseSiteIDDoer:         doer,
 		ListSubnetPoolsDoer:       doer,
 		ReserveSubnetPoolDoer:     doer,
+		AllocateSubnetPoolDoer:    doer,
 		ReleaseSubnetPoolDoer:     doer,
 		ListServiceAddressesDoer:  doer,
 		ReserveServiceAddressDoer: doer,
@@ -262,6 +267,30 @@ func (c *Client) ReserveSubnetPool() goa.Endpoint {
 		resp, err := c.ReserveSubnetPoolDoer.Do(req)
 		if err != nil {
 			return nil, goahttp.ErrRequestError("ipam", "reserve_subnet_pool", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// AllocateSubnetPool returns an endpoint that makes HTTP requests to the ipam
+// service allocate_subnet_pool server.
+func (c *Client) AllocateSubnetPool() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeAllocateSubnetPoolRequest(c.encoder)
+		decodeResponse = DecodeAllocateSubnetPoolResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildAllocateSubnetPoolRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.AllocateSubnetPoolDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "allocate_subnet_pool", err)
 		}
 		return decodeResponse(resp)
 	}

@@ -23,7 +23,7 @@ import (
 //	command (subcommand1|subcommand2|...)
 func UsageCommands() []string {
 	return []string{
-		"ipam (plan|check-policy|list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
+		"ipam (plan|check-policy|list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|allocate-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
 	}
 }
 
@@ -71,6 +71,10 @@ func ParseEndpoint(
 		ipamReserveSubnetPoolBodyFlag    = ipamReserveSubnetPoolFlags.String("body", "REQUIRED", "")
 		ipamReserveSubnetPoolTailnetFlag = ipamReserveSubnetPoolFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
 
+		ipamAllocateSubnetPoolFlags       = flag.NewFlagSet("allocate-subnet-pool", flag.ExitOnError)
+		ipamAllocateSubnetPoolBodyFlag    = ipamAllocateSubnetPoolFlags.String("body", "REQUIRED", "")
+		ipamAllocateSubnetPoolTailnetFlag = ipamAllocateSubnetPoolFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
+
 		ipamReleaseSubnetPoolFlags       = flag.NewFlagSet("release-subnet-pool", flag.ExitOnError)
 		ipamReleaseSubnetPoolTailnetFlag = ipamReleaseSubnetPoolFlags.String("tailnet", "REQUIRED", "Routing/storage key for the registry.")
 		ipamReleaseSubnetPoolCidrFlag    = ipamReleaseSubnetPoolFlags.String("cidr", "REQUIRED", "")
@@ -107,6 +111,7 @@ func ParseEndpoint(
 	ipamReleaseSiteIDFlags.Usage = ipamReleaseSiteIDUsage
 	ipamListSubnetPoolsFlags.Usage = ipamListSubnetPoolsUsage
 	ipamReserveSubnetPoolFlags.Usage = ipamReserveSubnetPoolUsage
+	ipamAllocateSubnetPoolFlags.Usage = ipamAllocateSubnetPoolUsage
 	ipamReleaseSubnetPoolFlags.Usage = ipamReleaseSubnetPoolUsage
 	ipamListServiceAddressesFlags.Usage = ipamListServiceAddressesUsage
 	ipamReserveServiceAddressFlags.Usage = ipamReserveServiceAddressUsage
@@ -169,6 +174,9 @@ func ParseEndpoint(
 
 			case "reserve-subnet-pool":
 				epf = ipamReserveSubnetPoolFlags
+
+			case "allocate-subnet-pool":
+				epf = ipamAllocateSubnetPoolFlags
 
 			case "release-subnet-pool":
 				epf = ipamReleaseSubnetPoolFlags
@@ -237,6 +245,9 @@ func ParseEndpoint(
 			case "reserve-subnet-pool":
 				endpoint = c.ReserveSubnetPool()
 				data, err = ipamc.BuildReserveSubnetPoolPayload(*ipamReserveSubnetPoolBodyFlag, *ipamReserveSubnetPoolTailnetFlag)
+			case "allocate-subnet-pool":
+				endpoint = c.AllocateSubnetPool()
+				data, err = ipamc.BuildAllocateSubnetPoolPayload(*ipamAllocateSubnetPoolBodyFlag, *ipamAllocateSubnetPoolTailnetFlag)
 			case "release-subnet-pool":
 				endpoint = c.ReleaseSubnetPool()
 				data, err = ipamc.BuildReleaseSubnetPoolPayload(*ipamReleaseSubnetPoolTailnetFlag, *ipamReleaseSubnetPoolCidrFlag)
@@ -280,6 +291,7 @@ func ipamUsage() {
 	fmt.Fprintln(os.Stderr, `    release-site-id: ReleaseSiteID implements release_site_id.`)
 	fmt.Fprintln(os.Stderr, `    list-subnet-pools: ListSubnetPools implements list_subnet_pools.`)
 	fmt.Fprintln(os.Stderr, `    reserve-subnet-pool: ReserveSubnetPool implements reserve_subnet_pool.`)
+	fmt.Fprintln(os.Stderr, `    allocate-subnet-pool: Reserve the first free child CIDR of a pool for a site in one locked read-decide-write transaction. Registry reservations for every site and the caller-supplied live routes both count as taken.`)
 	fmt.Fprintln(os.Stderr, `    release-subnet-pool: ReleaseSubnetPool implements release_subnet_pool.`)
 	fmt.Fprintln(os.Stderr, `    list-service-addresses: ListServiceAddresses implements list_service_addresses.`)
 	fmt.Fprintln(os.Stderr, `    reserve-service-address: ReserveServiceAddress implements reserve_service_address.`)
@@ -425,6 +437,26 @@ func ipamReserveSubnetPoolUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-subnet-pool --body '{\n      \"cidr\": \"Iste voluptatem modi aut id illum rerum.\",\n      \"description\": \"Eos et nesciunt aperiam molestiae iusto quia.\",\n      \"owner\": \"Consequuntur facilis.\",\n      \"reserved_at\": \"1999-05-20T14:51:36Z\",\n      \"site\": \"Occaecati assumenda quia.\",\n      \"ticket\": \"Qui labore facilis deleniti.\"\n   }' --tailnet \"Explicabo dolor est voluptate dolores nesciunt.\"")
+}
+
+func ipamAllocateSubnetPoolUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam allocate-subnet-pool", os.Args[0])
+	fmt.Fprint(os.Stderr, " -body JSON")
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `Reserve the first free child CIDR of a pool for a site in one locked read-decide-write transaction. Registry reservations for every site and the caller-supplied live routes both count as taken.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -body JSON: `)
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam allocate-subnet-pool --body '{\n      \"description\": \"Nam quia et distinctio necessitatibus.\",\n      \"live_taken\": [\n         \"Beatae molestiae aut aliquam.\",\n         \"In molestias.\"\n      ],\n      \"owner\": \"Hic aut et adipisci omnis ipsam sapiente.\",\n      \"pool\": \"Nemo laudantium dolores neque veniam doloremque eos.\",\n      \"reserved_at\": \"1981-11-04T12:49:58Z\",\n      \"site\": \"Cupiditate voluptatum.\",\n      \"size\": 4227288391465765948,\n      \"ticket\": \"Aut libero quam explicabo unde a.\"\n   }' --tailnet \"Pariatur illo doloremque aspernatur.\"")
 }
 
 func ipamReleaseSubnetPoolUsage() {

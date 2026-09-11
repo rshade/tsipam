@@ -463,6 +463,97 @@ func EncodeReserveSubnetPoolError(encoder func(context.Context, http.ResponseWri
 	}
 }
 
+// EncodeAllocateSubnetPoolResponse returns an encoder for responses returned
+// by the ipam allocate_subnet_pool endpoint.
+func EncodeAllocateSubnetPoolResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.(*ipam.AllocateSubnetPoolResult)
+		enc := encoder(ctx, w)
+		body := NewAllocateSubnetPoolResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeAllocateSubnetPoolRequest returns a decoder for requests sent to the
+// ipam allocate_subnet_pool endpoint.
+func DecodeAllocateSubnetPoolRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.AllocateSubnetPoolPayload, error) {
+	return func(r *http.Request) (*ipam.AllocateSubnetPoolPayload, error) {
+		var payload *ipam.AllocateSubnetPoolPayload
+		var (
+			body AllocateSubnetPoolRequestBody
+			err  error
+		)
+		err = decoder(r).Decode(&body)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return payload, goa.MissingPayloadError()
+			}
+			var gerr *goa.ServiceError
+			if errors.As(err, &gerr) {
+				return payload, gerr
+			}
+			return payload, goa.DecodePayloadError(err.Error())
+		}
+		err = ValidateAllocateSubnetPoolRequestBody(&body)
+		if err != nil {
+			return payload, err
+		}
+
+		var (
+			tailnet string
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		payload = NewAllocateSubnetPoolPayload(&body, tailnet)
+
+		return payload, nil
+	}
+}
+
+// EncodeAllocateSubnetPoolError returns an encoder for errors returned by the
+// allocate_subnet_pool ipam endpoint.
+func EncodeAllocateSubnetPoolError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewAllocateSubnetPoolInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		case "exhausted":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewAllocateSubnetPoolExhaustedResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
 // EncodeReleaseSubnetPoolResponse returns an encoder for responses returned by
 // the ipam release_subnet_pool endpoint.
 func EncodeReleaseSubnetPoolResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {

@@ -24,6 +24,7 @@ const (
 	commandSubnetList     = commandSubnet + " " + commandList
 	commandSubnetReserve  = commandSubnet + " reserve"
 	commandSubnetRelease  = commandSubnet + " release"
+	commandSubnetAllocate = commandSubnet + " allocate"
 	commandService        = "service"
 	commandServiceList    = commandService + " " + commandList
 	commandServiceReserve = commandService + " reserve"

@@ -22,6 +22,7 @@ type Client struct {
 	ReleaseSiteIDEndpoint         goa.Endpoint
 	ListSubnetPoolsEndpoint       goa.Endpoint
 	ReserveSubnetPoolEndpoint     goa.Endpoint
+	AllocateSubnetPoolEndpoint    goa.Endpoint
 	ReleaseSubnetPoolEndpoint     goa.Endpoint
 	ListServiceAddressesEndpoint  goa.Endpoint
 	ReserveServiceAddressEndpoint goa.Endpoint
@@ -32,7 +33,7 @@ type Client struct {
 }
 
 // NewClient initializes a "ipam" service client given the endpoints.
-func NewClient(plan, checkPolicy, listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
+func NewClient(plan, checkPolicy, listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, allocateSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
 	return &Client{
 		PlanEndpoint:                  plan,
 		CheckPolicyEndpoint:           checkPolicy,
@@ -41,6 +42,7 @@ func NewClient(plan, checkPolicy, listSiteIds, reserveSiteID, releaseSiteID, lis
 		ReleaseSiteIDEndpoint:         releaseSiteID,
 		ListSubnetPoolsEndpoint:       listSubnetPools,
 		ReserveSubnetPoolEndpoint:     reserveSubnetPool,
+		AllocateSubnetPoolEndpoint:    allocateSubnetPool,
 		ReleaseSubnetPoolEndpoint:     releaseSubnetPool,
 		ListServiceAddressesEndpoint:  listServiceAddresses,
 		ReserveServiceAddressEndpoint: reserveServiceAddress,
@@ -137,6 +139,21 @@ func (c *Client) ReserveSubnetPool(ctx context.Context, p *ReserveSubnetPoolPayl
 		return
 	}
 	return ires.(*ReserveSubnetPoolResult), nil
+}
+
+// AllocateSubnetPool calls the "allocate_subnet_pool" endpoint of the "ipam"
+// service.
+// AllocateSubnetPool may return the following errors:
+//   - "exhausted" (type *goa.ServiceError): No child of the requested size is free inside the pool.
+//   - "invalid_input" (type *goa.ServiceError): pool, size, site, a live route, or reservation metadata is invalid.
+//   - error: internal error
+func (c *Client) AllocateSubnetPool(ctx context.Context, p *AllocateSubnetPoolPayload) (res *AllocateSubnetPoolResult, err error) {
+	var ires any
+	ires, err = c.AllocateSubnetPoolEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.(*AllocateSubnetPoolResult), nil
 }
 
 // ReleaseSubnetPool calls the "release_subnet_pool" endpoint of the "ipam"

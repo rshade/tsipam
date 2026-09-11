@@ -172,6 +172,25 @@ func (s *Service) ReserveSubnetPool(
 	}, nil
 }
 
+// AllocateSubnetPool implements ipam.Service.
+func (s *Service) AllocateSubnetPool(
+	_ context.Context,
+	p *ipam.AllocateSubnetPoolPayload,
+) (*ipam.AllocateSubnetPoolResult, error) {
+	cidr, site, metadata, changed, err := registry.AllocateSubnetPoolWithLogger(
+		s.registryPath(p.Tailnet), p.Pool, p.Size, p.Site, p.LiveTaken,
+		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt), s.Logger,
+	)
+	if err != nil {
+		return nil, translateSubnetPoolError(s.registryError(p.Tailnet, err))
+	}
+	return &ipam.AllocateSubnetPoolResult{
+		CIDR: cidr, Site: site, Changed: changed,
+		Owner: nonEmptyPtr(metadata.Owner), Description: nonEmptyPtr(metadata.Description),
+		Ticket: nonEmptyPtr(metadata.Ticket), ReservedAt: nonEmptyPtr(metadata.ReservedAt),
+	}, nil
+}
+
 // ReleaseSubnetPool implements ipam.Service.
 func (s *Service) ReleaseSubnetPool(
 	_ context.Context,
@@ -326,6 +345,9 @@ func translateSiteIDError(err error) error {
 func translateSubnetPoolError(err error) error {
 	if collision, ok := errors.AsType[*registry.SubnetPoolCollisionError](err); ok {
 		return ipam.MakeCollision(collision)
+	}
+	if exhausted, ok := errors.AsType[*registry.SubnetPoolExhaustedError](err); ok {
+		return ipam.MakeExhausted(exhausted)
 	}
 	if _, ok := errors.AsType[*registry.InvalidInputError](err); ok {
 		return ipam.MakeInvalidInput(err)

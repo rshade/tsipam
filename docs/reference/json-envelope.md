@@ -36,6 +36,7 @@ Failures write nothing to stdout in either format; see
 | --- | --- | --- |
 | `site-id reserve`, `site-id release` | `changed`, `id`, `site` | `changed` is a boolean; reserve also echoes `owner`, `description`, `ticket`, `reserved_at` when present |
 | `subnet reserve`, `subnet release` | `changed`, `cidr`, `site` | plus metadata fields on reserve |
+| `subnet allocate` | `changed`, `cidr`, `site` | plus metadata fields; `changed` is `false` on a `--ticket` replay; an exhausted pool exits 2 with no document |
 | `service reserve`, `service release` | `changed`, `address`, `service` | plus metadata fields on reserve |
 | `port reserve`, `port release` | `changed`, `port`, `site`, `device` | `port` is a decimal string; release omits `device` |
 | `site-id list` | `site_ids` | array of `{id, site, owner?, description?, ticket?, reserved_at?}` |

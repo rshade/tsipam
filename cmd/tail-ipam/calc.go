@@ -141,10 +141,15 @@ func validateNextFreeOptions(
 		return errors.New("--all and --count cannot be used together")
 	}
 	if listDevices == nil {
-		return errors.New("device collector is not configured")
+		return errNoDeviceCollector
 	}
 	return nil
 }
+
+// errNoDeviceCollector is the refusal shared by calc next-free and subnet
+// allocate: neither may pick a block without a live read, because an offline
+// pick could hand out space a router already advertises.
+var errNoDeviceCollector = errors.New("device collector is not configured")
 
 func nextFreeOutput(
 	ctx context.Context,

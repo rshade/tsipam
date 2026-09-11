@@ -718,7 +718,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 
 	root.AddCommand(newDevicesCommand(state, deps.listDevices))
 	root.AddCommand(newSiteIDCommand(state))
-	root.AddCommand(newSubnetCommand(state))
+	root.AddCommand(newSubnetCommand(state, deps.listDevices))
 	root.AddCommand(newServiceCommand(state))
 	root.AddCommand(newUDPPortCommand(state))
 	root.AddCommand(newCalcCommand(state, deps.listDevices))

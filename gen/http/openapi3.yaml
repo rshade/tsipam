@@ -663,6 +663,68 @@ paths:
                         application/vnd.goa.error:
                             schema:
                                 $ref: '#/components/schemas/Error'
+    /tailnet/{tailnet}/ipam/subnet-pools/allocate:
+        post:
+            tags:
+                - ipam
+            summary: allocate_subnet_pool ipam
+            description: Reserve the first free child CIDR of a pool for a site in one locked read-decide-write transaction. Registry reservations for every site and the caller-supplied live routes both count as taken.
+            operationId: ipam#allocate_subnet_pool
+            parameters:
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry.
+                    example: Pariatur illo doloremque aspernatur.
+                  example: Et vel rerum eligendi aut ullam odit.
+            requestBody:
+                description: Request body for allocate_subnet_pool.
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AllocateSubnetPoolRequestBody'
+                        example:
+                            description: Nam quia et distinctio necessitatibus.
+                            live_taken:
+                                - Beatae molestiae aut aliquam.
+                                - In molestias.
+                            owner: Hic aut et adipisci omnis ipsam sapiente.
+                            pool: Nemo laudantium dolores neque veniam doloremque eos.
+                            reserved_at: "1981-11-04T12:49:58Z"
+                            site: Cupiditate voluptatum.
+                            size: 4227288391465765948
+                            ticket: Aut libero quam explicabo unde a.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReserveSubnetPoolResponseBody'
+                            example:
+                                changed: true
+                                cidr: Nisi quas est.
+                                description: Eligendi ullam impedit ipsum perferendis veritatis.
+                                owner: Facere delectus nobis vel eius in repellendus.
+                                reserved_at: "1986-11-13T00:34:35Z"
+                                site: Qui natus molestiae qui iste quas quos.
+                                ticket: Totam suscipit facilis adipisci pariatur.
+                "400":
+                    description: 'invalid_input: pool, size, site, a live route, or reservation metadata is invalid.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                "422":
+                    description: 'exhausted: No child of the requested size is free inside the pool.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
     /tailnet/{tailnet}/ipam/udp-ports:
         delete:
             tags:
@@ -827,6 +889,64 @@ paths:
                                 $ref: '#/components/schemas/Error'
 components:
     schemas:
+        AllocateSubnetPoolRequestBody:
+            type: object
+            properties:
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Nam quia et distinctio necessitatibus.
+                live_taken:
+                    type: array
+                    items:
+                        type: string
+                        example: Beatae molestiae aut aliquam.
+                    description: CIDR prefixes advertised by live devices, counted as taken alongside registry reservations.
+                    example:
+                        - Beatae molestiae aut aliquam.
+                        - In molestias.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Hic aut et adipisci omnis ipsam sapiente.
+                pool:
+                    type: string
+                    description: IPv4 or IPv6 CIDR prefix to allocate from; masked to its network address.
+                    example: Nemo laudantium dolores neque veniam doloremque eos.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "1981-11-04T12:49:58Z"
+                    format: date-time
+                site:
+                    type: string
+                    description: Site name to reserve the child for.
+                    example: Cupiditate voluptatum.
+                size:
+                    type: integer
+                    description: Prefix length of the child to allocate, between the pool's length and the address width.
+                    example: 4227288391465765948
+                    format: int64
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Aut libero quam explicabo unde a.
+            description: Request body for allocate_subnet_pool.
+            example:
+                description: Nam quia et distinctio necessitatibus.
+                live_taken:
+                    - Beatae molestiae aut aliquam.
+                    - In molestias.
+                owner: Hic aut et adipisci omnis ipsam sapiente.
+                pool: Nemo laudantium dolores neque veniam doloremque eos.
+                reserved_at: "1981-11-04T12:49:58Z"
+                site: Cupiditate voluptatum.
+                size: 4227288391465765948
+                ticket: Aut libero quam explicabo unde a.
+            required:
+                - pool
+                - size
+                - site
         CheckPolicyRequestBody:
             type: object
             properties:

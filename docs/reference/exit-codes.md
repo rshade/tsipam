@@ -30,14 +30,15 @@ catalog in machine-readable form.
   a service address that is not a bare IPv4 host or `/32`, a UDP port outside
   `1024`–`65535`, a missing `--site`, a control character in a label.
 - A registry that is missing, unreadable, or fails validation for the map
-  the command touches. Reserve creates a missing file; list, release, plan,
-  check, aggregate, and next-free do not.
-- `plan`, `check`, `devices list`, or `calc next-free` without
-  `TAILSCALE_TAILNET` and credentials, or when an API request fails.
-- `calc next-free` when the pool has no free block of the requested size:
-  the message goes to stderr and stdout stays empty, so
+  the command touches. Reserve and allocate create a missing file; list,
+  release, plan, check, aggregate, and next-free do not.
+- `plan`, `check`, `devices list`, `calc next-free`, or `subnet allocate`
+  without `TAILSCALE_TAILNET` and credentials, or when an API request fails.
+- `calc next-free` or `subnet allocate` when the pool has no free block of
+  the requested size: the message goes to stderr and stdout stays empty, so
   `subnet reserve "$(tail-ipam calc next-free …)"` fails at `reserve` with
-  `subnet CIDR must not be empty` rather than passing text as a CIDR.
+  `subnet CIDR must not be empty` rather than passing text as a CIDR, and
+  `allocate` writes nothing to the registry.
 - `check-policy` with a missing or malformed policy, an ipset reference
   cycle, a `host:` alias that is not a literal address, `autogroup:internet`
   or another dynamic selector, or expansion beyond 128 levels or 65,536
