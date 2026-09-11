@@ -16,7 +16,7 @@ func (s *Service) Plan(ctx context.Context, payload *ipam.PlanPayload) (*ipam.Co
 	}
 	reg, err := registry.LoadForPlanning(s.registryPath(payload.Tailnet))
 	if err != nil {
-		return nil, ipam.MakeComparisonFailed(err)
+		return nil, ipam.MakeComparisonFailed(s.registryError(payload.Tailnet, err))
 	}
 	live, err := s.CollectLive(ctx, payload.LiveTailnet, s.Logger)
 	if err != nil {

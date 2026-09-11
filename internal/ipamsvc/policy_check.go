@@ -15,7 +15,7 @@ func (s *Service) CheckPolicy(ctx context.Context, payload *ipam.CheckPolicyPayl
 	}
 	pools, err := registry.ListSubnetPoolsWithLogger(s.registryPath(payload.Tailnet), s.Logger)
 	if err != nil {
-		return nil, ipam.MakePolicyCheckFailed(err)
+		return nil, ipam.MakePolicyCheckFailed(s.registryError(payload.Tailnet, err))
 	}
 	report, err := policycheck.Compare([]byte(payload.Policy), pools)
 	if err != nil {

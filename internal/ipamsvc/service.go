@@ -7,6 +7,8 @@ package ipamsvc
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
 
 	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
@@ -31,6 +33,24 @@ var _ ipam.Service = (*Service)(nil)
 
 func (s *Service) registryPath(tailnet string) string {
 	return filepath.Join(s.RegistryDir, tailnet+".ipam.hujson")
+}
+
+// registryError restores the lookup context registry.Load withholds on
+// purpose (registry.identityFreePathError drops the file path because the
+// filename embeds the tailnet key): the alias and directory are reported
+// separately, so the CLI's sanitizer can sweep the alias while the directory,
+// which is the operator's own --registry-dir value, stays readable. A missing
+// directory and a missing file are told apart because they call for
+// different fixes.
+func (s *Service) registryError(tailnet string, err error) error {
+	if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if _, statErr := os.Stat(s.RegistryDir); errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("registry directory %q does not exist: %w", s.RegistryDir, err)
+	}
+	return fmt.Errorf("no registry for tailnet %q in %q (a reserve command creates it): %w",
+		tailnet, s.RegistryDir, err)
 }
 
 // nonEmptyPtr returns nil for an empty string, and a pointer to value
@@ -70,7 +90,7 @@ func metadataFromPayload(owner, description, ticket, reservedAt *string) registr
 func (s *Service) ListSiteIds(_ context.Context, p *ipam.ListSiteIdsPayload) ([]*ipam.SiteIDReservation, error) {
 	entries, err := registry.ListSiteIDsWithLogger(s.registryPath(p.Tailnet), s.Logger)
 	if err != nil {
-		return nil, err
+		return nil, s.registryError(p.Tailnet, err)
 	}
 	out := make([]*ipam.SiteIDReservation, len(entries))
 	for i, entry := range entries {
@@ -95,7 +115,7 @@ func (s *Service) ReserveSiteID(_ context.Context, p *ipam.ReserveSiteIDPayload)
 		s.Logger,
 	)
 	if err != nil {
-		return nil, translateSiteIDError(err)
+		return nil, translateSiteIDError(s.registryError(p.Tailnet, err))
 	}
 	return &ipam.ReserveSiteIDResult{
 		ID: id, Site: site, Changed: changed,
@@ -108,7 +128,7 @@ func (s *Service) ReserveSiteID(_ context.Context, p *ipam.ReserveSiteIDPayload)
 func (s *Service) ReleaseSiteID(_ context.Context, p *ipam.ReleaseSiteIDPayload) (*ipam.ReleaseSiteIDResult, error) {
 	id, changed, err := registry.ReleaseSiteIDWithLogger(s.registryPath(p.Tailnet), p.ID, s.Logger)
 	if err != nil {
-		return nil, translateSiteIDError(err)
+		return nil, translateSiteIDError(s.registryError(p.Tailnet, err))
 	}
 	return &ipam.ReleaseSiteIDResult{ID: id, Changed: changed}, nil
 }
@@ -120,7 +140,7 @@ func (s *Service) ListSubnetPools(
 ) ([]*ipam.SubnetPoolReservation, error) {
 	entries, err := registry.ListSubnetPoolsWithLogger(s.registryPath(p.Tailnet), s.Logger)
 	if err != nil {
-		return nil, err
+		return nil, s.registryError(p.Tailnet, err)
 	}
 	out := make([]*ipam.SubnetPoolReservation, len(entries))
 	for i, entry := range entries {
@@ -143,7 +163,7 @@ func (s *Service) ReserveSubnetPool(
 		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt), s.Logger,
 	)
 	if err != nil {
-		return nil, translateSubnetPoolError(err)
+		return nil, translateSubnetPoolError(s.registryError(p.Tailnet, err))
 	}
 	return &ipam.ReserveSubnetPoolResult{
 		CIDR: cidr, Site: site, Changed: changed,
@@ -159,7 +179,7 @@ func (s *Service) ReleaseSubnetPool(
 ) (*ipam.ReleaseSubnetPoolResult, error) {
 	cidr, changed, err := registry.ReleaseSubnetPoolWithLogger(s.registryPath(p.Tailnet), p.CIDR, s.Logger)
 	if err != nil {
-		return nil, translateSubnetPoolError(err)
+		return nil, translateSubnetPoolError(s.registryError(p.Tailnet, err))
 	}
 	return &ipam.ReleaseSubnetPoolResult{CIDR: cidr, Changed: changed}, nil
 }
@@ -171,7 +191,7 @@ func (s *Service) ListServiceAddresses(
 ) ([]*ipam.ServiceAddressReservation, error) {
 	entries, err := registry.ListServiceAddressesWithLogger(s.registryPath(p.Tailnet), s.Logger)
 	if err != nil {
-		return nil, err
+		return nil, s.registryError(p.Tailnet, err)
 	}
 	out := make([]*ipam.ServiceAddressReservation, len(entries))
 	for i, entry := range entries {
@@ -194,7 +214,7 @@ func (s *Service) ReserveServiceAddress(
 		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt), s.Logger,
 	)
 	if err != nil {
-		return nil, translateServiceAddressError(err)
+		return nil, translateServiceAddressError(s.registryError(p.Tailnet, err))
 	}
 	return &ipam.ReserveServiceAddressResult{
 		Address: address, Service: service, Changed: changed,
@@ -212,7 +232,7 @@ func (s *Service) ReleaseServiceAddress(
 		s.registryPath(p.Tailnet), p.Address, s.Logger,
 	)
 	if err != nil {
-		return nil, translateServiceAddressError(err)
+		return nil, translateServiceAddressError(s.registryError(p.Tailnet, err))
 	}
 	return &ipam.ReleaseServiceAddressResult{Address: address, Changed: changed}, nil
 }
@@ -234,7 +254,7 @@ func (s *Service) ListUDPPorts(
 		s.registryPath(p.Tailnet), site, s.Logger,
 	)
 	if err != nil {
-		return nil, translateUDPPortError(err)
+		return nil, translateUDPPortError(s.registryError(p.Tailnet, err))
 	}
 	out := make([]*ipam.UDPPortReservation, len(entries))
 	for i, entry := range entries {
@@ -252,7 +272,7 @@ func (s *Service) ReserveUDPPort(
 		s.registryPath(p.Tailnet), p.Site, p.Port, p.Device, s.Logger,
 	)
 	if err != nil {
-		return nil, translateUDPPortError(err)
+		return nil, translateUDPPortError(s.registryError(p.Tailnet, err))
 	}
 	return &ipam.ReserveUDPPortResult{
 		Site: site, Port: port, Device: device, Changed: changed,
@@ -268,7 +288,7 @@ func (s *Service) ReleaseUDPPort(
 		s.registryPath(p.Tailnet), p.Site, p.Port, s.Logger,
 	)
 	if err != nil {
-		return nil, translateUDPPortError(err)
+		return nil, translateUDPPortError(s.registryError(p.Tailnet, err))
 	}
 	return &ipam.ReleaseUDPPortResult{Site: site, Port: port, Changed: changed}, nil
 }

@@ -35,6 +35,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
 
 	"github.com/rshade/tailscale-utils/policycore/cliflags"
@@ -313,6 +314,7 @@ func runCLI(
 		if !errors.Is(err, errRegistryDrift) && !errors.Is(err, errPolicyDrift) {
 			registerKnownIdentityInventory(executed, state)
 		}
+		err = describeTransportFault(err)
 		_, _ = fmt.Fprintf(stderr, "%s: %v\n", toolName, sanitizeErrorIfNeeded(err, state.sanitizer))
 		return exitCodeFor(err)
 	}
@@ -550,6 +552,42 @@ func sanitizedQuotedSegment(quoted, kind string, sanitizer *sanitize.Sanitizer) 
 		return unprintableIdentityPlaceholder
 	}
 	return `"` + sanitizer.Value(kind, value) + `"`
+}
+
+// transportFaultError is a *goahttp.ClientError whose rendered text is the
+// service's own message rather than the generated client's envelope. The
+// original error stays in the chain for [errors.As] callers.
+type transportFaultError struct {
+	message string
+	cause   error
+}
+
+func (e *transportFaultError) Error() string { return e.message }
+func (e *transportFaultError) Unwrap() error { return e.cause }
+
+// describeTransportFault unwraps the envelope the generated HTTP client builds
+// around an error the design does not declare: "[ipam list_subnet_pools]:
+// invalid response code 500, body: {"name":"fault",...,"message":"..."}".
+// The loopback transport is in-process, so for an operator that envelope is
+// noise around the one useful field. Declared errors (collision,
+// invalid_input, comparison_failed, ...) decode to *goa.ServiceError and are
+// untouched; so is any client error whose body is not a goa fault.
+func describeTransportFault(err error) error {
+	var clientErr *goahttp.ClientError
+	if !errors.As(err, &clientErr) {
+		return err
+	}
+	_, body, found := strings.Cut(clientErr.Message, ", body: ")
+	if !found {
+		return err
+	}
+	var fault struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal([]byte(body), &fault) != nil || fault.Message == "" {
+		return err
+	}
+	return &transportFaultError{message: fault.Message, cause: err}
 }
 
 // collisionErrorName must match design.Error("collision", ...) in
