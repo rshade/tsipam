@@ -8,7 +8,6 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -43,37 +42,24 @@ func distDir(t *testing.T) string {
 	return abs
 }
 
-type releaseMetadata struct {
-	Tag     string `json:"tag"`
-	Version string `json:"version"`
-	Commit  string `json:"commit"`
-}
-
-func readMetadata(t *testing.T, dist string) releaseMetadata {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dist, "metadata.json"))
-	if err != nil {
-		t.Fatalf("reading metadata.json: %v", err)
+func archiveExt(target string) string {
+	if strings.HasPrefix(target, "windows_") {
+		return ".zip"
 	}
-	var meta releaseMetadata
-	if err = json.Unmarshal(data, &meta); err != nil {
-		t.Fatalf("decoding metadata.json: %v", err)
-	}
-	return meta
+	return ".tar.gz"
 }
 
 func archiveName(version, target string) string {
-	ext := ".tar.gz"
-	if strings.HasPrefix(target, "windows_") {
-		ext = ".zip"
-	}
-	return "tail-ipam_" + version + "_" + target + ext
+	return "tail-ipam_" + version + "_" + target + archiveExt(target)
 }
 
 func TestArtifacts(t *testing.T) {
 	t.Parallel()
 	dist := distDir(t)
-	meta := readMetadata(t, dist)
+	meta, err := releaseMetadataFrom(dist, moduleDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if meta.Version == "" || strings.Contains(meta.Version, "SNAPSHOT") || meta.Commit == "none" {
 		t.Fatalf("metadata %+v is a snapshot; build with the release tag (see make smoke-release)", meta)
 	}
@@ -137,12 +123,14 @@ func assertHostBinaryVersion(t *testing.T, dist string, meta releaseMetadata) {
 		t.Fatalf("--version: %v", err)
 	}
 	version := strings.TrimSpace(string(out))
-	shortCommit := meta.Commit
-	if len(shortCommit) > shortCommitLen {
-		shortCommit = shortCommit[:shortCommitLen]
-	}
-	containsAll(t, version, "tail-ipam "+meta.Version, shortCommit)
+	containsAll(t, version, "tail-ipam "+meta.Version)
 	containsNone(t, version, "dirty", "dev")
+	if meta.Commit == "" {
+		t.Logf("not checking the commit: dist has no metadata.json and %s is not in this checkout",
+			releaseTag(meta.Version))
+		return
+	}
+	containsAll(t, version, meta.Commit[:min(len(meta.Commit), shortCommitLen)])
 }
 
 func readChecksums(t *testing.T, dist string) map[string]string {
@@ -225,15 +213,11 @@ func extractBinary(t *testing.T, path string) string {
 }
 
 // extractHostBinary locates this platform's release archive under dist by the
-// version in metadata.json and unpacks its binary to out. Windows hosts are
-// not supported because the archive is a zip and the binary name differs.
+// release version and unpacks its binary to out. Windows hosts are not
+// supported because the archive is a zip and the binary name differs.
 func extractHostBinary(dist, out string) error {
-	data, err := os.ReadFile(filepath.Join(dist, "metadata.json"))
+	meta, err := releaseMetadataFrom(dist, moduleDir)
 	if err != nil {
-		return err
-	}
-	var meta releaseMetadata
-	if err = json.Unmarshal(data, &meta); err != nil {
 		return err
 	}
 	target := runtime.GOOS + "_" + runtime.GOARCH

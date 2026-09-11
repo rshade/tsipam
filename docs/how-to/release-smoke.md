@@ -46,6 +46,23 @@ To test archives built elsewhere, point at their directory:
 make smoke SMOKE_DIST=tail-ipam/dist
 ```
 
+### After a release
+
+A GitHub Release carries the six archives and `checksums.txt` but not
+goreleaser's `metadata.json`. Download them and point the suite at the
+directory:
+
+```bash
+gh release download tail-ipam/vX.Y.Z --repo rshade/tailscale-utils --dir <dir>
+make smoke SMOKE_DIST=<dir>
+```
+
+Without `metadata.json` the suite reads the version from the archive names
+and the commit from the `tail-ipam/vX.Y.Z` tag. Fetch tags first; on a
+checkout without the tag the commit check is skipped with a note, and the
+version check still runs. Add `SMOKE_LIVE=1` under `esc run` to include the
+live section.
+
 ## Run the live section
 
 The live cases need `TAILSCALE_TAILNET` and either `TAILSCALE_API_KEY` or an
@@ -84,3 +101,12 @@ release 0.1.0 has this and 0.1.1 does not.
 `tail-ipam/smoke/` is an external test package behind the `smoke` build tag,
 so `make test` never picks it up and it never needs network access unless you
 opt in. Add cases there when a command gains behavior the README promises.
+
+## In CI
+
+`.github/workflows/ci.yml` runs the offline section (`make smoke`) on every
+pull request, so README examples and the CLI contract cannot drift apart.
+`.github/workflows/release.yml` runs the suite with the artifact section
+against goreleaser's `dist/` after the build and before any archive is
+attached to the Release, so a bad archive is never published. The live
+section stays opt-in.

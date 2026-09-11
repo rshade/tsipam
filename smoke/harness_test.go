@@ -90,7 +90,7 @@ func resolveBinary(configured, dist string) (string, func(), error) {
 	if dist != "" {
 		err = extractHostBinary(dist, out)
 	} else {
-		build := exec.Command("go", "build", "-o", out, "../cmd/tail-ipam")
+		build := exec.Command("go", "build", "-o", out, filepath.Join(moduleDir, "cmd", "tail-ipam"))
 		build.Stderr = os.Stderr
 		if err = build.Run(); err != nil {
 			err = fmt.Errorf("building tail-ipam: %w", err)
