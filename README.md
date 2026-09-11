@@ -565,8 +565,9 @@ Target sizes range from the pool's prefix length through `/32` for IPv4 or
 the default single result or `--count`: `--all` still produces every free
 child and can be impractical even though the search skips occupied ranges.
 
-If the pool is exhausted, the command succeeds with a message that no free
-block exists (and an empty `free_blocks` JSON array). IPv4-mapped prefixes of
+If the pool is exhausted, the command exits with code 2 (output operation failed),
+writes nothing to stdout in either format, and writes the exhaustion message to
+stderr instead. IPv4-mapped prefixes of
 `/96` or longer are normalized to their plain IPv4 equivalent before searching,
 so `--size` uses the IPv4 prefix length. Shorter mapped-looking prefixes remain
 native IPv6. Host bits in pool inputs are masked before searching.

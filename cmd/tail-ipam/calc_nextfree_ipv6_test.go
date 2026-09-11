@@ -126,69 +126,61 @@ func TestCalcNextFreeMixedFamilyExclusions(t *testing.T) {
 
 func TestCalcNextFreeIPv6JSON(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name     string
-		registry string
-		want     []string
-		message  string
-	}{
-		{
-			name:     "suggestions",
-			registry: `{}`,
-			want:     []string{"2001:db8::/128", "2001:db8::1/128"},
-			message:  "suggested 2 free block(s)",
-		},
-		{
-			name:     "exhaustion",
-			registry: `{"subnetPools":{"2001:db8::/127":"reserved"}}`,
-			want:     []string{},
-			message:  "no free /128 block in 2001:db8::/127",
-		},
+	dir := t.TempDir()
+	writeNextFreeRegistry(t, dir, `{}`)
+	out, errOut, err := runCalcNextFree(t, dir, nil,
+		"2001:db8::/127", "--size", "128", "--all", "--format", formatJSON)
+	if err != nil {
+		t.Fatalf("next-free: %v (stderr = %q)", err, errOut)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			dir := t.TempDir()
-			writeNextFreeRegistry(t, dir, test.registry)
-			out, errOut, err := runCalcNextFree(t, dir, nil,
-				"2001:db8::/127", "--size", "128", "--all", "--format", formatJSON)
-			if err != nil || errOut != "" {
-				t.Fatalf("next-free: %v (stderr = %q)", err, errOut)
-			}
-			var result outputEnvelope
-			if decodeErr := json.Unmarshal([]byte(out), &result); decodeErr != nil {
-				t.Fatal(decodeErr)
-			}
-			if result.SchemaVersion != outputSchemaVersion ||
-				result.Command != commandCalcNextFree || result.Status != statusOK {
-				t.Errorf("unexpected envelope: %s", out)
-			}
-			if result.FreeBlocks == nil || !slices.Equal(*result.FreeBlocks, test.want) ||
-				result.Message != test.message {
-				t.Errorf("result = %s, want blocks %v and message %q", out, test.want, test.message)
-			}
-		})
+	if errOut != "" {
+		t.Fatalf("stderr = %q, want empty", errOut)
+	}
+	var result outputEnvelope
+	if decodeErr := json.Unmarshal([]byte(out), &result); decodeErr != nil {
+		t.Fatal(decodeErr)
+	}
+	if result.SchemaVersion != outputSchemaVersion ||
+		result.Command != commandCalcNextFree || result.Status != statusOK {
+		t.Errorf("unexpected envelope: %s", out)
+	}
+	want := []string{"2001:db8::/128", "2001:db8::1/128"}
+	if result.FreeBlocks == nil || !slices.Equal(*result.FreeBlocks, want) ||
+		result.Message != "suggested 2 free block(s)" {
+		t.Errorf("result = %s, want blocks %v", out, want)
+	}
+}
+
+// TestCalcNextFreeIPv6JSONExhaustion covers the exhaustion path for an IPv6
+// pool under --format json: exit 2, empty stdout, message on stderr. See
+// TestCalcNextFreeIPv6ExhaustionSanitizesStderr for the sanitized variant and
+// TestCalcNextFreeMultipleAndExhaustedOutput for the IPv4 case.
+func TestCalcNextFreeIPv6JSONExhaustion(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeNextFreeRegistry(t, dir, `{"subnetPools":{"2001:db8::/127":"reserved"}}`)
+	code, out, errOut := runCalcNextFreeCLI(t, dir, nil,
+		"2001:db8::/127", "--size", "128", "--all", "--format", formatJSON)
+	if code != exitUsage {
+		t.Errorf("exit code = %d, want %d (exitUsage)", code, exitUsage)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want empty on exhaustion", out)
+	}
+	if !strings.Contains(errOut, "no free /128 block in 2001:db8::/127") {
+		t.Errorf("stderr = %q, want exhaustion explanation", errOut)
 	}
 }
 
 func TestCalcNextFreeIPv6Sanitization(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name      string
-		format    string
-		exhausted bool
-		registry  string
+		name     string
+		format   string
+		registry string
 	}{
 		{name: "human suggestion", format: formatHuman, registry: `{}`},
 		{name: "JSON suggestion", format: formatJSON, registry: `{}`},
-		{
-			name: "human exhaustion", format: formatHuman, exhausted: true,
-			registry: `{"subnetPools":{"2001:db8::1/128":"reserved"}}`,
-		},
-		{
-			name: "JSON exhaustion", format: formatJSON, exhausted: true,
-			registry: `{"subnetPools":{"2001:db8::1/128":"reserved"}}`,
-		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -206,11 +198,39 @@ func TestCalcNextFreeIPv6Sanitization(t *testing.T) {
 			if strings.Contains(out, "2001:db8") || !strings.Contains(out, "cidr-") {
 				t.Errorf("expected sanitized CIDR: %s", out)
 			}
-			if test.exhausted && !strings.Contains(out, "no free /128 block") {
-				t.Errorf("expected exhaustion message: %s", out)
-			}
 			if test.format == formatJSON && !json.Valid([]byte(out)) {
 				t.Errorf("invalid JSON: %s", out)
+			}
+		})
+	}
+}
+
+// TestCalcNextFreeIPv6ExhaustionSanitizesStderr exercises the same identity
+// sanitization as TestCalcNextFreeIPv6Sanitization, but for the exhaustion
+// path: since exhaustion returns before emitOutput ever runs (see
+// executeCalcNextFree), the pool CIDR is only sanitized by runCLI's
+// sanitizeErrorIfNeeded on the way to real stderr -- root.Execute() alone
+// (as runCalcNextFree uses) never exercises that path, so this needs runCLI.
+func TestCalcNextFreeIPv6ExhaustionSanitizesStderr(t *testing.T) {
+	t.Parallel()
+	for _, format := range []string{formatHuman, formatJSON} {
+		t.Run(format, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeNextFreeRegistry(t, dir, `{"subnetPools":{"2001:db8::1/128":"reserved"}}`)
+			code, out, errOut := runCalcNextFreeCLI(t, dir, nil,
+				"2001:db8::1/128", "--size", "128", "--format", format, "--sanitize", "identity")
+			if code != exitUsage {
+				t.Errorf("exit code = %d, want %d (exitUsage)", code, exitUsage)
+			}
+			if out != "" {
+				t.Errorf("stdout = %q, want empty on exhaustion", out)
+			}
+			if !strings.Contains(errOut, "no free /128 block") {
+				t.Errorf("stderr = %q, want exhaustion explanation", errOut)
+			}
+			if strings.Contains(errOut, "2001:db8") || !strings.Contains(errOut, "cidr-") {
+				t.Errorf("expected sanitized CIDR in stderr: %s", errOut)
 			}
 		})
 	}

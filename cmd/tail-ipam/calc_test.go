@@ -83,6 +83,26 @@ func runCalcNextFree(t *testing.T, registryDir string, devices []deviceRecord, a
 	return outBuf.String(), errBuf.String(), err
 }
 
+// runCalcNextFreeCLI drives the full runCLI path (unlike runCalcNextFree,
+// which calls root.Execute() directly) so the returned exit code and stderr
+// text match what a real invocation prints -- SilenceErrors hands error
+// printing, including sanitization, to runCLI.
+func runCalcNextFreeCLI(
+	t *testing.T, registryDir string, devices []deviceRecord, args ...string,
+) (int, string, string) {
+	t.Helper()
+	var outBuf, errBuf bytes.Buffer
+	listDevices := func(context.Context, diagnostics.Logger) ([]deviceRecord, error) {
+		return devices, nil
+	}
+	code := runCLI(
+		context.Background(),
+		append([]string{"calc", "next-free"}, append(args, "--registry-dir", registryDir)...),
+		func(string) string { return "" }, &outBuf, &errBuf, listDevices,
+	)
+	return code, outBuf.String(), errBuf.String()
+}
+
 func writeNextFreeRegistry(t *testing.T, dir, contents string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, "local.ipam.hujson"), []byte(contents), 0o600); err != nil {
@@ -183,25 +203,21 @@ func TestCalcNextFreeMultipleAndExhaustedOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("exhaustion is successful", func(t *testing.T) {
+	t.Run("exhaustion is an output operation failure", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		writeNextFreeRegistry(t, dir, `{}`)
-		out, errOut, err := runCalcNextFree(t, dir, []deviceRecord{{
+		code, out, errOut := runCalcNextFreeCLI(t, dir, []deviceRecord{{
 			Name: "router", AdvertisedRoutes: []string{"10.0.0.0/24"},
 		}}, "10.0.0.0/24", "--size", "26", "--format", formatJSON)
-		if err != nil {
-			t.Fatalf("runCalcNextFree() error = %v (stderr = %q)", err, errOut)
+		if code != exitUsage {
+			t.Errorf("exit code = %d, want %d (exitUsage)", code, exitUsage)
 		}
-		var envelope outputEnvelope
-		if decodeErr := json.Unmarshal([]byte(out), &envelope); decodeErr != nil {
-			t.Fatalf("decode JSON output: %v\n%s", decodeErr, out)
+		if out != "" {
+			t.Errorf("stdout = %q, want empty on exhaustion", out)
 		}
-		if envelope.FreeBlocks == nil || len(*envelope.FreeBlocks) != 0 {
-			t.Errorf("FreeBlocks = %#v, want empty list", envelope.FreeBlocks)
-		}
-		if !strings.Contains(envelope.Message, "no free /26 block") {
-			t.Errorf("Message = %q, want exhaustion explanation", envelope.Message)
+		if !strings.Contains(errOut, "no free /26 block") {
+			t.Errorf("stderr = %q, want exhaustion explanation", errOut)
 		}
 	})
 }

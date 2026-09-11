@@ -38,6 +38,7 @@ const (
 	commandCalcNextFree   = commandCalc + " next-free"
 	statusOK              = "ok"
 	statusNoChanges       = "no_changes"
+	statusExhausted       = "exhausted"
 )
 
 func changedStatus(changed bool) string {

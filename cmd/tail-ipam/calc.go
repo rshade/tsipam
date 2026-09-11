@@ -103,6 +103,12 @@ func executeCalcNextFree(
 	if err != nil {
 		return err
 	}
+	// Mirrors calc split's ipcalc.ErrTooManyChildren precedent: a refusal
+	// returns before anything reaches stdout, so the message lands on
+	// stderr alone and downstream pipe consumers see empty input.
+	if result.Status == statusExhausted {
+		return errors.New(result.Message)
+	}
 	return emitOutput(cmd.OutOrStdout(), state.format, result, outputSanitizer)
 }
 
@@ -160,10 +166,12 @@ func nextFreeOutput(
 	}
 	blocks := nextFreeBlocks(pool, size, nextFreeTaken(reservations, devices), count, all)
 	message := fmt.Sprintf("suggested %d free block(s)", len(blocks))
+	status := statusOK
 	if len(blocks) == 0 {
 		message = fmt.Sprintf("no free /%d block in %s", size, pool)
+		status = statusExhausted
 	}
-	result := newOutput(commandCalcNextFree, statusOK, message, tailnet)
+	result := newOutput(commandCalcNextFree, status, message, tailnet)
 	result.FreeBlocks = &blocks
 	return result, nil
 }
