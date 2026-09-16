@@ -10,7 +10,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
-	goa.design/goa/v3 v3.31.0
+	goa.design/goa/v3 v3.31.1
 	tailscale.com/client/tailscale/v2 v2.10.1
 )
 
