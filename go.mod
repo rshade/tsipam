@@ -1,6 +1,6 @@
 module github.com/rshade/tailscale-utils/tail-ipam
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/jaxxstorm/tscli v0.10.0
@@ -11,7 +11,7 @@ require (
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb
 	goa.design/goa/v3 v3.34.0
-	tailscale.com/client/tailscale/v2 v2.11.0
+	tailscale.com/client/tailscale/v2 v2.12.0
 )
 
 require (
@@ -53,7 +53,7 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.59.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
