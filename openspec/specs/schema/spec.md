@@ -24,8 +24,9 @@ appear in the document's top-level flags list.
 - **THEN** the JSON document's `commands` array includes `devices`,
   `devices list`, `site-id`, `site-id list`, `site-id reserve`,
   `site-id release`, `subnet`, `subnet list`, `subnet reserve`,
-  `subnet release`, `service`, `service list`, `service reserve`,
-  `service release`, `calc`, `calc split`, and `calc info`
+  `subnet release`, `subnet allocate`, `service`, `service list`,
+  `service reserve`, `service release`, `calc`, `calc split`, and
+  `calc info`
 
 #### Scenario: Registry commands document their shared flags
 
@@ -39,6 +40,13 @@ appear in the document's top-level flags list.
 - **WHEN** the schema document is inspected for `calc aggregate`
 - **THEN** it lists `from-registry`, `registry-dir`, and `tailnet`, and
   command help explains the mutually exclusive input sources
+
+#### Scenario: Schema exposes subnet allocation
+
+- **WHEN** the schema document is inspected for `subnet allocate`
+- **THEN** it lists `size`, `owner`, `description`, `ticket`,
+  `reserved-at`, `registry-dir`, and `tailnet`, `size` is marked required,
+  and its usage line reads `subnet allocate <pool-cidr> <site-name>`
 
 ### Requirement: Schema documents exit codes and sanitization behavior
 
