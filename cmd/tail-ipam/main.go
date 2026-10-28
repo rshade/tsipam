@@ -417,6 +417,8 @@ const (
 	kindPath     = "path"
 	kindOwner    = "owner"
 	kindHostname = "hostname"
+	kindLogin    = "login"
+	kindTag      = "tag"
 
 	svcSelectorToken = "svc:"
 )

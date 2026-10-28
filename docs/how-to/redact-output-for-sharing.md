@@ -23,9 +23,8 @@ tail-ipam subnet list
 # stderr: tail-ipam: TAILSCALE_SANITIZE=identity is active; output is sanitized
 ```
 
-`strict` is accepted for flag compatibility with the other tools in this
-repository and is currently equivalent to `identity` for `tail-ipam`. `off`
-disables sanitization.
+`strict` matches `identity`, except that device tags stay visible at
+`identity` and are redacted at `strict`. `off` disables sanitization.
 
 ## What changes and what does not
 
@@ -33,10 +32,15 @@ Redacted, on stdout and stderr alike:
 
 - Tailnet names and registry aliases
 - Site labels, service identities, reservation owners
-- Device names, addresses, advertised routes
+- Device names, addresses, advertised routes, enabled routes, users, and hostnames
 - Reserved subnet CIDRs, reserved service addresses
 - Registry directory paths in error messages
 - Ipset names and CIDRs in `check-policy` output
+
+`devices list` redacts device names, addresses, advertised routes, enabled
+routes, users, and hostnames at `identity`. Device tags stay visible at
+`identity`, because they are policy vocabulary, and are redacted at `strict`.
+OS, `authorized`, and `ephemeral` stay visible at both levels.
 
 Left as they are:
 

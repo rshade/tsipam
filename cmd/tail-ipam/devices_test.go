@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -65,8 +66,13 @@ func newDevicesAPIServer(t *testing.T) *httptest.Server {
 			status: http.StatusOK,
 			body: `{"devices":[` +
 				`{"name":"router-1","addresses":["100.64.0.1","fd7a:115c:a1e0::1"],` +
-				`"AdvertisedRoutes":["10.0.0.0/24","10.1.0.0/24"]},` +
-				`{"name":"laptop-1","addresses":["100.64.0.2"]}` +
+				`"AdvertisedRoutes":["10.0.0.0/24","10.1.0.0/24"],` +
+				`"enabledRoutes":["10.0.0.0/24"],"tags":["tag:subnet"],` +
+				`"user":"alice@example.com","os":"linux","hostname":"router-1",` +
+				`"authorized":true,"isEphemeral":false},` +
+				`{"name":"laptop-1","addresses":["100.64.0.2"],"tags":["tag:client"],` +
+				`"user":"bob@example.com","os":"macOS","hostname":"laptop",` +
+				`"authorized":true,"isEphemeral":true}` +
 				`]}`,
 		},
 		"/api/v2/tailnet/error.example.com/devices": {
@@ -241,6 +247,9 @@ func TestDevicesListTSCLIPath(t *testing.T) {
 	testDevicesParallelClientConstruction(t)
 	testDevicesOAuthSuccess(t)
 	testDevicesAPIErrorIsSanitized(t)
+	testDevicesInventoryJSON(t)
+	testDevicesTagFilter(t)
+	testDevicesInventorySanitization(t)
 	testPlanningTSCLIPath(t)
 }
 
@@ -291,8 +300,11 @@ func testDevicesSuccessfulRoundTrip(t *testing.T) {
 			"TAILSCALE_TAILNET": "success.example.com",
 			"TAILSCALE_API_KEY": "success-key",
 		}))
-		want := "router-1\t[100.64.0.1 fd7a:115c:a1e0::1]\troutes=[10.0.0.0/24 10.1.0.0/24]\n" +
-			"laptop-1\t[100.64.0.2]\troutes=[]\n"
+		want := "router-1\t[100.64.0.1 fd7a:115c:a1e0::1]\troutes=[10.0.0.0/24 10.1.0.0/24]\t" +
+			"enabled=[10.0.0.0/24]\tpending=[10.1.0.0/24]\ttags=[tag:subnet]\t" +
+			"user=alice@example.com\tos=linux\thostname=router-1\tauthorized=true\tephemeral=false\n" +
+			"laptop-1\t[100.64.0.2]\troutes=[]\tenabled=[]\tpending=[]\ttags=[tag:client]\t" +
+			"user=bob@example.com\tos=macOS\thostname=laptop\tauthorized=true\tephemeral=true\n"
 		assertDevicesSuccess(t, code, stdout, stderr, want)
 	})
 }
@@ -334,7 +346,8 @@ func testDevicesParallelClientConstruction(t *testing.T) {
 				"TAILSCALE_TAILNET": testCase.tailnet,
 				"TAILSCALE_API_KEY": testCase.apiKey,
 			}))
-			want := fmt.Sprintf("%s\t[]\troutes=[]\n", testCase.device)
+			want := testCase.device + "\t[]\troutes=[]\tenabled=[]\tpending=[]\ttags=[]\t" +
+				"user=\tos=\thostname=\tauthorized=false\tephemeral=false\n"
 			assertDevicesSuccess(t, code, stdout, stderr, want)
 		})
 	}
@@ -356,7 +369,7 @@ func testDevicesOAuthSuccess(t *testing.T) {
 			"TAILSCALE_OAUTH_CLIENT_ID":     "oauth-client-id",
 			"TAILSCALE_OAUTH_CLIENT_SECRET": "oauth-client-secret",
 		}))
-		want := "oauth-device\t[]\troutes=[]\n"
+		want := "oauth-device\t[]\troutes=[]\tenabled=[]\tpending=[]\ttags=[]\tuser=\tos=\thostname=\tauthorized=false\tephemeral=false\n"
 		assertDevicesSuccess(t, code, stdout, stderr, want)
 	})
 }
@@ -385,4 +398,156 @@ func testDevicesAPIErrorIsSanitized(t *testing.T) {
 			t.Errorf("stderr = %q, want the wrapped error with a sanitized tailnet placeholder", stderr)
 		}
 	})
+}
+
+func executeDevicesListArgs(getenv func(string) string, args ...string) (int, string, string) {
+	var stdout, stderr bytes.Buffer
+	code := runCLI(
+		context.Background(), append([]string{commandDevices, commandList}, args...), getenv,
+		&stdout, &stderr, nil,
+	)
+	return code, stdout.String(), stderr.String()
+}
+
+func testDevicesInventoryJSON(t *testing.T) {
+	t.Helper()
+	t.Run("json carries inventory fields and empty slices", func(t *testing.T) {
+		t.Parallel()
+		code, stdout, stderr := executeDevicesListArgs(devicesEnv(map[string]string{
+			"TAILSCALE_TAILNET": "success.example.com",
+			"TAILSCALE_API_KEY": "success-key",
+		}), "--format", formatJSON)
+		if code != exitOK {
+			t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
+		}
+		var envelope struct {
+			Devices []map[string]json.RawMessage `json:"devices"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+			t.Fatalf("decode devices list: %v", err)
+		}
+		if len(envelope.Devices) != 2 {
+			t.Fatalf("devices = %d, want 2", len(envelope.Devices))
+		}
+		assertDeviceJSON(t, envelope.Devices[0], envelope.Devices[1])
+	})
+}
+
+func testDevicesTagFilter(t *testing.T) {
+	t.Helper()
+	t.Run("tag filter accepts a prefix-less value", func(t *testing.T) {
+		t.Parallel()
+		code, stdout, stderr := executeDevicesListArgs(devicesEnv(map[string]string{
+			"TAILSCALE_TAILNET": "success.example.com",
+			"TAILSCALE_API_KEY": "success-key",
+		}), "--tag", "subnet")
+		if code != exitOK || stderr != "" {
+			t.Fatalf("exit = %d stderr = %q", code, stderr)
+		}
+		if !strings.Contains(stdout, "tag:subnet") || strings.Contains(stdout, "tag:client") {
+			t.Errorf("stdout = %q, want only the subnet-tagged device", stdout)
+		}
+	})
+	t.Run("unknown tag lists nothing", func(t *testing.T) {
+		t.Parallel()
+		code, stdout, stderr := executeDevicesListArgs(devicesEnv(map[string]string{
+			"TAILSCALE_TAILNET": "success.example.com",
+			"TAILSCALE_API_KEY": "success-key",
+		}), "--tag", "tag:missing")
+		if code != exitOK || stderr != "" || stdout != "" {
+			t.Errorf("exit=%d stdout=%q stderr=%q, want an empty success", code, stdout, stderr)
+		}
+	})
+	t.Run("empty tag name is a usage error", func(t *testing.T) {
+		t.Parallel()
+		code, stdout, stderr := executeDevicesListArgs(devicesEnv(map[string]string{
+			"TAILSCALE_TAILNET": "success.example.com",
+			"TAILSCALE_API_KEY": "success-key",
+		}), "--tag", "tag:")
+		assertUsageFailure(t, code, stdout)
+		if !strings.Contains(stderr, "tag name is empty") {
+			t.Errorf("stderr = %q, want the empty tag name", stderr)
+		}
+	})
+}
+
+func testDevicesInventorySanitization(t *testing.T) {
+	t.Helper()
+	baseEnv := map[string]string{
+		"TAILSCALE_TAILNET": "success.example.com",
+		"TAILSCALE_API_KEY": "success-key",
+		sanitize.KeyEnv:     testSanitizeKey,
+	}
+	t.Run("identity keeps tags and redacts user and hostname", func(t *testing.T) {
+		t.Parallel()
+		env := maps.Clone(baseEnv)
+		env[sanitize.LevelEnv] = string(sanitize.Identity)
+		stdout := deviceListStdout(t, env)
+		assertContains(t, stdout,
+			[]string{"alice@example.com", "bob@example.com", "router-1", "laptop-1", "100.64.0.1", "10.0.0.0/24"},
+			[]string{"tag:subnet", "tag:client", "linux", "macOS", "authorized=true"})
+	})
+	t.Run("strict also redacts tags", func(t *testing.T) {
+		t.Parallel()
+		env := maps.Clone(baseEnv)
+		env[sanitize.LevelEnv] = string(sanitize.Strict)
+		stdout := deviceListStdout(t, env)
+		assertContains(t, stdout,
+			[]string{"tag:subnet", "tag:client", "alice@example.com", "laptop"},
+			[]string{"linux", "tag-"})
+	})
+}
+
+func deviceListStdout(t *testing.T, env map[string]string) string {
+	t.Helper()
+	code, stdout, stderr := executeDevicesListArgs(devicesEnv(env))
+	if code != exitOK {
+		t.Fatalf("exit = %d stderr = %s", code, stderr)
+	}
+	return stdout
+}
+
+func assertContains(t *testing.T, stdout string, absent, present []string) {
+	t.Helper()
+	for _, leaked := range absent {
+		if strings.Contains(stdout, leaked) {
+			t.Errorf("output still contains %q\n%s", leaked, stdout)
+		}
+	}
+	for _, kept := range present {
+		if !strings.Contains(stdout, kept) {
+			t.Errorf("output missing %q\n%s", kept, stdout)
+		}
+	}
+}
+
+func assertDeviceJSON(t *testing.T, router, laptop map[string]json.RawMessage) {
+	t.Helper()
+	for _, key := range []string{
+		"name", "addresses", "advertised_routes", "enabled_routes", "tags",
+		"user", "os", "hostname", "authorized", "ephemeral",
+	} {
+		if _, ok := router[key]; !ok {
+			t.Errorf("router missing %s", key)
+		}
+	}
+	assertJSONStrings(t, router["enabled_routes"], []string{"10.0.0.0/24"})
+	assertJSONStrings(t, router["tags"], []string{"tag:subnet"})
+	assertJSONStrings(t, laptop["enabled_routes"], []string{})
+	assertJSONStrings(t, laptop["tags"], []string{"tag:client"})
+	var authorized, ephemeral bool
+	if err := json.Unmarshal(router["authorized"], &authorized); err != nil || !authorized {
+		t.Errorf("authorized = %s", router["authorized"])
+	}
+	if err := json.Unmarshal(laptop["ephemeral"], &ephemeral); err != nil || !ephemeral {
+		t.Errorf("ephemeral = %s", laptop["ephemeral"])
+	}
+}
+
+func assertJSONStrings(t *testing.T, raw json.RawMessage, want []string) {
+	t.Helper()
+	var got []string
+	if err := json.Unmarshal(raw, &got); err != nil || !slices.Equal(got, want) {
+		t.Errorf("json = %s, want %q", raw, want)
+	}
 }

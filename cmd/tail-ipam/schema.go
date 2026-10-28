@@ -85,10 +85,11 @@ func printSchema(writer io.Writer, root *cobra.Command) error {
 			"comment-preserving registry and read-only control-plane inventory.",
 		Sanitization: "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; " +
 			"a non-off environment value overrides --sanitize. Device names, addresses, and routes; " +
-			"tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; " +
-			"reserved service addresses; and UDP-port site and device labels are replaced. " +
-			"UDP port numbers remain visible. strict is accepted for cross-tool " +
-			"flag compatibility and is currently equivalent to identity for tail-ipam. " +
+			"device users and hostnames; tailnet routing keys; site names; service identities; reservation owners; " +
+			"reserved subnet CIDRs; reserved service addresses; and UDP-port site and device labels are replaced. " +
+			"Device tags stay visible at identity as policy vocabulary and are redacted at strict. " +
+			"Device OS, authorized, and ephemeral stay visible. UDP port numbers remain visible. " +
+			"strict otherwise matches identity. " +
 			"calc split, positional aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; " +
 			"calc aggregate --from-registry and calc next-free output reflects registry or live-route data and is sanitized. " +
 			"plan/check redact comparison identities and both tailnet sources; numeric site IDs and drift counts remain visible. " +

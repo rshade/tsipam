@@ -132,6 +132,13 @@ type deviceRecord struct {
 	Name             string   `json:"name"`
 	Addresses        []string `json:"addresses"`
 	AdvertisedRoutes []string `json:"advertised_routes"`
+	EnabledRoutes    []string `json:"enabled_routes"`
+	Tags             []string `json:"tags"`
+	User             string   `json:"user"`
+	OS               string   `json:"os"`
+	Hostname         string   `json:"hostname"`
+	Authorized       bool     `json:"authorized"`
+	Ephemeral        bool     `json:"ephemeral"`
 }
 
 // outputEnvelope is the owned, versioned machine contract shared by every
@@ -293,12 +300,38 @@ func renderReservationLine(writer io.Writer, key, target string, metadata reserv
 
 func renderDevices(writer io.Writer, devices []deviceRecord) error {
 	for _, device := range devices {
-		if _, err := fmt.Fprintf(writer, "%s\t%v\troutes=%v\n",
-			device.Name, device.Addresses, device.AdvertisedRoutes); err != nil {
+		if _, err := fmt.Fprintln(writer, formatDeviceLine(device)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// formatDeviceLine keeps the historical name, address, and routes columns in
+// place and appends the inventory fields. pending is the advertised set minus
+// the enabled set, so a route that is requested but not approved is visible
+// without changing what routes= means.
+func formatDeviceLine(device deviceRecord) string {
+	return fmt.Sprintf(
+		"%s\t%v\troutes=%v\tenabled=%v\tpending=%v\ttags=%v\tuser=%s\tos=%s\thostname=%s\tauthorized=%t\tephemeral=%t",
+		device.Name, device.Addresses, device.AdvertisedRoutes, device.EnabledRoutes,
+		pendingRoutes(device.AdvertisedRoutes, device.EnabledRoutes), device.Tags,
+		device.User, device.OS, device.Hostname, device.Authorized, device.Ephemeral,
+	)
+}
+
+func pendingRoutes(advertised, enabled []string) []string {
+	approved := make(map[string]struct{}, len(enabled))
+	for _, route := range enabled {
+		approved[route] = struct{}{}
+	}
+	pending := make([]string, 0)
+	for _, route := range advertised {
+		if _, ok := approved[route]; !ok {
+			pending = append(pending, route)
+		}
+	}
+	return pending
 }
 
 // renderBlockInfo writes one tab-separated fact<TAB>value line per block
@@ -406,11 +439,7 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 	if input.Devices != nil {
 		devices := make([]deviceRecord, len(*input.Devices))
 		for index, device := range *input.Devices {
-			devices[index] = deviceRecord{
-				Name:             output.Value(kindHostname, device.Name),
-				Addresses:        sanitizeNetworkValues(device.Addresses, output),
-				AdvertisedRoutes: sanitizeNetworkValues(device.AdvertisedRoutes, output),
-			}
+			devices[index] = sanitizeDeviceRecord(device, output)
 		}
 		result.Devices = &devices
 	}
@@ -487,13 +516,50 @@ func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer)
 		return
 	}
 	for _, device := range *input.Devices {
-		output.Value(kindHostname, device.Name)
-		for _, value := range device.Addresses {
-			output.Value(networkKind(value), value)
+		registerDeviceIdentities(device, output)
+	}
+}
+
+func registerDeviceIdentities(device deviceRecord, output *sanitize.Sanitizer) {
+	output.Value(kindHostname, device.Name)
+	output.Value(kindLogin, device.User)
+	output.Value(kindHostname, device.Hostname)
+	registerNetworkValues(device.Addresses, output)
+	registerNetworkValues(device.AdvertisedRoutes, output)
+	registerNetworkValues(device.EnabledRoutes, output)
+	if output.Level() != sanitize.Strict {
+		return
+	}
+	for _, tag := range device.Tags {
+		output.Value(kindTag, tag)
+	}
+}
+
+func registerNetworkValues(values []string, output *sanitize.Sanitizer) {
+	for _, value := range values {
+		output.Value(networkKind(value), value)
+	}
+}
+
+func sanitizeDeviceRecord(device deviceRecord, output *sanitize.Sanitizer) deviceRecord {
+	tags := device.Tags
+	if output.Level() == sanitize.Strict {
+		tags = make([]string, len(device.Tags))
+		for index, tag := range device.Tags {
+			tags[index] = output.Value(kindTag, tag)
 		}
-		for _, value := range device.AdvertisedRoutes {
-			output.Value(networkKind(value), value)
-		}
+	}
+	return deviceRecord{
+		Name:             output.Value(kindHostname, device.Name),
+		Addresses:        sanitizeNetworkValues(device.Addresses, output),
+		AdvertisedRoutes: sanitizeNetworkValues(device.AdvertisedRoutes, output),
+		EnabledRoutes:    sanitizeNetworkValues(device.EnabledRoutes, output),
+		Tags:             tags,
+		User:             output.Value(kindLogin, device.User),
+		OS:               device.OS,
+		Hostname:         output.Value(kindHostname, device.Hostname),
+		Authorized:       device.Authorized,
+		Ephemeral:        device.Ephemeral,
 	}
 }
 

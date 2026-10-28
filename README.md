@@ -97,8 +97,8 @@ CIDR arithmetic, and inspect the live tailnet:
 
 #### `devices list`
 
-Read-only command that lists all devices on the tailnet, including their addresses
-and advertised routes. Requires the Tailscale API client to be configured:
+Read-only command that lists all devices on the tailnet, including their addresses,
+advertised and enabled routes, tags, user, OS, and hostname. Requires the Tailscale API client to be configured:
 
 ```bash
 export TAILSCALE_TAILNET=myorg
@@ -115,10 +115,21 @@ export TAILSCALE_OAUTH_CLIENT_SECRET=...
 tail-ipam devices list
 ```
 
-Human output is tab-separated (device name, addresses, advertised routes).
-Use `-format json` for the versioned machine contract. Set
-`TAILSCALE_SANITIZE=identity` or `strict` when the output must not expose
-device names, addresses, routes, or the tailnet name.
+Human output is tab-separated. The first three columns stay the device name,
+addresses, and `routes=` advertised list. Later columns are `enabled=`,
+`pending=` (advertised routes that are not enabled), `tags=`, `user=`,
+`os=`, `hostname=`, `authorized=`, and `ephemeral=`. `--tag subnet` keeps
+only devices carrying `tag:subnet`.
+
+Use `-format json` for the versioned machine contract. Each device object
+includes `tags`, `enabled_routes`, `authorized`, `ephemeral`, `user`, `os`,
+and `hostname` beside `name`, `addresses`, and `advertised_routes`. Empty
+slices are `[]`.
+
+Set `TAILSCALE_SANITIZE=identity` or `strict` when the output must not expose
+device names, addresses, routes, users, hostnames, or the tailnet name.
+Tags stay visible at `identity` and are redacted at `strict`. OS,
+`authorized`, and `ephemeral` stay visible at both levels.
 
 #### `plan` and `check`
 

@@ -437,7 +437,8 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 		t.Errorf("reservationMetadataOutput fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[deviceRecord](
-		"Name", "Addresses", "AdvertisedRoutes",
+		"Name", "Addresses", "AdvertisedRoutes", "EnabledRoutes", "Tags",
+		"User", "OS", "Hostname", "Authorized", "Ephemeral",
 	); len(missing) != 0 {
 		t.Errorf("deviceRecord fields without an explicit sanitization decision: %v", missing)
 	}

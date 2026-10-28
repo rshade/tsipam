@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -27,13 +29,18 @@ func newDevicesCommand(state *commandState, listDevices devicesListFunc) *cobra.
 }
 
 func newDevicesListCommand(state *commandState, listDevices devicesListFunc) *cobra.Command {
-	return &cobra.Command{
+	var tag string
+	command := &cobra.Command{
 		Use:           commandList,
-		Short:         "List devices with their addresses and advertised routes.",
+		Short:         "List devices with addresses, routes, tags, and identity fields.",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			filter, err := normalizeDeviceTag(tag)
+			if err != nil {
+				return err
+			}
 			tailnet := state.getenv("TAILSCALE_TAILNET")
 			outputSanitizer, err := state.outputSanitizer(tailnet)
 			if err != nil {
@@ -46,6 +53,9 @@ func newDevicesListCommand(state *commandState, listDevices devicesListFunc) *co
 			if err != nil {
 				return err
 			}
+			if filter != "" {
+				records = filterDevicesByTag(records, filter)
+			}
 			result := newOutput(
 				commandDevicesList, statusOK,
 				fmt.Sprintf("listed %d device(s)", len(records)), tailnet,
@@ -54,6 +64,33 @@ func newDevicesListCommand(state *commandState, listDevices devicesListFunc) *co
 			return emitOutput(cmd.OutOrStdout(), state.format, result, outputSanitizer)
 		},
 	}
+	command.Flags().StringVar(&tag, "tag", "",
+		"Show only devices carrying this tag. A value without the tag: prefix is treated as tag:<value>.")
+	return command
+}
+
+func normalizeDeviceTag(tag string) (string, error) {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return "", nil
+	}
+	if !strings.HasPrefix(tag, "tag:") {
+		tag = "tag:" + tag
+	}
+	if tag == "tag:" {
+		return "", errors.New("tag name is empty")
+	}
+	return tag, nil
+}
+
+func filterDevicesByTag(records []deviceRecord, tag string) []deviceRecord {
+	matched := make([]deviceRecord, 0)
+	for _, record := range records {
+		if slices.Contains(record.Tags, tag) {
+			matched = append(matched, record)
+		}
+	}
+	return matched
 }
 
 // collectDevices adapts internal/devices' collected records into the CLI's
@@ -73,6 +110,13 @@ func collectDevices(
 			Name:             device.Name,
 			Addresses:        device.Addresses,
 			AdvertisedRoutes: device.AdvertisedRoutes,
+			EnabledRoutes:    device.EnabledRoutes,
+			Tags:             device.Tags,
+			User:             device.User,
+			OS:               device.OS,
+			Hostname:         device.Hostname,
+			Authorized:       device.Authorized,
+			Ephemeral:        device.Ephemeral,
 		}
 	}
 	return records, nil

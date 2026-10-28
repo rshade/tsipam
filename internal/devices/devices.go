@@ -21,13 +21,20 @@ import (
 // APITimeout bounds every Tailscale API request.
 const APITimeout = 30 * time.Second
 
-// Device is a normalized device record: nil address/route lists from the API
-// are represented as empty slices so callers never have to special-case a nil
-// slice separately from an empty one.
+// Device is a normalized device record: nil address, route, and tag lists from
+// the API are represented as empty slices so callers never have to special-case
+// a nil slice separately from an empty one.
 type Device struct {
 	Name             string
 	Addresses        []string
 	AdvertisedRoutes []string
+	EnabledRoutes    []string
+	Tags             []string
+	User             string
+	OS               string
+	Hostname         string
+	Authorized       bool
+	Ephemeral        bool
 }
 
 // clientMu serializes access to viper's process-global config: tscli.New reads
@@ -70,6 +77,13 @@ func List(ctx context.Context, getenv func(string) string, logger diagnostics.Lo
 			Name:             device.Name,
 			Addresses:        nonNilStrings(device.Addresses),
 			AdvertisedRoutes: nonNilStrings(device.AdvertisedRoutes),
+			EnabledRoutes:    nonNilStrings(device.EnabledRoutes),
+			Tags:             nonNilStrings(device.Tags),
+			User:             device.User,
+			OS:               device.OS,
+			Hostname:         device.Hostname,
+			Authorized:       device.Authorized,
+			Ephemeral:        device.IsEphemeral,
 		}
 	}
 	diagnostics.Debug(logger, "device collection complete", "count", len(devices))

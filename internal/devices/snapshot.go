@@ -55,6 +55,13 @@ func CollectSnapshot(
 		result.Devices[index] = Device{
 			Name: device.Name, Addresses: nonNilStrings(device.Addresses),
 			AdvertisedRoutes: nonNilStrings(device.AdvertisedRoutes),
+			EnabledRoutes:    nonNilStrings(device.EnabledRoutes),
+			Tags:             nonNilStrings(device.Tags),
+			User:             device.User,
+			OS:               device.OS,
+			Hostname:         device.Hostname,
+			Authorized:       device.Authorized,
+			Ephemeral:        device.IsEphemeral,
 		}
 	}
 	for index, service := range services {

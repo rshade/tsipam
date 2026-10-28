@@ -43,7 +43,7 @@ Failures write nothing to stdout in either format; see
 | `subnet list` | `subnet_pools` | array of `{cidr, site, …metadata}` |
 | `service list` | `service_addresses` | array of `{address, service, …metadata}` |
 | `port list` | `udp_ports` | array of `{site, port, device}` |
-| `devices list` | `devices` | array of `{name, addresses, advertised_routes}` |
+| `devices list` | `devices` | array of `{name, addresses, advertised_routes, enabled_routes, tags, user, os, hostname, authorized, ephemeral}` |
 | `calc info` | `block_info` | `{prefix, network, broadcast?, first_usable, last_usable, usable_hosts}` |
 | `calc split` | `subnets` | array of CIDR strings |
 | `calc aggregate` | `supernets` | array of CIDR strings, IPv4 before IPv6 |

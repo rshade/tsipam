@@ -3,6 +3,7 @@
 package smoke_test
 
 import (
+	"encoding/json"
 	"net/netip"
 	"os"
 	"slices"
@@ -60,19 +61,54 @@ func TestLiveDevicesList(t *testing.T) {
 	expect(t, human, exitOK)
 	res := run(t, env, "devices", "list", flagFormat, formatJSON)
 	expect(t, res, exitOK)
-	var devices []struct {
-		Name string `json:"name"`
-	}
+	var devices []map[string]json.RawMessage
 	decodeEnvelope(t, res.stdout).field(t, "devices", &devices)
 	if len(devices) != len(lines(human.stdout)) {
 		t.Errorf("JSON lists %d devices, human output %d rows", len(devices), len(lines(human.stdout)))
+	}
+	for _, device := range devices {
+		for _, key := range []string{
+			"name", "addresses", "advertised_routes", "enabled_routes", "tags",
+			"user", "os", "hostname", "authorized", "ephemeral",
+		} {
+			if _, ok := device[key]; !ok {
+				t.Errorf("device missing %s", key)
+			}
+		}
 	}
 	env["TAILSCALE_SANITIZE"] = "identity"
 	res = run(t, env, "devices", "list", flagFormat, formatJSON)
 	expect(t, res, exitOK)
 	for _, device := range devices {
-		containsNone(t, res.stdout, device.Name)
+		for _, key := range []string{"name", "user", "hostname"} {
+			if value := jsonString(t, device[key]); value != "" {
+				containsNone(t, res.stdout, value)
+			}
+		}
+		for _, tag := range jsonStrings(t, device["tags"]) {
+			if tag != "" && !strings.Contains(res.stdout, tag) {
+				t.Errorf("identity output dropped tag %q", tag)
+			}
+		}
 	}
+}
+
+func jsonString(t *testing.T, raw json.RawMessage) string {
+	t.Helper()
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		t.Fatalf("decode string: %v", err)
+	}
+	return value
+}
+
+func jsonStrings(t *testing.T, raw json.RawMessage) []string {
+	t.Helper()
+	var values []string
+	if err := json.Unmarshal(raw, &values); err != nil {
+		t.Fatalf("decode strings: %v", err)
+	}
+	return values
 }
 
 func TestLivePlanCheckRoundTrip(t *testing.T) {

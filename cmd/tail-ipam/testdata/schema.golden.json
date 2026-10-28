@@ -3,7 +3,7 @@
   "version": "tail-ipam dev",
   "schema_version": "1",
   "description": "Allocate and plan Tailscale address space through a local, comment-preserving registry and read-only control-plane inventory.",
-  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; reserved service addresses; and UDP-port site and device labels are replaced. UDP port numbers remain visible. strict is accepted for cross-tool flag compatibility and is currently equivalent to identity for tail-ipam. calc split, positional aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; calc aggregate --from-registry and calc next-free output reflects registry or live-route data and is sanitized. plan/check redact comparison identities and both tailnet sources; numeric site IDs and drift counts remain visible. check-policy redacts ipset names, CIDRs, site labels, and registry aliases; drift counts remain visible. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
+  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; device users and hostnames; tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; reserved service addresses; and UDP-port site and device labels are replaced. Device tags stay visible at identity as policy vocabulary and are redacted at strict. Device OS, authorized, and ephemeral stay visible. UDP port numbers remain visible. strict otherwise matches identity. calc split, positional aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; calc aggregate --from-registry and calc next-free output reflects registry or live-route data and is sanitized. plan/check redact comparison identities and both tailnet sources; numeric site IDs and drift counts remain visible. check-policy redacts ipset names, CIDRs, site labels, and registry aliases; drift counts remain visible. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
   "flags": [
     {
       "name": "format",
@@ -151,8 +151,15 @@
     },
     {
       "name": "devices list",
-      "summary": "List devices with their addresses and advertised routes.",
-      "usage": "devices list"
+      "summary": "List devices with addresses, routes, tags, and identity fields.",
+      "usage": "devices list",
+      "flags": [
+        {
+          "name": "tag",
+          "usage": "Show only devices carrying this tag. A value without the tag: prefix is treated as tag:\u003cvalue\u003e.",
+          "default": ""
+        }
+      ]
     },
     {
       "name": "plan",
