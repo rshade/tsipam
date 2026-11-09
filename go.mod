@@ -3,7 +3,7 @@ module github.com/rshade/tailscale-utils/tail-ipam
 go 1.27.3
 
 require (
-	github.com/jaxxstorm/tscli v0.10.0
+	github.com/jaxxstorm/tscli v0.12.0
 	github.com/rshade/tailscale-utils/policycore v0.0.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.1.0
