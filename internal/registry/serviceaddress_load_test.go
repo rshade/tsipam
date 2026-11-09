@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rshade/tailscale-utils/policycore/hujsonedit"
+	"github.com/rshade/tsacl/pkg/policycore/hujsonedit"
 )
 
 func TestLoadServiceAddressesAbsentEmptyAndValid(t *testing.T) {

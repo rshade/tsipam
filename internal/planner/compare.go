@@ -3,7 +3,8 @@ package planner
 import (
 	"net/netip"
 
-	"github.com/rshade/tailscale-utils/policycore/ipcalc"
+	"github.com/rshade/tsacl/pkg/ipcalc"
+
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
 

@@ -13,7 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tsacl/pkg/policycore/sanitize"
+
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 )
 

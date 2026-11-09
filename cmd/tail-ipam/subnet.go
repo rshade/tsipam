@@ -8,7 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tsacl/pkg/policycore/sanitize"
+
 	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/loopback"

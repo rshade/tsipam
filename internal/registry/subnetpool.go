@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rshade/tailscale-utils/policycore/addrspace"
-	"github.com/rshade/tailscale-utils/policycore/hujsonedit"
-	"github.com/rshade/tailscale-utils/policycore/ipcalc"
+	"github.com/rshade/tsacl/pkg/ipcalc"
+	"github.com/rshade/tsacl/pkg/policycore/addrspace"
+	"github.com/rshade/tsacl/pkg/policycore/hujsonedit"
+
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 )
 
@@ -83,7 +84,7 @@ func NormalizeSubnetCIDR(cidr string) (string, error) {
 
 // canonicalizeSubnetPools builds the canonical subnet-pool view and validates
 // that no two pools belonging to different sites overlap. The overlap check
-// deliberately uses policycore/addrspace's shared primitive so registry,
+// deliberately uses tsacl policycore/addrspace's shared primitive so registry,
 // policy, and audit consumers cannot drift on CIDR semantics.
 func canonicalizeSubnetPools(raw map[string]Entry) (map[string]Entry, map[string]string, error) {
 	if len(raw) == 0 {

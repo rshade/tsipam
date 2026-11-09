@@ -81,7 +81,8 @@ commands but not site-ID, subnet, or service commands, and vice versa.
 ## Writes
 
 Every reserve and release rewrites the whole file through
-`policycore/hujsonedit`: tab indentation, trailing commas on expanded objects.
+`github.com/rshade/tsacl/pkg/policycore/hujsonedit`: tab indentation, trailing
+commas on expanded objects.
 Comments are preserved, except that a comment directly above a released entry
 is removed with that entry, which is standard HuJSON behavior. A registry made
 only of bare-string entries round-trips byte for byte.

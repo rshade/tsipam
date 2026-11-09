@@ -8,7 +8,7 @@ import (
 
 	"go4.org/netipx"
 
-	"github.com/rshade/tailscale-utils/policycore/ipcalc"
+	"github.com/rshade/tsacl/pkg/ipcalc"
 )
 
 const ipv4MappingBits = 96

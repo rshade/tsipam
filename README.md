@@ -805,7 +805,8 @@ structure is straightforward:
 }
 ```
 
-Every write goes through `policycore/hujsonedit`, which always reformats the
+Every write goes through
+`github.com/rshade/tsacl/pkg/policycore/hujsonedit`, which always reformats the
 whole file (tab indentation, trailing commas on an expanded object) rather
 than preserving the original file's own style. The example above matches that
 shape (comment preserved, trailing comma on an expanded block) except for the
@@ -833,7 +834,8 @@ absent; `release` and `list` error if the file does not exist.
 Subnet-pool keys must be canonical CIDR prefixes. Registry load validates the
 whole `subnetPools` map and refuses malformed or non-canonical keys, duplicate
 members, empty site names, and overlaps owned by different sites. CIDR overlap
-semantics come from the shared `policycore/addrspace` primitive used by the
+semantics come from the shared
+`github.com/rshade/tsacl/pkg/policycore/addrspace` primitive used by the
 repository's policy and audit tools rather than from a registry-specific
 comparison.
 

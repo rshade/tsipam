@@ -7,7 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rshade/tailscale-utils/policycore/cliflags"
+	"github.com/rshade/tsacl/pkg/policycore/cliflags"
+
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/devices"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 )

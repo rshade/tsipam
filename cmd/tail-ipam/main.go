@@ -38,9 +38,10 @@ import (
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
 
-	"github.com/rshade/tailscale-utils/policycore/cliflags"
-	"github.com/rshade/tailscale-utils/policycore/ipcalc"
-	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tsacl/pkg/ipcalc"
+	"github.com/rshade/tsacl/pkg/policycore/cliflags"
+	"github.com/rshade/tsacl/pkg/policycore/sanitize"
+
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
@@ -139,7 +140,7 @@ func registerSweepValue(sanitizer *sanitize.Sanitizer, kind, value string) {
 // token-delimited byte match against the raw registration can never find it.
 // The surrounding quotes themselves are deliberately not part of the
 // registered form: '"' is not a tokenByte
-// (policycore/sanitize.tokenByte), so the escaped inner text alone is still
+// (tsacl policycore/sanitize.tokenByte), so the escaped inner text alone is still
 // correctly delimited by the %q quote marks that surround it in the
 // rendered error text -- verified empirically against a real %q-formatted
 // error (see the round-2 fix report's revert-proof evidence).
@@ -210,7 +211,7 @@ func registerSweepValueWithCanonical(
 // registry directory, the full computed registry file path, and that path's
 // bare filename -- so sanitizeErrorIfNeeded's free-text sweep can redact them
 // from an error's text wherever they appear verbatim. This closes registry
-// path leaks that originate deep in policycore/hujsonedit's own error
+// path leaks that originate deep in tsacl policycore/hujsonedit's own error
 // strings (which this tool does not control the wording of) without any
 // quote-parsing: Sanitizer.Text finds and replaces a known value byte-for-byte
 // regardless of where in the error text it surfaces.

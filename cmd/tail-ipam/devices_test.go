@@ -16,7 +16,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tsacl/pkg/policycore/sanitize"
 )
 
 // unroutableBaseURL is an address nothing in this suite ever serves. TestMain

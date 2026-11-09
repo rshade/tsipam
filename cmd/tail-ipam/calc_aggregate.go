@@ -8,7 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rshade/tailscale-utils/policycore/ipcalc"
+	"github.com/rshade/tsacl/pkg/ipcalc"
+
 	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/loopback"
 )

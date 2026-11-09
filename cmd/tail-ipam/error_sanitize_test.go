@@ -13,7 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tsacl/pkg/policycore/sanitize"
+
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
 
@@ -262,7 +263,7 @@ func TestCollisionErrorDoesNotSurviveTheLoopbackTransport(t *testing.T) {
 // path leak reached through a plain "file not found" (registry.go's Load,
 // via identityFreePathError) combined with Step 1's pre-registered path
 // inventory (registerKnownIdentityInventory), which also sweeps the leak
-// closed for callers deeper in policycore/hujsonedit that this tool does not
+// closed for callers deeper in tsacl policycore/hujsonedit that this tool does not
 // control the wording of.
 func TestErrorSanitizationOmitsRegistryPathOnMissingDirectory(t *testing.T) {
 	t.Parallel()
@@ -472,7 +473,7 @@ func TestHelperTriggerRegistryWriteFailure(t *testing.T) {
 // internal/registry/subnetpool.go's canonicalizeSubnetPools). Before this fix,
 // registerKnownIdentityInventory did not extract values from the registry
 // file, so sanitizeErrorIfNeeded's free-text sweep could not redact values
-// deep in policycore/hujsonedit's error strings. This test seeds a registry
+// deep in tsacl policycore/hujsonedit's error strings. This test seeds a registry
 // with overlapping subnet pools using distinctive site names ("secret-hq-site"
 // and "secret-branch-site"), runs a command that triggers the overlap error,
 // and asserts neither raw site name nor CIDR appears under sanitization.

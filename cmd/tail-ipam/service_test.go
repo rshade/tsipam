@@ -12,7 +12,8 @@ import (
 
 	goa "goa.design/goa/v3/pkg"
 
-	"github.com/rshade/tailscale-utils/policycore/sanitize"
+	"github.com/rshade/tsacl/pkg/policycore/sanitize"
+
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
 )
 

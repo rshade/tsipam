@@ -6,7 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/rshade/tailscale-utils/policycore/hujsonedit"
+	"github.com/rshade/tsacl/pkg/policycore/hujsonedit"
+
 	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
 )
 
