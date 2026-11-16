@@ -16,7 +16,7 @@ import (
 
 func regPath(t *testing.T) string {
 	t.Helper()
-	return filepath.Join(t.TempDir(), "tail-ipam.hujson")
+	return filepath.Join(t.TempDir(), "tsipam.hujson")
 }
 
 func TestReserveSiteIDCreatesFileWhenMissing(t *testing.T) {

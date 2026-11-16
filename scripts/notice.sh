@@ -8,12 +8,10 @@
 set -euo pipefail
 
 out=${1:?usage: scripts/notice.sh OUTPUT}
-case $out in
-  /*) ;;
-  *) out=$PWD/$out ;;
-esac
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-cd "$root"
+# A module with no license file of its own needs <module path>.txt here, stating
+# where its license is found. license-check reads the same directory.
+exceptions=$root/scripts/license-exceptions
 
 targets=(linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64)
 sep='==============================================================================='
@@ -21,10 +19,18 @@ sep='===========================================================================
 modules() {
   local target
   for target in "${targets[@]}"; do
-    GOOS=${target%/*} GOARCH=${target#*/} go list -deps \
+    GOOS=${target%/*} GOARCH=${target#*/} go -C "$root" list -deps \
       -f '{{with .Module}}{{if not .Main}}{{with .Replace}}{{.Path}} {{.Version}} {{.Dir}}{{else}}{{.Path}} {{.Version}} {{.Dir}}{{end}}{{end}}{{end}}' \
-      ./cmd/tsipam
+      ./cmd/tsipam || exit 1
   done | sort -u
+}
+
+# Lists the regular files directly in DIR whose names match the find tests that
+# follow, one per line, in byte order.
+files_in() {
+  local dir=$1
+  shift
+  find "$dir" -maxdepth 1 -type f \( "$@" \) | LC_ALL=C sort
 }
 
 # Prints a file verbatim, adding a final newline if it lacks one, then a blank
@@ -35,27 +41,26 @@ emit() {
   echo
 }
 
-# Modules whose archive has no license file. Each entry names where the license
-# is stated; review it whenever the module's version changes.
-no_license_file() {
-  case $1 in
-    github.com/jaxxstorm/vers)
-      cat <<'EOF'
-No standalone license file is present in this module archive. Its
-published README identifies the project as Apache-2.0; the Apache-2.0
-terms are provided in LICENSE. The upstream NOTICE follows.
-
-EOF
-      ;;
-    *) return 1 ;;
-  esac
+# Emits each file in the newline-separated LIST under a "LABEL (from NAME):"
+# heading.
+emit_all() {
+  local label=$1 list=$2 file
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    printf '%s (from %s):\n\n' "$label" "${file##*/}"
+    emit "$file"
+  done <<<"$list"
 }
+
+# Read the inventory up front: a failing go list inside a process substitution
+# would not stop the script, and the NOTICE would silently lose modules.
+inventory=$(modules)
 
 tmp=$(mktemp)
 trap 'rm -f "$tmp"' EXIT
 
 {
-  emit NOTICE
+  emit "$root/NOTICE"
   cat <<EOF
 Third-party dependency notices
 
@@ -68,29 +73,24 @@ module.
 EOF
   while read -r path version dir; do
     printf '%s\n%s %s\n%s\n' "$sep" "$path" "$version" "$sep"
-    licenses=$(find "$dir" -maxdepth 1 -type f \
-      \( -iname 'LICENSE' -o -iname 'LICENSE[.-]*' -o -iname 'LICENCE*' -o -iname 'COPYING*' \) | LC_ALL=C sort)
-    notices=$(find "$dir" -maxdepth 1 -type f -iname 'NOTICE*' | LC_ALL=C sort)
+    licenses=$(files_in "$dir" -iname 'LICENSE' -o -iname 'LICENSE[.-]*' -o -iname 'LICENCE*' -o -iname 'COPYING*')
+    notices=$(files_in "$dir" -iname 'NOTICE*')
     if [ -z "$licenses" ]; then
-      if ! no_license_file "$path"; then
-        echo "notice.sh: $path $version has no license file; add it to no_license_file after checking its terms" >&2
+      if [ ! -f "$exceptions/$path.txt" ]; then
+        echo "notice.sh: $path $version has no license file; add $exceptions/$path.txt after checking its terms" >&2
         exit 1
       fi
-      for file in $notices; do
+      cat "$exceptions/$path.txt"
+      while IFS= read -r file; do
+        [ -n "$file" ] || continue
         printf 'Upstream NOTICE text:\n\n'
         emit "$file"
-      done
+      done <<<"$notices"
       continue
     fi
-    for file in $licenses; do
-      printf 'License text (from %s):\n\n' "${file##*/}"
-      emit "$file"
-    done
-    for file in $notices; do
-      printf 'NOTICE text (from %s):\n\n' "${file##*/}"
-      emit "$file"
-    done
-  done < <(modules)
+    emit_all "License text" "$licenses"
+    emit_all "NOTICE text" "$notices"
+  done <<<"$inventory"
 } > "$tmp"
 
 mkdir -p "$(dirname "$out")"

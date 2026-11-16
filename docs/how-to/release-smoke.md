@@ -35,8 +35,8 @@ mise run smoke-release
 ```
 
 The task does what `.github/workflows/release.yml` does: it creates a local
-`v0.0.0-smoke` tag (never pushed, deleted on exit), runs
-`goreleaser release --skip=publish`, then runs the suite against the host
+`v0.0.0-smoke` tag (never pushed, deleted on exit), builds the archives with
+`mise run release-build`, then runs the suite against the host
 archive it produced plus the artifact checks. Pass `SMOKE_TAG=v0.2.0` to stamp
 the version the release will carry.
 
@@ -74,6 +74,15 @@ exporting them in a shell you will keep using:
 esc run <environment> -- env TSIPAM_SMOKE_LIVE=1 mise run smoke
 ```
 
+To run only the live cases, the way the `Live verify` workflow does:
+
+```bash
+esc run <environment> -- mise run smoke-live
+```
+
+`smoke-live` fails when the credentials are missing, when a case fails, and
+when every case skips, because a run in which nothing passed proved nothing.
+
 The round-trip test reserves every live allocation it finds into a temporary
 registry, and the matching-rules test needs one advertised IPv4 route between
 `/20` and `/30`. On a tailnet with no routes both still pass or skip with a
@@ -109,4 +118,5 @@ pull request, so README examples and the CLI contract cannot drift apart.
 `.github/workflows/release.yml` runs the suite with the artifact section
 against goreleaser's `dist/` after the build and before any archive is
 attached to the Release, so a bad archive is never published. The live
-section stays opt-in.
+section stays opt-in: `.github/workflows/live-verify.yml` runs
+`mise run smoke-live` only on manual dispatch from `main`.

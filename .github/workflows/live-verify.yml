@@ -53,8 +53,8 @@ jobs:
       - name: Install pinned tools
         uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
 
-      - name: go vet with the smoke tag
-        run: go vet -tags smoke ./...
+      - name: go vet, including the smoke tag
+        run: mise run vet
 
   live-verify:
     name: Run live-verify against a real tailnet (opt-in)
@@ -75,23 +75,6 @@ jobs:
         env:
           TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY }}
           TAILSCALE_TAILNET: ${{ secrets.TAILSCALE_TAILNET }}
-          TSIPAM_SMOKE_LIVE: "1"
-        run: |
-          set -uo pipefail
-          : "${TAILSCALE_API_KEY:?set the TAILSCALE_API_KEY secret on the live-verify environment}"
-          : "${TAILSCALE_TAILNET:?set the TAILSCALE_TAILNET secret on the live-verify environment}"
-
-          log=$(mktemp)
-          go test -tags smoke -count=1 -v -run '^TestLive' ./smoke 2>&1 | tee "$log"
-          rc=${PIPESTATUS[0]}
-          passed=$(grep -c '^--- PASS: TestLive' "$log" || true)
-          skipped=$(grep -c '^--- SKIP: TestLive' "$log" || true)
-          echo "live smoke: $passed passed, $skipped skipped"
-          if [[ "$rc" -ne 0 ]]; then
-            echo "::error::live smoke failed"
-            exit 1
-          fi
-          if [[ "$passed" -eq 0 ]]; then
-            echo "::error::no live smoke test passed, so the run proved nothing"
-            exit 1
-          fi
+        # smoke-live fails when the secrets are unset, when a case fails, and
+        # when every case skips.
+        run: mise run smoke-live
