@@ -44,8 +44,12 @@ import (
 	"github.com/rshade/tsipam/internal/registry"
 )
 
-// version is overridden at build time via -ldflags "-X main.version=vX.Y.Z".
-var version = "dev"
+// devVersion is the release string of a build that injects no version.
+const devVersion = "dev"
+
+// version is overridden at build time via -ldflags "-X main.version=X.Y.Z";
+// goreleaser injects the tag without its leading v.
+var version = devVersion
 
 const (
 	toolName            = "tsipam"
@@ -738,7 +742,8 @@ func newLogger(writer io.Writer, verbose bool) *slog.Logger {
 	return slog.New(slog.NewTextHandler(writer, &slog.HandlerOptions{Level: level}))
 }
 
-// buildVersion combines the ldflags version with the embedded VCS revision so
+// buildVersion combines the release string (injected by ldflags, or the module
+// version for `go install module@version`) with the embedded VCS revision so
 // --version reports exact provenance for an auditable binary.
 func buildVersion() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -748,13 +753,14 @@ func buildVersion() string {
 }
 
 // moduleVersion prefers the module version Go recorded for `go install
-// module@version` over the "dev" placeholder. A working-tree build records
-// "(devel)" and keeps "dev". An ldflags release string always wins.
-func moduleVersion(version, module string) string {
-	if version != "dev" || module == "" || module == "(devel)" {
-		return version
+// module@version` over the dev placeholder, without its leading v so both
+// install paths print the same release string. A working-tree build records
+// "(devel)" and keeps dev. An injected release string always wins.
+func moduleVersion(injected, module string) string {
+	if injected != devVersion || module == "" || module == "(devel)" {
+		return injected
 	}
-	return module
+	return strings.TrimPrefix(module, "v")
 }
 
 func buildVersionWithSettings(value string, settings []debug.BuildSetting) string {

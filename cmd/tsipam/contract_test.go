@@ -668,10 +668,16 @@ func TestModuleVersionUsesGoInstallVersion(t *testing.T) {
 	tests := []struct {
 		name, version, module, want string
 	}{
-		{name: "go install replaces dev", version: "dev", module: "v0.1.0", want: "v0.1.0"},
+		{name: "go install replaces dev without the v", version: "dev", module: "v0.1.0", want: "0.1.0"},
+		{
+			name:    "go install pseudo-version drops the v",
+			version: "dev",
+			module:  "v0.1.1-0.20261116120000-0123456789ab",
+			want:    "0.1.1-0.20261116120000-0123456789ab",
+		},
 		{name: "working tree keeps dev", version: "dev", module: "(devel)", want: "dev"},
 		{name: "empty module keeps dev", version: "dev", module: "", want: "dev"},
-		{name: "injected release string wins", version: "v1.2.3", module: "v9.9.9", want: "v1.2.3"},
+		{name: "injected release string wins", version: "1.2.3", module: "v9.9.9", want: "1.2.3"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -686,11 +692,11 @@ func TestModuleVersionUsesGoInstallVersion(t *testing.T) {
 func TestBuildVersionIncludesShortDirtyRevision(t *testing.T) {
 	t.Parallel()
 
-	got := buildVersionWithSettings("v1.2.3", []debug.BuildSetting{
+	got := buildVersionWithSettings("1.2.3", []debug.BuildSetting{
 		{Key: "vcs.revision", Value: "0123456789abcdef"},
 		{Key: "vcs.modified", Value: "true"},
 	})
-	want := "tsipam v1.2.3 (0123456789ab+dirty)"
+	want := "tsipam 1.2.3 (0123456789ab+dirty)"
 	if got != want {
 		t.Errorf("buildVersionWithSettings = %q, want %q", got, want)
 	}
