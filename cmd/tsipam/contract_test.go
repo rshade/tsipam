@@ -663,6 +663,26 @@ func TestBothDashSpellingsAndAuthoredOutputContracts(t *testing.T) {
 	}
 }
 
+func TestModuleVersionUsesGoInstallVersion(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name, version, module, want string
+	}{
+		{name: "go install replaces dev", version: "dev", module: "v0.1.0", want: "v0.1.0"},
+		{name: "working tree keeps dev", version: "dev", module: "(devel)", want: "dev"},
+		{name: "empty module keeps dev", version: "dev", module: "", want: "dev"},
+		{name: "injected release string wins", version: "v1.2.3", module: "v9.9.9", want: "v1.2.3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := moduleVersion(tt.version, tt.module); got != tt.want {
+				t.Errorf("moduleVersion(%q, %q) = %q, want %q", tt.version, tt.module, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildVersionIncludesShortDirtyRevision(t *testing.T) {
 	t.Parallel()
 

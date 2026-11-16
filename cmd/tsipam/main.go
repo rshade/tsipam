@@ -742,9 +742,19 @@ func newLogger(writer io.Writer, verbose bool) *slog.Logger {
 // --version reports exact provenance for an auditable binary.
 func buildVersion() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
-		return buildVersionWithSettings(version, info.Settings)
+		return buildVersionWithSettings(moduleVersion(version, info.Main.Version), info.Settings)
 	}
 	return buildVersionWithSettings(version, nil)
+}
+
+// moduleVersion prefers the module version Go recorded for `go install
+// module@version` over the "dev" placeholder. A working-tree build records
+// "(devel)" and keeps "dev". An ldflags release string always wins.
+func moduleVersion(version, module string) string {
+	if version != "dev" || module == "" || module == "(devel)" {
+		return version
+	}
+	return module
 }
 
 func buildVersionWithSettings(value string, settings []debug.BuildSetting) string {
