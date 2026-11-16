@@ -579,7 +579,7 @@ func benchmarkSubnetPoolRegistry(b *testing.B, count int) string {
 	if err != nil {
 		b.Fatalf("marshaling benchmark registry: %v", err)
 	}
-	path := filepath.Join(b.TempDir(), "tail-ipam.hujson")
+	path := filepath.Join(b.TempDir(), "tsipam.hujson")
 	if writeErr := os.WriteFile(path, content, 0o600); writeErr != nil {
 		b.Fatalf("writing benchmark registry: %v", writeErr)
 	}

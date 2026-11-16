@@ -725,7 +725,7 @@ func TestServiceAddressLoadValidationErrorsHaveProperContext(t *testing.T) {
 
 func serviceRegistryPath(t *testing.T) string {
 	t.Helper()
-	return filepath.Join(t.TempDir(), "tail-ipam.hujson")
+	return filepath.Join(t.TempDir(), "tsipam.hujson")
 }
 
 func writeRegistryFixture(t *testing.T, path, content string) {

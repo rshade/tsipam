@@ -1,0 +1,4 @@
+No standalone license file is present in this module archive. Its
+published README identifies the project as Apache-2.0; the Apache-2.0
+terms are provided in LICENSE. The upstream NOTICE follows.
+

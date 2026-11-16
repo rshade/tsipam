@@ -14,12 +14,14 @@ trufflehog = "3.99.8"
 # go.mod: gen-check fails when the committed gen/ differs from this generator's
 # output.
 "go:goa.design/goa/v3/cmd/goa" = "3.35.0"
-# Node only provides the npm backend for the two CLIs below.
+# Node only provides the npm backend for the CLIs below.
 node = "26"
 "npm:markdownlint-cli" = "0.50.0"
 # @commitlint/config-conventional installs nested inside the CLI, so
 # commitlint.config.js extends it without a second pin.
 "npm:@commitlint/cli" = "21.2.4"
+# The OpenSpec CLI behind the openspec/ workflow and the Copilot setup steps.
+"npm:@fission-ai/openspec" = "1.16.1"
 
 [tasks.lint]
 description = "Run every check"
@@ -114,12 +116,22 @@ if ! git diff --quiet -- gen || [ -n "$untracked" ]; then
 fi
 '''
 
-# jaxxstorm/vers (a tscli dependency) states Apache-2.0 in its README but ships
-# no LICENSE file, so go-licenses cannot classify it. Drop the --ignore once
-# upstream adds one; scripts/notice.sh carries the same exception.
+# go-licenses cannot classify a module that ships no license file, such as
+# jaxxstorm/vers (a tscli dependency, Apache-2.0 per its README). Each one is
+# listed as scripts/license-exceptions/<module path>.txt, which also supplies the
+# text scripts/notice.sh ships for it; delete the file once upstream adds a
+# license.
 [tasks.license-check]
 description = "Fail on a dependency outside the license allowlist"
-run = "go-licenses check ./... --ignore github.com/jaxxstorm/vers --allowed_licenses=MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0"
+shell = "bash -euo pipefail -c"
+run = '''
+ignore=$(cd scripts/license-exceptions && find . -type f -name '*.txt' | sed -e 's#^\./##' -e 's#\.txt$##' | LC_ALL=C sort | paste -sd, -)
+args=()
+if [ -n "$ignore" ]; then
+  args=(--ignore "$ignore")
+fi
+go-licenses check ./... "${args[@]}" --allowed_licenses=MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0
+'''
 
 [tasks.notice]
 description = "Write the release NOTICE, with the dependency inventory, to .release/NOTICE"
@@ -147,6 +159,35 @@ done
 go test -tags smoke -count=1 ./smoke
 '''
 
+[tasks.smoke-live]
+description = "Live smoke cases against a real tailnet (needs TAILSCALE_API_KEY and TAILSCALE_TAILNET); fails if none passed"
+shell = "bash -euo pipefail -c"
+run = '''
+: "${TAILSCALE_API_KEY:?set TAILSCALE_API_KEY (read-only key) for the live smoke cases}"
+: "${TAILSCALE_TAILNET:?set TAILSCALE_TAILNET for the live smoke cases}"
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT
+rc=0
+TSIPAM_SMOKE_LIVE=1 go test -tags smoke -count=1 -v -run '^TestLive' ./smoke 2>&1 | tee "$log" || rc=$?
+passed=$(grep -c '^--- PASS: TestLive' "$log" || true)
+skipped=$(grep -c '^--- SKIP: TestLive' "$log" || true)
+echo "live smoke: $passed passed, $skipped skipped"
+if [ "$rc" -ne 0 ]; then
+  echo "live smoke failed" >&2
+  exit 1
+fi
+# Every case skipping (missing data on the tailnet) would otherwise pass while
+# proving nothing.
+if [ "$passed" -eq 0 ]; then
+  echo "no live smoke test passed, so the run proved nothing" >&2
+  exit 1
+fi
+'''
+
+[tasks.release-build]
+description = "Build the release archives for the tag at HEAD into dist/ without publishing"
+run = "goreleaser release --clean --skip=publish"
+
 [tasks.smoke-release]
 description = "Build release archives on HEAD as SMOKE_TAG (default v0.0.0-smoke) and smoke-test them"
 shell = "bash -euo pipefail -c"
@@ -158,8 +199,8 @@ if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
 fi
 git -c tag.gpgSign=false -c tag.forceSignAnnotated=false tag "$tag" HEAD
 trap 'git tag -d "$tag" >/dev/null' EXIT
-goreleaser release --clean --skip=publish
-TSIPAM_SMOKE_DIST="$PWD/dist" go test -tags smoke -count=1 ./smoke
+mise run release-build
+TSIPAM_SMOKE_DIST="$PWD/dist" mise run smoke
 '''
 
 [tasks.lint-md]
@@ -178,7 +219,9 @@ run = 'commitlint --from "${COMMIT_FROM:-$(git merge-base HEAD origin/main)}" --
 [tasks.govulncheck]
 description = "Scan Go dependencies for known vulnerabilities"
 # vuln.go.dev resets connections now and then. govulncheck exits 3 when it finds
-# vulnerabilities, which must fail at once; any other failure is retried.
+# vulnerabilities, which must fail at once; any other failure is retried. errexit
+# does not end the loop early: govulncheck runs on the left of &&.
+shell = "bash -euo pipefail -c"
 run = '''
 for attempt in 1 2 3; do
   govulncheck ./... && exit 0
