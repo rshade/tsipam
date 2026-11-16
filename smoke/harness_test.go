@@ -1,20 +1,20 @@
 //go:build smoke
 
-// Package smoke_test exercises a built tail-ipam binary end to end against
+// Package smoke_test exercises a built tsipam binary end to end against
 // the contract the README documents: exit codes, human and JSON output,
 // registry side effects, sanitization, and, when enabled, the live tailnet
 // commands. It is configured through the environment so the same invocation
 // works under `make`, under `esc run`, and in CI:
 //
-//	TAIL_IPAM_SMOKE_BINARY  binary under test; when unset, the host binary is
-//	                        extracted from TAIL_IPAM_SMOKE_DIST, or built from
+//	TSIPAM_SMOKE_BINARY  binary under test; when unset, the host binary is
+//	                        extracted from TSIPAM_SMOKE_DIST, or built from
 //	                        source when that is unset too
-//	TAIL_IPAM_SMOKE_DIST    goreleaser dist directory; enables artifact checks
-//	TAIL_IPAM_SMOKE_LIVE    non-empty runs the commands that need TAILSCALE_*
+//	TSIPAM_SMOKE_DIST    goreleaser dist directory; enables artifact checks
+//	TSIPAM_SMOKE_LIVE    non-empty runs the commands that need TAILSCALE_*
 //
 //	go test -tags smoke ./smoke
-//	TAIL_IPAM_SMOKE_DIST=dist go test -tags smoke ./smoke
-//	esc run <env> -- env TAIL_IPAM_SMOKE_LIVE=1 go test -tags smoke ./smoke
+//	TSIPAM_SMOKE_DIST=dist go test -tags smoke ./smoke
+//	esc run <env> -- env TSIPAM_SMOKE_LIVE=1 go test -tags smoke ./smoke
 package smoke_test
 
 import (
@@ -42,9 +42,9 @@ const (
 	flagTailnet     = "--tailnet"
 	defaultAlias    = "alias"
 
-	envBinary = "TAIL_IPAM_SMOKE_BINARY"
-	envDist   = "TAIL_IPAM_SMOKE_DIST"
-	envLive   = "TAIL_IPAM_SMOKE_LIVE"
+	envBinary = "TSIPAM_SMOKE_BINARY"
+	envDist   = "TSIPAM_SMOKE_DIST"
+	envLive   = "TSIPAM_SMOKE_LIVE"
 )
 
 // TestMain resolves the binary under test once, before the parallel phase,
@@ -81,19 +81,19 @@ func resolveBinary(configured, dist string) (string, func(), error) {
 		}
 		return abs, func() {}, nil
 	}
-	dir, err := os.MkdirTemp("", "tail-ipam-smoke-*")
+	dir, err := os.MkdirTemp("", "tsipam-smoke-*")
 	if err != nil {
 		return "", nil, err
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
-	out := filepath.Join(dir, "tail-ipam")
+	out := filepath.Join(dir, "tsipam")
 	if dist != "" {
 		err = extractHostBinary(dist, out)
 	} else {
-		build := exec.Command("go", "build", "-o", out, filepath.Join(moduleDir, "cmd", "tail-ipam"))
+		build := exec.Command("go", "build", "-o", out, filepath.Join(moduleDir, "cmd", "tsipam"))
 		build.Stderr = os.Stderr
 		if err = build.Run(); err != nil {
-			err = fmt.Errorf("building tail-ipam: %w", err)
+			err = fmt.Errorf("building tsipam: %w", err)
 		}
 	}
 	if err != nil {
@@ -172,7 +172,7 @@ func decodeEnvelope(t *testing.T, stdout string) envelope {
 	if err := json.Unmarshal([]byte(stdout), &env.raw); err != nil {
 		t.Fatalf("stdout is not a JSON object: %v", err)
 	}
-	if env.SchemaVersion != "1" || env.Tool != "tail-ipam" || env.Command == "" || env.Status == "" {
+	if env.SchemaVersion != "1" || env.Tool != "tsipam" || env.Command == "" || env.Status == "" {
 		t.Fatalf("envelope header incomplete: %+v", env)
 	}
 	return env

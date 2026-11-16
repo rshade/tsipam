@@ -41,7 +41,7 @@ None.
 
 ## Impact
 
-- `tail-ipam` only. `internal/devices` copies the fields the v2 client
+- `tsipam` only. `internal/devices` copies the fields the v2 client
   already returns. The CLI envelope, sanitizer registration, schema golden,
   docs, and the live smoke assertion change.
 - Additive JSON keys. No exit-code change. Lab script edits that could drop

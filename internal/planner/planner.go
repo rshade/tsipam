@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/devices"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/devices"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 const (

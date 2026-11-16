@@ -1,0 +1,50 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Bare `go build` output beside go.mod
+/tsipam
+/bin/
+
+# goreleaser build output (snapshot and release)
+dist/
+.release/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+!**/coverage.go
+*.coverprofile
+profile.cov
+
+# Per-machine mise overrides (mise.toml itself IS committed: it is the pin)
+mise.local.toml
+.mise.local.toml
+.mise/config.local.toml
+
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# Generated PR description (local only)
+PR_MESSAGE.md
+
+# Editor/IDE
+.idea/
+.vscode/
+
+# Per-machine agent settings, workflow scratch, and agent worktrees
+.superpowers/
+.claude/settings.local.json
+.claude/workflow/
+.claude/worktrees/
+.playwright-mcp/

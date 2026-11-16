@@ -1,6 +1,6 @@
-# Smoke-test a tail-ipam release
+# Smoke-test a tsipam release
 
-Run this before merging a `chore(main): release tail-ipam x.y.z` pull request.
+Run this before merging a `chore(main): release tsipam x.y.z` pull request.
 It executes a built binary against the contract the README documents and, when
 asked, the release archives goreleaser would attach and the commands that talk
 to a real tailnet.
@@ -20,10 +20,10 @@ to a real tailnet.
 ## Run it against a source build
 
 ```bash
-make smoke
+mise run smoke
 ```
 
-This builds `tail-ipam` from the checkout and runs every offline section. It
+This builds `tsipam` from the checkout and runs every offline section. It
 takes a few seconds.
 
 ## Run it against the release archives
@@ -31,10 +31,10 @@ takes a few seconds.
 On a clean checkout of the commit the release PR will tag:
 
 ```bash
-make smoke-release
+mise run smoke-release
 ```
 
-The target does what `.github/workflows/release.yml` does: it creates a local
+The task does what `.github/workflows/release.yml` does: it creates a local
 `v0.0.0-smoke` tag (never pushed, deleted on exit), runs
 `goreleaser release --skip=publish`, then runs the suite against the host
 archive it produced plus the artifact checks. Pass `SMOKE_TAG=v0.2.0` to stamp
@@ -43,7 +43,7 @@ the version the release will carry.
 To test archives built elsewhere, point at their directory:
 
 ```bash
-make smoke SMOKE_DIST=tail-ipam/dist
+TSIPAM_SMOKE_DIST=dist mise run smoke
 ```
 
 ### After a release
@@ -53,25 +53,25 @@ goreleaser's `metadata.json`. Download them and point the suite at the
 directory:
 
 ```bash
-gh release download tail-ipam/vX.Y.Z --repo rshade/tailscale-utils --dir <dir>
-make smoke SMOKE_DIST=<dir>
+gh release download vX.Y.Z --repo rshade/tsipam --dir <dir>
+TSIPAM_SMOKE_DIST=<dir> mise run smoke
 ```
 
 Without `metadata.json` the suite reads the version from the archive names
-and the commit from the `tail-ipam/vX.Y.Z` tag. Fetch tags first; on a
+and the commit from the `vX.Y.Z` tag. Fetch tags first; on a
 checkout without the tag the commit check is skipped with a note, and the
-version check still runs. Add `SMOKE_LIVE=1` under `esc run` to include the
+version check still runs. Add `TSIPAM_SMOKE_LIVE=1` under `esc run` to include the
 live section.
 
 ## Run the live section
 
 The live cases need `TAILSCALE_TAILNET` and either `TAILSCALE_API_KEY` or an
 OAuth client, with read access to devices and Services. They skip unless
-`SMOKE_LIVE` is set. Inject credentials from your secret store rather than
+`TSIPAM_SMOKE_LIVE` is set. Inject credentials from your secret store rather than
 exporting them in a shell you will keep using:
 
 ```bash
-esc run tailscale-phase-2/tailscale -- make smoke SMOKE_LIVE=1
+esc run <environment> -- env TSIPAM_SMOKE_LIVE=1 mise run smoke
 ```
 
 The round-trip test reserves every live allocation it finds into a temporary
@@ -98,13 +98,13 @@ release 0.1.0 has this and 0.1.1 does not.
 
 ## Where the tests live
 
-`tail-ipam/smoke/` is an external test package behind the `smoke` build tag,
-so `make test` never picks it up and it never needs network access unless you
+`smoke/` is an external test package behind the `smoke` build tag,
+so `mise run test` never picks it up and it never needs network access unless you
 opt in. Add cases there when a command gains behavior the README promises.
 
 ## In CI
 
-`.github/workflows/ci.yml` runs the offline section (`make smoke`) on every
+`.github/workflows/ci.yml` runs the offline section (`mise run smoke`) on every
 pull request, so README examples and the CLI contract cannot drift apart.
 `.github/workflows/release.yml` runs the suite with the artifact section
 against goreleaser's `dist/` after the build and before any archive is

@@ -58,7 +58,7 @@ Invalid input SHALL fail before any registry mutation.
 
 ### Requirement: Port reservation is scoped per site, reusable across sites
 
-`tail-ipam port reserve <port> <device> --site <site>` and the corresponding
+`tsipam port reserve <port> <device> --site <site>` and the corresponding
 API operation SHALL explicitly reserve the canonical port for the canonical
 device label within the canonical site label. Reserve SHALL create the
 tailnet registry when it is absent. Every reserve SHALL require the caller to
@@ -226,7 +226,7 @@ as an unreadable-registry error.
 
 ### Requirement: Idempotent per-site release
 
-`tail-ipam port release <port> --site <site>` and the corresponding API
+`tsipam port release <port> --site <site>` and the corresponding API
 operation SHALL remove only the canonical `(site, port)` reservation and
 report `changed=true` when present. Releasing an unreserved port or an unknown
 site from an existing valid registry SHALL succeed as a no-op with
@@ -265,18 +265,18 @@ directly.
 
 The `port` command group and its `reserve`, `release`, and `list` subcommands,
 including the required or optional `--site` flags, SHALL appear in help and in
-`tail-ipam -schema`.
+`tsipam -schema`.
 
 #### Scenario: CLI reservation traverses the transport
 
-- **WHEN** `tail-ipam port reserve 41642 branch-fw01 --site branch-office`
+- **WHEN** `tsipam port reserve 41642 branch-fw01 --site branch-office`
   runs in local mode
 - **THEN** it invokes the generated reserve operation over the loopback HTTP
   transport and returns the canonical service result
 
 #### Scenario: Schema catalogs the command group
 
-- **WHEN** `tail-ipam -schema` runs
+- **WHEN** `tsipam -schema` runs
 - **THEN** the command catalog includes `port reserve`, `port release`, and
   `port list` with their site-flag requirements
 

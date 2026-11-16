@@ -4,7 +4,7 @@
 
 ### Requirement: Schema documents the device tag filter and tag redaction
 
-`tail-ipam -schema` SHALL list a `tag` flag on `devices list`. The document's
+`tsipam -schema` SHALL list a `tag` flag on `devices list`. The document's
 `sanitization` text SHALL state that `identity` redacts device users and
 hostnames while leaving device tags visible, and that `strict` also redacts
 device tags. It SHALL NOT claim that `strict` and `identity` are equivalent
@@ -12,7 +12,7 @@ for every field.
 
 #### Scenario: Devices list advertises the tag flag
 
-- **WHEN** an operator runs `tail-ipam -schema`
+- **WHEN** an operator runs `tsipam -schema`
 - **THEN** the `devices list` command entry includes a flag named `tag`
 
 #### Scenario: Sanitization text names the tag exception

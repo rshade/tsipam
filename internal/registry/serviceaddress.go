@@ -8,7 +8,7 @@ import (
 
 	"github.com/rshade/tsacl/pkg/policycore/hujsonedit"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/diagnostics"
 )
 
 // ServiceAddressEntry is one resolved service-address reservation returned by

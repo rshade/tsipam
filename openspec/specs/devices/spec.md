@@ -10,7 +10,7 @@ write the local registry.
 
 ### Requirement: Listing devices requires explicit credentials
 
-`tail-ipam devices list` SHALL require `TAILSCALE_TAILNET` and either
+`tsipam devices list` SHALL require `TAILSCALE_TAILNET` and either
 `TAILSCALE_API_KEY` or both `TAILSCALE_OAUTH_CLIENT_ID` and
 `TAILSCALE_OAUTH_CLIENT_SECRET` to be set in the environment. A missing
 tailnet or missing/incomplete credentials SHALL fail the command as a usage

@@ -5,7 +5,7 @@ import (
 
 	"github.com/rshade/tsacl/pkg/ipcalc"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 func compareSiteIDs(reserved map[string]registry.Entry, live map[string]evidence) []Entry {

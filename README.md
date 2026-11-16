@@ -1,28 +1,24 @@
-# tail-ipam
+# tsipam
 
 Allocate and plan Tailscale address space: 4via6 site IDs, subnet CIDR pools
 for sites, per-service `/32` reservations for Tailscale Services, and
 per-device UDP listen ports. Starts scoped to
 Tailscale-route/site-ID/service-VIP/listen-port space; on-prem CIDR planning
 (address space that has not yet been advertised as a live route) is an
-explicit future-growth direction, not initial scope. See
-[`../ROADMAP.md`](../ROADMAP.md) ("Future Vision" → `tail-ipam`) for the full
-design rationale.
+explicit future-growth direction, not initial scope.
 
-> **Module** `github.com/rshade/tailscale-utils/tail-ipam`. Conforms to the AX
-> conventions in [`../AGENTS.md`](../AGENTS.md#ax-conventions-the-shared-standard):
+> **Module** `github.com/rshade/tsipam`. Conforms to the AX
+> conventions in [`docs/reference/ax-conventions.md`](docs/reference/ax-conventions.md):
 > command results are written to **stdout** as human text by default or a
 > versioned JSON envelope with `-format json`; structured logs and errors go
 > to **stderr**. Task-oriented guides, reference pages, and a tutorial live
 > under [`docs/`](./docs/README.md).
 
-`tail-ipam` complements, and does not duplicate, two existing tools: `tail-acl`'s
+`tsipam` complements, and does not duplicate, two existing tools: `tail-acl`'s
 `ipset`/`autoApprovers` are authoring-only (they label or edit ACL policy text,
 with no allocation or conflict detection), and `tailnet-audit`'s
-`subnet-route-overlap` ([#221](https://github.com/rshade/tailscale-utils/issues/221))
-and `4via6-site-id-collision`
-([#222](https://github.com/rshade/tailscale-utils/issues/222)) roadmap checks
-own collision detection in what is already live. `tail-ipam` reserves address
+`subnet-route-overlap` and `4via6-site-id-collision` checks
+own collision detection in what is already live. `tsipam` reserves address
 space before it is advertised and compares those reservations with live use.
 
 ## Contents
@@ -62,11 +58,11 @@ The pages under [`docs/`](./docs/README.md) are organized by the task they
 help with; this README stays the command and flag reference.
 
 - Tutorials
-  - [Reserve your first address space](../docs/tutorials/first-address-plan.md):
+  - [Reserve your first address space](docs/tutorials/first-address-plan.md):
     build a registry from nothing, watch it refuse a conflicting reservation,
     and finish with an offline policy check that passes.
 - How-to guides
-  - [Adopt tail-ipam for an existing tailnet](./docs/how-to/adopt-existing-tailnet.md):
+  - [Adopt tsipam for an existing tailnet](./docs/how-to/adopt-existing-tailnet.md):
     record routes, site IDs, and Services that are already live so `check`
     catches later drift.
   - [Gate address space in CI](./docs/how-to/gate-address-space-in-ci.md):
@@ -103,7 +99,7 @@ advertised and enabled routes, tags, user, OS, and hostname. Requires the Tailsc
 ```bash
 export TAILSCALE_TAILNET=myorg
 export TAILSCALE_API_KEY=tskey_...
-tail-ipam devices list
+tsipam devices list
 ```
 
 Or use OAuth credentials:
@@ -112,7 +108,7 @@ Or use OAuth credentials:
 export TAILSCALE_TAILNET=myorg
 export TAILSCALE_OAUTH_CLIENT_ID=...
 export TAILSCALE_OAUTH_CLIENT_SECRET=...
-tail-ipam devices list
+tsipam devices list
 ```
 
 Human output is tab-separated. The first three columns stay the device name,
@@ -144,8 +140,8 @@ See also the [adoption guide](./docs/how-to/adopt-existing-tailnet.md) and
 
 ```bash
 export TAILSCALE_TAILNET=myorg
-tail-ipam plan --registry-dir /etc/tail-ipam --tailnet production
-tail-ipam check --registry-dir /etc/tail-ipam --tailnet production --format json
+tsipam plan --registry-dir /etc/tsipam --tailnet production
+tsipam check --registry-dir /etc/tsipam --tailnet production --format json
 ```
 
 The commands use these matching rules:
@@ -186,7 +182,7 @@ JSON adds a `comparison` object to the versioned envelope:
 ```json
 {
   "schema_version": "1",
-  "tool": "tail-ipam",
+  "tool": "tsipam",
   "command": "check",
   "status": "drift",
   "message": "found 1 allocation drift(s)",
@@ -239,8 +235,8 @@ leaves both files unchanged.
 See also [Gate address space in CI](./docs/how-to/gate-address-space-in-ci.md).
 
 ```bash
-tail-ipam check-policy policy.hujson --registry-dir /etc/tail-ipam --tailnet production
-tail-ipam check-policy policy.hujson --registry-dir /etc/tail-ipam --tailnet production --format json
+tsipam check-policy policy.hujson --registry-dir /etc/tsipam --tailnet production
+tsipam check-policy policy.hujson --registry-dir /etc/tsipam --tailnet production --format json
 ```
 
 Each effective authored CIDR needs **one containing reservation**. For example,
@@ -291,15 +287,15 @@ is already reserved for a different site. Reserves the same ID and site name
 again in a no-op (idempotent). Creates the registry file if it does not exist.
 
 ```bash
-tail-ipam site-id reserve 1 hq-vpc
-tail-ipam site-id reserve 2 branch-office
+tsipam site-id reserve 1 hq-vpc
+tsipam site-id reserve 2 branch-office
 ```
 
 Select the registry directory and routing/storage key explicitly when needed:
 
 ```bash
-tail-ipam site-id reserve 1 hq-vpc \
-  --registry-dir /etc/tail-ipam \
+tsipam site-id reserve 1 hq-vpc \
+  --registry-dir /etc/tsipam \
   --tailnet production
 ```
 
@@ -309,7 +305,7 @@ that is otherwise auto-stamped (UTC, now) the first time any of the other
 three is set on a reservation that does not already carry one:
 
 ```bash
-tail-ipam site-id reserve 1 hq-vpc --owner platform-team --ticket OPS-1234 \
+tsipam site-id reserve 1 hq-vpc --owner platform-team --ticket OPS-1234 \
   --description "HQ gateway, migrated from the old ACL"
 ```
 
@@ -327,8 +323,8 @@ Releases a reserved site ID. Errors if the registry file does not exist.
 Releases a never-reserved ID as a no-op (not an error).
 
 ```bash
-tail-ipam site-id release 1
-tail-ipam site-id release 2 --registry-dir /etc/tail-ipam --tailnet production
+tsipam site-id release 1
+tsipam site-id release 2 --registry-dir /etc/tsipam --tailnet production
 ```
 
 #### `site-id list`
@@ -337,8 +333,8 @@ Lists all reserved site IDs in the registry, sorted numerically by ID.
 Errors if the registry file does not exist.
 
 ```bash
-tail-ipam site-id list
-tail-ipam site-id list --registry-dir /etc/tail-ipam --tailnet production
+tsipam site-id list
+tsipam site-id list --registry-dir /etc/tsipam --tailnet production
 ```
 
 Human output is tab-separated (site ID, site name), plus a third
@@ -358,8 +354,8 @@ This checks retained reservations whether or not they are advertised live; it
 does not query the Tailscale control plane.
 
 ```bash
-tail-ipam subnet reserve 10.20.0.0/16 hq-vpc
-tail-ipam subnet reserve 2001:db8:20::/48 branch-office
+tsipam subnet reserve 10.20.0.0/16 hq-vpc
+tsipam subnet reserve 2001:db8:20::/48 branch-office
 ```
 
 `subnet reserve` accepts the same `--owner`, `--description`, `--ticket`, and
@@ -383,10 +379,10 @@ the command needs the Tailscale API credentials used by `devices list` and
 has no offline mode.
 
 ```bash
-tail-ipam subnet allocate 10.20.0.0/16 --size 24 branch-office \
-  --registry-dir /etc/tail-ipam --tailnet production
-tail-ipam subnet allocate 2001:db8::/32 --size 48 branch-office --ticket NET-412
-tail-ipam subnet allocate 10.20.0.0/16 --size 24 branch-office --format json | jq -r .cidr
+tsipam subnet allocate 10.20.0.0/16 --size 24 branch-office \
+  --registry-dir /etc/tsipam --tailnet production
+tsipam subnet allocate 2001:db8::/32 --size 48 branch-office --ticket NET-412
+tsipam subnet allocate 10.20.0.0/16 --size 24 branch-office --format json | jq -r .cidr
 ```
 
 Human output is one message line in the shape `subnet reserve` prints,
@@ -415,7 +411,7 @@ Releases an exact subnet-pool reservation. Errors if the registry file does
 not exist; releasing a valid canonical CIDR that is not reserved is a no-op.
 
 ```bash
-tail-ipam subnet release 10.20.0.0/16
+tsipam subnet release 10.20.0.0/16
 ```
 
 #### `subnet list`
@@ -427,8 +423,8 @@ tab-separated (CIDR, site name), with the same metadata third field as
 `reserved_at` included only when set.
 
 ```bash
-tail-ipam subnet list
-tail-ipam subnet list --registry-dir /etc/tail-ipam --tailnet production
+tsipam subnet list
+tsipam subnet list --registry-dir /etc/tsipam --tailnet production
 ```
 
 #### `service reserve <address> <service-name>`
@@ -441,8 +437,8 @@ service may be written as either `dashboard` or `svc:dashboard`; both forms
 are stored and returned as exactly `svc:dashboard`.
 
 ```bash
-tail-ipam service reserve 100.100.100.8 dashboard
-tail-ipam service reserve 100.100.100.9/32 svc:metrics \
+tsipam service reserve 100.100.100.8 dashboard
+tsipam service reserve 100.100.100.9/32 svc:metrics \
   --owner network-team --ticket NET-237 --format json
 ```
 
@@ -464,8 +460,8 @@ Releases the canonical reservation selected by a bare IPv4 address or exact
 an error.
 
 ```bash
-tail-ipam service release 100.100.100.8
-tail-ipam service release 100.100.100.9/32 --format json
+tsipam service release 100.100.100.8
+tsipam service release 100.100.100.9/32 --format json
 ```
 
 #### `service list`
@@ -476,8 +472,8 @@ metadata third field used by the other registry lists. JSON output carries a
 `service_addresses` array with `address`, `service`, and any set metadata.
 
 ```bash
-tail-ipam service list
-tail-ipam service list --format json
+tsipam service list
+tsipam service list --format json
 ```
 
 #### `port reserve <port> <device> --site <site>`
@@ -488,9 +484,9 @@ multiple devices share tailscaled's default UDP 41641. Configure the returned
 port with `tailscaled --port` or the `PORT` environment variable.
 
 ```bash
-tail-ipam port reserve 41642 branch-fw01 --site branch-office
-tail-ipam port reserve 41643 branch-fw02 --site branch-office \
-  --registry-dir /etc/tail-ipam --tailnet production
+tsipam port reserve 41642 branch-fw01 --site branch-office
+tsipam port reserve 41643 branch-fw02 --site branch-office \
+  --registry-dir /etc/tsipam --tailnet production
 ```
 
 Ports must contain only ASCII decimal digits and fall within 1024-65535.
@@ -505,7 +501,7 @@ behind a different firewall may reuse it:
 
 ```bash
 # Allowed: the sites represent different firewall boundaries.
-tail-ipam port reserve 41642 hq-fw01 --site hq-vpc
+tsipam port reserve 41642 hq-fw01 --site hq-vpc
 ```
 
 This command records only explicit reservations. It does not choose the next
@@ -519,8 +515,8 @@ Releases a reservation from the selected site. Releasing an absent site/port
 pair is a successful no-op; a missing registry file is an error.
 
 ```bash
-tail-ipam port release 41642 --site branch-office
-tail-ipam port release 41643 --site branch-office --format json
+tsipam port release 41642 --site branch-office
+tsipam port release 41643 --site branch-office --format json
 ```
 
 #### `port list [--site <site>]`
@@ -532,9 +528,9 @@ array whose entries have those same three fields. An empty result remains an
 empty JSON array.
 
 ```bash
-tail-ipam port list
-tail-ipam port list --site branch-office
-tail-ipam port list --site branch-office --format json
+tsipam port list
+tsipam port list --site branch-office
+tsipam port list --site branch-office --format json
 ```
 
 #### `calc split`
@@ -543,9 +539,9 @@ Stateless IPv4 and IPv6 CIDR splitting: divides a parent CIDR into equal-sized
 child subnets. No registry, network I/O, or Tailscale API credentials required.
 
 ```bash
-tail-ipam calc split 10.0.0.0/16 --prefix 24
-tail-ipam calc split fd7a:115c:a1e0::/48 --prefix 64
-tail-ipam calc split 2001:db8::/32 --prefix 64
+tsipam calc split 10.0.0.0/16 --prefix 24
+tsipam calc split fd7a:115c:a1e0::/48 --prefix 64
+tsipam calc split 2001:db8::/32 --prefix 64
 ```
 
 The first command produces 256 subnets of size `/24`. The second divides
@@ -556,8 +552,8 @@ like a site-ID collision) and reports the exact count with a suggested
 narrower parent or shorter target on stderr:
 
 ```bash
-tail-ipam calc split 2001:db8::/32 --prefix 64
-# stderr: tail-ipam: splitting 2001:db8::/32 into /64 blocks would produce
+tsipam calc split 2001:db8::/32 --prefix 64
+# stderr: tsipam: splitting 2001:db8::/32 into /64 blocks would produce
 # 4294967296 subnets; too many to list (max 65536); use a shorter target or
 # narrower parent: ipcalc: split would produce too many children to
 # materialize
@@ -573,7 +569,7 @@ IPv4-mapped (4-in-6) prefixes with a length of `/96` or longer are converted to
 their equivalent plain IPv4 form before splitting, so `--prefix` then specifies
 IPv4 bits (0–32). Shorter 4-in-6-like prefixes cannot be exclusively IPv4-mapped
 and are treated as native IPv6 (so `--prefix` specifies IPv6 bits, 0–128). For
-example, `tail-ipam calc split '::ffff:10.0.0.0/104' --prefix 20` normalizes to
+example, `tsipam calc split '::ffff:10.0.0.0/104' --prefix 20` normalizes to
 `10.0.0.0/8` and splits it into `/20` IPv4 subnets.
 
 #### `calc aggregate`
@@ -587,13 +583,13 @@ remain separate. Human output is one bare CIDR per line in network-address
 order, making it safe to compose in a shell:
 
 ```bash
-tail-ipam calc aggregate 10.0.0.0/25 10.0.0.128/25
+tsipam calc aggregate 10.0.0.0/25 10.0.0.128/25
 # 10.0.0.0/24
 
-tail-ipam calc aggregate fd12:3456:789a:1::/64 fd12:3456:789a:2::/63 fd12:3456:789a::/64
+tsipam calc aggregate fd12:3456:789a:1::/64 fd12:3456:789a:2::/63 fd12:3456:789a::/64
 # fd12:3456:789a::/62
 
-tail-ipam calc aggregate 10.0.0.0/24 10.1.0.0/24 --format json
+tsipam calc aggregate 10.0.0.0/24 10.1.0.0/24 --format json
 ```
 
 IPv4 and IPv6 CIDRs may be mixed in one invocation. Each family is aggregated
@@ -601,7 +597,7 @@ on its own, so a CIDR never merges with, or is covered by, a CIDR of the other
 family, and every IPv4 supernet is listed before any IPv6 supernet:
 
 ```bash
-tail-ipam calc aggregate 2001:db8::/49 10.0.0.128/25 2001:db8:0:8000::/49 10.0.0.0/25
+tsipam calc aggregate 2001:db8::/49 10.0.0.128/25 2001:db8:0:8000::/49 10.0.0.0/25
 # 10.0.0.0/24
 # 2001:db8::/48
 ```
@@ -616,10 +612,10 @@ To summarize the subnet pools already reserved in a local registry, use
 `--from-registry`:
 
 ```bash
-tail-ipam calc aggregate --from-registry \
-  --registry-dir /etc/tail-ipam --tailnet production
-tail-ipam calc aggregate --from-registry \
-  --registry-dir /etc/tail-ipam --tailnet production --format json
+tsipam calc aggregate --from-registry \
+  --registry-dir /etc/tsipam --tailnet production
+tsipam calc aggregate --from-registry \
+  --registry-dir /etc/tsipam --tailnet production --format json
 ```
 
 Registry aggregation supports IPv4-only, IPv6-only, and mixed-family subnet
@@ -659,12 +655,12 @@ to the registry. It searches conflicting CIDR intervals directly, so finding a
 free child does not enumerate every possible child of a large pool.
 
 ```bash
-tail-ipam calc next-free 10.20.0.0/16 --size 24 \
-  --registry-dir /etc/tail-ipam --tailnet production
-tail-ipam subnet reserve "$(tail-ipam calc next-free 10.20.0.0/16 --size 24)" branch-office
-tail-ipam calc next-free 2001:db8::/32 --size 48 --count 3 \
-  --registry-dir /etc/tail-ipam --tailnet production
-tail-ipam subnet reserve "$(tail-ipam calc next-free 2001:db8::/48 --size 64)" branch-office
+tsipam calc next-free 10.20.0.0/16 --size 24 \
+  --registry-dir /etc/tsipam --tailnet production
+tsipam subnet reserve "$(tsipam calc next-free 10.20.0.0/16 --size 24)" branch-office
+tsipam calc next-free 2001:db8::/32 --size 48 --count 3 \
+  --registry-dir /etc/tsipam --tailnet production
+tsipam subnet reserve "$(tsipam calc next-free 2001:db8::/48 --size 64)" branch-office
 ```
 
 One result is exactly one bare CIDR followed by a newline, which makes the
@@ -702,7 +698,7 @@ for its containing block. Human output is one tab-separated `fact` and `value`
 pair per line:
 
 ```bash
-tail-ipam calc info 192.168.1.0/24
+tsipam calc info 192.168.1.0/24
 # prefix        192.168.1.0/24
 # network       192.168.1.0
 # broadcast     192.168.1.255
@@ -718,7 +714,7 @@ address is the whole range. The broadcast fact is omitted entirely for
 those sizes, in both formats, rather than rendered empty:
 
 ```bash
-tail-ipam calc info 10.0.0.0/31
+tsipam calc info 10.0.0.0/31
 # prefix        10.0.0.0/31
 # network       10.0.0.0
 # first_usable  10.0.0.0
@@ -731,7 +727,7 @@ formats. Every address in an IPv6 block is usable, including `/127` and
 `/128`; for example:
 
 ```bash
-tail-ipam calc info 2001:db8:1::42/64
+tsipam calc info 2001:db8:1::42/64
 # prefix        2001:db8:1::/64
 # network       2001:db8:1::
 # first_usable  2001:db8:1::
@@ -748,7 +744,7 @@ a number is required.
 
 IPv4-mapped (4-in-6) prefixes of `/96` or longer are normalized to plain
 IPv4 first, exactly as `calc split` does, so
-`tail-ipam calc info '::ffff:10.0.0.0/120'` reports the facts for
+`tsipam calc info '::ffff:10.0.0.0/120'` reports the facts for
 `10.0.0.0/24`. Shorter 4-in-6-like prefixes cannot be exclusively IPv4-mapped
 and are treated as native IPv6.
 
@@ -861,7 +857,7 @@ data in the map it is about to read or change.
 
 A comment attached directly to a released entry (i.e. immediately above it)
 is removed along with that entry — this is standard `hujson` behavior, not a
-tail-ipam bug. Comments elsewhere in the file, including ones attached to
+tsipam bug. Comments elsewhere in the file, including ones attached to
 other entries, are preserved.
 
 ### Machine-readable and diagnostic output
@@ -876,7 +872,7 @@ output:
 ```json
 {
   "schema_version": "1",
-  "tool": "tail-ipam",
+  "tool": "tsipam",
   "command": "site-id reserve",
   "status": "ok",
   "message": "reserved site ID 1 for \"hq-vpc\"",
@@ -900,9 +896,9 @@ Empty list results remain JSON arrays. Treat field names and meanings as a
 compatibility surface; `schema_version` changes before a breaking contract
 change.
 
-Run `tail-ipam -schema` for the authoritative machine-readable command, flag,
-and exit-code catalog. Run `tail-ipam --help` for examples and the human-facing
-exit-code description. `tail-ipam --version` includes the embedded VCS revision
+Run `tsipam -schema` for the authoritative machine-readable command, flag,
+and exit-code catalog. Run `tsipam --help` for examples and the human-facing
+exit-code description. `tsipam --version` includes the embedded VCS revision
 and marks a modified working-tree build as dirty.
 
 `-verbose` enables structured `slog` diagnostics for collection, loopback
@@ -934,28 +930,25 @@ placeholders are artifact-scoped.
 
 ### Not yet implemented
 
-The following commands and features are planned future work per
-[`../ROADMAP.md`](../ROADMAP.md) ("Future Vision" → `tail-ipam`):
+The following commands and features are planned future work:
 
 - On-prem CIDR planning (address space not yet advertised as live routes)
 
 ## Build
 
 ```sh
-go build -o tail-ipam ./cmd/tail-ipam
+go build -o tsipam ./cmd/tsipam
 ```
 
-`make build` at the monorepo root builds all tool binaries into `bin/`. See
+Tool versions and the check tasks live in [`mise.toml`](./mise.toml). See
 also [Smoke-test a release](./docs/how-to/release-smoke.md), which exercises
 a built binary against the contract this README documents.
 
-Releases are not discovery-based: this module is registered in
-`release-please-config.json`, `.release-please-manifest.json`, and the release
-workflow's tag outputs, and ships its own [`.goreleaser.yaml`](./.goreleaser.yaml).
-Merging its release-please PR cuts the `tail-ipam/vX.Y.Z` tag and attaches the
-archives; registration alone does not cut the initial release.
+Merging the release-please pull request cuts the `vX.Y.Z` tag. The release
+workflow then builds with [`.goreleaser.yaml`](./.goreleaser.yaml) and attaches
+the archives.
 
 ## License
 
-Apache-2.0; see this module's [LICENSE](./LICENSE) and [`NOTICE`](./NOTICE) — the
-latter carries the full third-party dependency inventory for the release binaries.
+Apache-2.0; see [LICENSE](./LICENSE) and [`NOTICE`](./NOTICE). Release
+archives carry a generated `NOTICE` with the third-party dependency inventory.

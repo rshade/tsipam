@@ -1,7 +1,7 @@
 // Package loopback runs the goa-generated ipam HTTP server and client over an
 // ephemeral, per-invocation Unix domain socket, in-process.
 //
-// The point is dogfooding: every tail-ipam invocation, including the fully
+// The point is dogfooding: every tsipam invocation, including the fully
 // local default, goes through the same transport/encoding/validation path a
 // remote deployment's client would use. Pointing the client at a real host
 // later is an endpoint change, not a code change. This is deliberately not a
@@ -23,16 +23,16 @@ import (
 
 	goahttp "goa.design/goa/v3/http"
 
-	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
-	ipamserver "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/server"
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/ipamsvc"
+	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
+	ipamserver "github.com/rshade/tsipam/gen/http/ipam/server"
+	ipam "github.com/rshade/tsipam/gen/ipam"
+	"github.com/rshade/tsipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/ipamsvc"
 )
 
 // socketFileName is fixed because each Run gets its own freshly created
 // temporary directory (see [os.MkdirTemp] below) — the uniqueness guarantee
-// comes from the directory, not the file name, so two concurrent tail-ipam
+// comes from the directory, not the file name, so two concurrent tsipam
 // processes never share a socket path.
 const socketFileName = "ipam.sock"
 
@@ -69,7 +69,7 @@ func RunWithService(
 ) error {
 	logger := svc.Logger
 	diagnostics.Debug(logger, "starting loopback registry transport")
-	socketDir, err := os.MkdirTemp("", "tail-ipam-*")
+	socketDir, err := os.MkdirTemp("", "tsipam-*")
 	if err != nil {
 		return fmt.Errorf("creating socket directory: %w", err)
 	}
@@ -113,7 +113,7 @@ func RunWithService(
 			},
 		},
 	}
-	client := ipamclient.NewClient("http", "tail-ipam.local", httpClient,
+	client := ipamclient.NewClient("http", "tsipam.local", httpClient,
 		goahttp.RequestEncoder, goahttp.ResponseDecoder, false)
 
 	diagnostics.Debug(logger, "loopback registry transport ready")

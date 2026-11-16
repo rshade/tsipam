@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 func TestServiceEntryMarshalJSON(t *testing.T) {

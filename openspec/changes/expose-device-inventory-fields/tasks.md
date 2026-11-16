@@ -23,5 +23,5 @@
 
 ## 4. Verification
 
-- [x] 4.1 Run `go test ./...` and `golangci-lint run ./...` in `tail-ipam` with `GOWORK=off`.
+- [x] 4.1 Run `go test ./...` and `golangci-lint run ./...` in `tsipam` with `GOWORK=off`.
 - [x] 4.2 Validate the OpenSpec change.

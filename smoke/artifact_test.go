@@ -50,7 +50,7 @@ func archiveExt(target string) string {
 }
 
 func archiveName(version, target string) string {
-	return "tail-ipam_" + version + "_" + target + archiveExt(target)
+	return "tsipam_" + version + "_" + target + archiveExt(target)
 }
 
 func TestArtifacts(t *testing.T) {
@@ -61,7 +61,7 @@ func TestArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if meta.Version == "" || strings.Contains(meta.Version, "SNAPSHOT") || meta.Commit == "none" {
-		t.Fatalf("metadata %+v is a snapshot; build with the release tag (see make smoke-release)", meta)
+		t.Fatalf("metadata %+v is a snapshot; build with the release tag (see mise run smoke-release)", meta)
 	}
 
 	t.Run("checksums cover every archive and verify", func(t *testing.T) {
@@ -99,7 +99,7 @@ func assertArchiveMembers(t *testing.T, dist, version string) {
 	for _, target := range releaseTargets() {
 		name := archiveName(version, target)
 		members := archiveMembers(t, filepath.Join(dist, name))
-		binaryName := "tail-ipam"
+		binaryName := "tsipam"
 		if strings.HasPrefix(target, "windows_") {
 			binaryName += ".exe"
 		}
@@ -123,11 +123,11 @@ func assertHostBinaryVersion(t *testing.T, dist string, meta releaseMetadata) {
 		t.Fatalf("--version: %v", err)
 	}
 	version := strings.TrimSpace(string(out))
-	containsAll(t, version, "tail-ipam "+meta.Version)
+	containsAll(t, version, "tsipam "+meta.Version)
 	containsNone(t, version, "dirty", "dev")
 	if meta.Commit == "" {
-		t.Logf("not checking the commit: dist has no metadata.json and %s is not in this checkout",
-			releaseTag(meta.Version))
+		t.Logf("not checking the commit: dist has no metadata.json and v%s is not in this checkout",
+			meta.Version)
 		return
 	}
 	containsAll(t, version, meta.Commit[:min(len(meta.Commit), shortCommitLen)])
@@ -201,12 +201,12 @@ func archiveMembers(t *testing.T, path string) []string {
 	return names
 }
 
-// extractBinary pulls the tail-ipam executable out of a tar.gz archive into a
+// extractBinary pulls the tsipam executable out of a tar.gz archive into a
 // temporary directory and returns its path.
 func extractBinary(t *testing.T, path string) string {
 	t.Helper()
-	out := filepath.Join(t.TempDir(), "tail-ipam")
-	if err := extractTarMember(path, "tail-ipam", out); err != nil {
+	out := filepath.Join(t.TempDir(), "tsipam")
+	if err := extractTarMember(path, "tsipam", out); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -224,7 +224,7 @@ func extractHostBinary(dist, out string) error {
 	if runtime.GOOS == "windows" || !slices.Contains(releaseTargets(), target) {
 		return fmt.Errorf("no extractable release archive for %s; set %s", target, envBinary)
 	}
-	return extractTarMember(filepath.Join(dist, archiveName(meta.Version, target)), "tail-ipam", out)
+	return extractTarMember(filepath.Join(dist, archiveName(meta.Version, target)), "tsipam", out)
 }
 
 // extractTarMember copies the named entry of a tar.gz archive to an

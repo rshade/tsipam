@@ -1,16 +1,16 @@
 # Gate address space in CI
 
-Use `tail-ipam` in two stages: an offline policy check on every pull request
+Use `tsipam` in two stages: an offline policy check on every pull request
 that touches the policy or the registry, and a credentialed registry check
 after merge or on a schedule.
 
 ## Check pull requests offline
 
 `check-policy` needs the policy file and the registry, nothing else. Install a
-fixed `tail-ipam` release in the job and run:
+fixed `tsipam` release in the job and run:
 
 ```bash
-tail-ipam check-policy policy.hujson --registry-dir . --tailnet production
+tsipam check-policy policy.hujson --registry-dir . --tailnet production
 ```
 
 It exits `0` when every authored ipset CIDR sits inside a reserved pool and
@@ -28,7 +28,7 @@ Expose credentials only to a protected job:
 ```bash
 export TAILSCALE_TAILNET=example.ts.net
 export TAILSCALE_API_KEY="${TAILSCALE_API_KEY_FROM_SECRET_STORE}"
-tail-ipam check --registry-dir . --tailnet production
+tsipam check --registry-dir . --tailnet production
 ```
 
 `check` exits `1` when a reservation has no live counterpart or a live route,
@@ -51,7 +51,7 @@ Add `--format json` and capture stdout on its own; stderr carries diagnostics
 and must not be mixed into the document:
 
 ```bash
-tail-ipam check --registry-dir . --tailnet production --format json \
+tsipam check --registry-dir . --tailnet production --format json \
   > check.json 2> check.log
 ```
 
@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: tail-ipam check-policy policy.hujson --registry-dir . --tailnet production
+      - run: tsipam check-policy policy.hujson --registry-dir . --tailnet production
 
   registry:
     needs: policy
@@ -85,11 +85,11 @@ jobs:
       TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - run: tail-ipam check --registry-dir . --tailnet production --format json > check.json
+      - run: tsipam check --registry-dir . --tailnet production --format json > check.json
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: registry-check, path: check.json }
 ```
 
-Install `tail-ipam` from a pinned release archive in each job; see the
-[tail-ipam README](../../README.md) for the release layout.
+Install `tsipam` from a pinned release archive in each job; see the
+[tsipam README](../../README.md) for the release layout.

@@ -1,6 +1,6 @@
-module github.com/rshade/tailscale-utils/tail-ipam
+module github.com/rshade/tsipam
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/jaxxstorm/tscli v0.12.0

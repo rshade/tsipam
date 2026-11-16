@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 //nolint:gocognit // the table verifies each nested HuJSON presence state in one shared operation matrix

@@ -3,7 +3,7 @@ package diagnostics_test
 import (
 	"testing"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/diagnostics"
 )
 
 // mockLogger records calls to its Debug and Warn methods.

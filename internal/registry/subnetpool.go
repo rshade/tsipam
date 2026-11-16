@@ -12,7 +12,7 @@ import (
 	"github.com/rshade/tsacl/pkg/policycore/addrspace"
 	"github.com/rshade/tsacl/pkg/policycore/hujsonedit"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/diagnostics"
 )
 
 // SubnetPoolEntry is one resolved subnet-pool reservation, returned by

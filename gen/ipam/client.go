@@ -3,7 +3,7 @@
 // ipam client
 //
 // Command:
-// $ goa gen github.com/rshade/tailscale-utils/tail-ipam/design
+// $ goa gen github.com/rshade/tsipam/design
 
 package ipam
 

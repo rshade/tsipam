@@ -3,9 +3,9 @@ package ipamsvc
 import (
 	"context"
 
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/policycheck"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	ipam "github.com/rshade/tsipam/gen/ipam"
+	"github.com/rshade/tsipam/internal/policycheck"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 // CheckPolicy compares local authored address space with one subnet-pool snapshot.

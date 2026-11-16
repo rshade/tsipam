@@ -1,6 +1,6 @@
 # Exit codes
 
-`tail-ipam` uses three exit codes. `tail-ipam -schema` carries the same
+`tsipam` uses three exit codes. `tsipam -schema` carries the same
 catalog in machine-readable form.
 
 | Code | Meaning | stdout |
@@ -36,7 +36,7 @@ catalog in machine-readable form.
   without `TAILSCALE_TAILNET` and credentials, or when an API request fails.
 - `calc next-free` or `subnet allocate` when the pool has no free block of
   the requested size: the message goes to stderr and stdout stays empty, so
-  `subnet reserve "$(tail-ipam calc next-free …)"` fails at `reserve` with
+  `subnet reserve "$(tsipam calc next-free …)"` fails at `reserve` with
   `subnet CIDR must not be empty` rather than passing text as a CIDR, and
   `allocate` writes nothing to the registry.
 - `check-policy` with a missing or malformed policy, an ipset reference
@@ -49,7 +49,7 @@ catalog in machine-readable form.
 ## Reading the codes in scripts
 
 ```bash
-tail-ipam check --registry-dir . --tailnet production --format json > check.json
+tsipam check --registry-dir . --tailnet production --format json > check.json
 case $? in
   0) echo "registry matches" ;;
   1) echo "drift; see check.json" ;;

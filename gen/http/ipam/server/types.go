@@ -3,12 +3,12 @@
 // ipam HTTP server types
 //
 // Command:
-// $ goa gen github.com/rshade/tailscale-utils/tail-ipam/design
+// $ goa gen github.com/rshade/tsipam/design
 
 package server
 
 import (
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	ipam "github.com/rshade/tsipam/gen/ipam"
 	goa "goa.design/goa/v3/pkg"
 )
 
@@ -750,7 +750,7 @@ func NewCheckPolicyResponseBody(res *ipam.PolicyComparison) *CheckPolicyResponse
 
 // NewListSiteIdsResponseBody builds the HTTP response body from the result of
 // the "list_site_ids" endpoint of the "ipam" service.
-func NewListSiteIdsResponseBody(res []*ipam.SiteIDReservation) ListSiteIdsResponseBody {
+func NewListSiteIdsResponseBody(res []*ipam.SiteIDReservation) []*SiteIDReservationResponse {
 	body := make([]*SiteIDReservationResponse, len(res))
 	for i, val := range res {
 		if val == nil {
@@ -789,7 +789,7 @@ func NewReleaseSiteIDResponseBody(res *ipam.ReleaseSiteIDResult) *ReleaseSiteIDR
 
 // NewListSubnetPoolsResponseBody builds the HTTP response body from the result
 // of the "list_subnet_pools" endpoint of the "ipam" service.
-func NewListSubnetPoolsResponseBody(res []*ipam.SubnetPoolReservation) ListSubnetPoolsResponseBody {
+func NewListSubnetPoolsResponseBody(res []*ipam.SubnetPoolReservation) []*SubnetPoolReservationResponse {
 	body := make([]*SubnetPoolReservationResponse, len(res))
 	for i, val := range res {
 		if val == nil {
@@ -843,7 +843,7 @@ func NewReleaseSubnetPoolResponseBody(res *ipam.ReleaseSubnetPoolResult) *Releas
 
 // NewListServiceAddressesResponseBody builds the HTTP response body from the
 // result of the "list_service_addresses" endpoint of the "ipam" service.
-func NewListServiceAddressesResponseBody(res []*ipam.ServiceAddressReservation) ListServiceAddressesResponseBody {
+func NewListServiceAddressesResponseBody(res []*ipam.ServiceAddressReservation) []*ServiceAddressReservationResponse {
 	body := make([]*ServiceAddressReservationResponse, len(res))
 	for i, val := range res {
 		if val == nil {
@@ -882,7 +882,7 @@ func NewReleaseServiceAddressResponseBody(res *ipam.ReleaseServiceAddressResult)
 
 // NewListUDPPortsResponseBody builds the HTTP response body from the result of
 // the "list_udp_ports" endpoint of the "ipam" service.
-func NewListUDPPortsResponseBody(res []*ipam.UDPPortReservation) ListUDPPortsResponseBody {
+func NewListUDPPortsResponseBody(res []*ipam.UDPPortReservation) []*UDPPortReservationResponse {
 	body := make([]*UDPPortReservationResponse, len(res))
 	for i, val := range res {
 		if val == nil {
@@ -1338,7 +1338,7 @@ func NewReleaseUDPPortPayload(tailnet string, site string, port string) *ipam.Re
 }
 
 // ValidateCheckPolicyRequestBody runs the validations defined on
-// check_policy_request_body
+// CheckPolicyRequestBody
 func ValidateCheckPolicyRequestBody(body *CheckPolicyRequestBody) (err error) {
 	if body.Policy == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("policy", "body"))
@@ -1347,7 +1347,7 @@ func ValidateCheckPolicyRequestBody(body *CheckPolicyRequestBody) (err error) {
 }
 
 // ValidateReserveSiteIDRequestBody runs the validations defined on
-// reserve_site_id_request_body
+// ReserveSiteIDRequestBody
 func ValidateReserveSiteIDRequestBody(body *ReserveSiteIDRequestBody) (err error) {
 	if body.ID == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
@@ -1362,7 +1362,7 @@ func ValidateReserveSiteIDRequestBody(body *ReserveSiteIDRequestBody) (err error
 }
 
 // ValidateReserveSubnetPoolRequestBody runs the validations defined on
-// reserve_subnet_pool_request_body
+// ReserveSubnetPoolRequestBody
 func ValidateReserveSubnetPoolRequestBody(body *ReserveSubnetPoolRequestBody) (err error) {
 	if body.CIDR == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
@@ -1377,7 +1377,7 @@ func ValidateReserveSubnetPoolRequestBody(body *ReserveSubnetPoolRequestBody) (e
 }
 
 // ValidateAllocateSubnetPoolRequestBody runs the validations defined on
-// allocate_subnet_pool_request_body
+// AllocateSubnetPoolRequestBody
 func ValidateAllocateSubnetPoolRequestBody(body *AllocateSubnetPoolRequestBody) (err error) {
 	if body.Pool == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("pool", "body"))
@@ -1395,7 +1395,7 @@ func ValidateAllocateSubnetPoolRequestBody(body *AllocateSubnetPoolRequestBody) 
 }
 
 // ValidateReserveServiceAddressRequestBody runs the validations defined on
-// reserve_service_address_request_body
+// ReserveServiceAddressRequestBody
 func ValidateReserveServiceAddressRequestBody(body *ReserveServiceAddressRequestBody) (err error) {
 	if body.Address == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("address", "body"))
@@ -1410,7 +1410,7 @@ func ValidateReserveServiceAddressRequestBody(body *ReserveServiceAddressRequest
 }
 
 // ValidateReserveUDPPortRequestBody runs the validations defined on
-// reserve_udp_port_request_body
+// ReserveUDPPortRequestBody
 func ValidateReserveUDPPortRequestBody(body *ReserveUDPPortRequestBody) (err error) {
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))

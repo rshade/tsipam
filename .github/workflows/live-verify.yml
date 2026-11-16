@@ -1,0 +1,97 @@
+# Opt-in, credentialed live-verify tier.
+#
+# Every other test here is offline. That cannot validate a claim like "the
+# devices tsipam reads and the routes it plans against still look the way the
+# real control plane returns them today". This workflow is that opt-in tier,
+# excluded from ordinary CI. It runs the smoke suite's TestLive* cases:
+# `devices list` human/JSON parity, plan and check round trips against live
+# allocations, and the next-free and subnet-allocate matching rules. They read
+# devices and routes from the tailnet and write only to a temporary local
+# registry, so a read-only credential is enough.
+#
+# The tailnet is shared, so live-verify never runs on a pull request: it runs
+# only on workflow_dispatch from main, after the change has merged, and waits
+# for the protected `live-verify` environment's required reviewer.
+#
+# compile-check runs on PRs that touch the smoke suite and needs no
+# credentials. A build tag nobody compiles by default rots unnoticed, so it vets
+# the smoke-tagged tests to prove they still compile; it never executes them.
+#
+# The job reads TAILSCALE_API_KEY and TAILSCALE_TAILNET from secrets stored on
+# the `live-verify` environment, so they are released only to an approved run on
+# main. Use a read-only API key or OAuth client, and keep it out of
+# repository-level secrets so no other workflow can read it.
+name: Live verify
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - "smoke/**"
+      - ".github/workflows/live-verify.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  compile-check:
+    name: Compile smoke-tagged files (no credentials)
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install pinned tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+
+      - name: go vet with the smoke tag
+        run: go vet -tags smoke ./...
+
+  live-verify:
+    name: Run live-verify against a real tailnet (opt-in)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 15
+    environment: live-verify
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install pinned tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+
+      - name: Run the live smoke cases
+        env:
+          TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY }}
+          TAILSCALE_TAILNET: ${{ secrets.TAILSCALE_TAILNET }}
+          TSIPAM_SMOKE_LIVE: "1"
+        run: |
+          set -uo pipefail
+          : "${TAILSCALE_API_KEY:?set the TAILSCALE_API_KEY secret on the live-verify environment}"
+          : "${TAILSCALE_TAILNET:?set the TAILSCALE_TAILNET secret on the live-verify environment}"
+
+          log=$(mktemp)
+          go test -tags smoke -count=1 -v -run '^TestLive' ./smoke 2>&1 | tee "$log"
+          rc=${PIPESTATUS[0]}
+          passed=$(grep -c '^--- PASS: TestLive' "$log" || true)
+          skipped=$(grep -c '^--- SKIP: TestLive' "$log" || true)
+          echo "live smoke: $passed passed, $skipped skipped"
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::error::live smoke failed"
+            exit 1
+          fi
+          if [[ "$passed" -eq 0 ]]; then
+            echo "::error::no live smoke test passed, so the run proved nothing"
+            exit 1
+          fi

@@ -10,7 +10,7 @@ change to them.
 ```json
 {
   "schema_version": "1",
-  "tool": "tail-ipam",
+  "tool": "tsipam",
   "command": "subnet reserve",
   "status": "ok",
   "message": "reserved subnet CIDR 10.20.0.0/24 for \"hq-vpc\"",
@@ -21,7 +21,7 @@ change to them.
 | Field | Values |
 | --- | --- |
 | `schema_version` | `"1"` |
-| `tool` | `"tail-ipam"` |
+| `tool` | `"tsipam"` |
 | `command` | The subcommand path, for example `"site-id list"` or `"check-policy"` |
 | `status` | `"ok"`; `"no_changes"` for a reserve or release that changed nothing; `"drift"` for a check that found drift |
 | `message` | Human summary of the result |

@@ -1,6 +1,6 @@
 # Redact output for sharing
 
-Use this when a `tail-ipam` report has to leave the team: a support ticket, a
+Use this when a `tsipam` report has to leave the team: a support ticket, a
 public issue, a slide. Sanitization replaces identities with placeholders after
 the real operation has completed, so the command's effect and exit code are
 unchanged.
@@ -10,7 +10,7 @@ unchanged.
 Per command:
 
 ```bash
-tail-ipam check --registry-dir /etc/tail-ipam --tailnet production --sanitize identity
+tsipam check --registry-dir /etc/tsipam --tailnet production --sanitize identity
 ```
 
 For a whole session or CI job, set the environment variable. It overrides
@@ -19,8 +19,8 @@ redacted:
 
 ```bash
 export TAILSCALE_SANITIZE=identity
-tail-ipam subnet list
-# stderr: tail-ipam: TAILSCALE_SANITIZE=identity is active; output is sanitized
+tsipam subnet list
+# stderr: tsipam: TAILSCALE_SANITIZE=identity is active; output is sanitized
 ```
 
 `strict` matches `identity`, except that device tags stay visible at

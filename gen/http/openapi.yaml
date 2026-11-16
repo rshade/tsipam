@@ -1,6 +1,6 @@
 swagger: "2.0"
 info:
-    title: tail-ipam address-space registry API
+    title: tsipam address-space registry API
     description: Plans and allocates Tailscale address space through 4via6 site IDs, subnet CIDR pools, per-service IPv4 addresses, and per-device UDP listen ports. Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own control-plane API convention.
     version: 0.0.1
 host: localhost:80
@@ -43,9 +43,17 @@ paths:
                             - authored
                             - reserved
                 "400":
-                    description: Bad Request response.
+                    description: 'policy_check_failed: Policy or registry input could not be compared completely.'
                     schema:
                         $ref: '#/definitions/IpamCheckPolicyPolicyCheckFailedResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: policy_check_failed
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
     /tailnet/{tailnet}/ipam/plan:
@@ -77,9 +85,17 @@ paths:
                             - entries
                             - excluded
                 "502":
-                    description: Bad Gateway response.
+                    description: 'comparison_failed: Registry or live inventory could not be compared completely.'
                     schema:
                         $ref: '#/definitions/IpamPlanComparisonFailedResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: comparison_failed
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
     /tailnet/{tailnet}/ipam/service-addresses:
@@ -132,13 +148,29 @@ paths:
                             - service
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: address, service, or reservation metadata is invalid.'
                     schema:
                         $ref: '#/definitions/IpamReserveServiceAddressInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
                 "409":
-                    description: Conflict response.
+                    description: 'collision: address is already reserved for a different service.'
                     schema:
                         $ref: '#/definitions/IpamReserveServiceAddressCollisionResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: collision
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
         delete:
@@ -166,9 +198,17 @@ paths:
                             - address
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: address is not a bare IPv4 host or exact IPv4 /32 prefix.'
                     schema:
                         $ref: '#/definitions/IpamReleaseServiceAddressInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
     /tailnet/{tailnet}/ipam/site-ids:
@@ -221,13 +261,29 @@ paths:
                             - site
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: id, site, or reservation metadata is invalid.'
                     schema:
                         $ref: '#/definitions/IpamReserveSiteIDInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
                 "409":
-                    description: Conflict response.
+                    description: 'collision: id is already reserved for a different site.'
                     schema:
                         $ref: '#/definitions/IpamReserveSiteIDCollisionResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: collision
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
     /tailnet/{tailnet}/ipam/site-ids/{id}:
@@ -256,9 +312,17 @@ paths:
                             - id
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: id is not a valid 4via6 site ID.'
                     schema:
                         $ref: '#/definitions/IpamReleaseSiteIDInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
     /tailnet/{tailnet}/ipam/subnet-pools:
@@ -311,13 +375,29 @@ paths:
                             - site
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: cidr, site, or reservation metadata is invalid.'
                     schema:
                         $ref: '#/definitions/IpamReserveSubnetPoolInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
                 "409":
-                    description: Conflict response.
+                    description: 'collision: cidr overlaps a subnet pool reserved for a different site.'
                     schema:
                         $ref: '#/definitions/IpamReserveSubnetPoolCollisionResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: collision
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
         delete:
@@ -345,9 +425,17 @@ paths:
                             - cidr
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: cidr is not a valid IPv4 or IPv6 CIDR prefix.'
                     schema:
                         $ref: '#/definitions/IpamReleaseSubnetPoolInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
     /tailnet/{tailnet}/ipam/subnet-pools/allocate:
@@ -382,13 +470,29 @@ paths:
                             - site
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: pool, size, site, a live route, or reservation metadata is invalid.'
                     schema:
                         $ref: '#/definitions/IpamAllocateSubnetPoolInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
                 "422":
-                    description: Unprocessable Entity response.
+                    description: 'exhausted: No child of the requested size is free inside the pool.'
                     schema:
                         $ref: '#/definitions/IpamAllocateSubnetPoolExhaustedResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: exhausted
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
     /tailnet/{tailnet}/ipam/udp-ports:
@@ -416,9 +520,17 @@ paths:
                         items:
                             $ref: '#/definitions/UDPPortReservation'
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: site is not a valid site/firewall-boundary label.'
                     schema:
                         $ref: '#/definitions/IpamListUDPPortsInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
         post:
@@ -452,13 +564,29 @@ paths:
                             - device
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: site, port, or device is invalid.'
                     schema:
                         $ref: '#/definitions/IpamReserveUDPPortInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
                 "409":
-                    description: Conflict response.
+                    description: 'collision: port is already reserved for a different device within the site.'
                     schema:
                         $ref: '#/definitions/IpamReserveUDPPortCollisionResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: collision
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
         delete:
@@ -492,9 +620,17 @@ paths:
                             - port
                             - changed
                 "400":
-                    description: Bad Request response.
+                    description: 'invalid_input: site or port is invalid.'
                     schema:
                         $ref: '#/definitions/IpamReleaseUDPPortInvalidInputResponseBody'
+                    examples:
+                        application/vnd.goa.error:
+                            fault: false
+                            id: 123abc
+                            message: parameter 'p' must be an integer
+                            name: invalid_input
+                            temporary: false
+                            timeout: false
             schemes:
                 - http
 definitions:
@@ -505,15 +641,15 @@ definitions:
             expected:
                 type: string
                 description: Registry site label or service name, when reserved.
-                example: Maxime et alias in.
+                example: Ipsa et sequi dolores minus.
             key:
                 type: string
                 description: Numeric site ID, subnet CIDR, or service IPv4 address.
-                example: Corporis iure et accusamus.
+                example: Excepturi ullam delectus maxime.
             kind:
                 type: string
                 description: Allocation primitive.
-                example: subnet_pool
+                example: service_address
                 enum:
                     - site_id
                     - subnet_pool
@@ -522,27 +658,26 @@ definitions:
                 type: array
                 items:
                     type: string
-                    example: Perspiciatis ipsam reiciendis qui quod laudantium.
+                    example: Dolores tempora est eaque neque illo in.
                 description: Sorted unique live device or service names.
                 example:
-                    - Perspiciatis ipsam reiciendis qui quod laudantium.
-                    - Enim praesentium.
-                    - Omnis nisi quia modi qui quis.
+                    - Dolores tempora est eaque neque illo in.
+                    - Similique et.
             routes:
                 type: array
                 items:
                     type: string
-                    example: A voluptatem dolorum quasi sed rem.
+                    example: Error non nobis officia.
                 description: Sorted unique advertised routes supporting the comparison.
                 example:
-                    - A voluptatem dolorum quasi sed rem.
-                    - Qui ex ullam repellat mollitia.
-                    - Ducimus aut consequatur rerum est.
-                    - Voluptas eos at beatae.
+                    - Error non nobis officia.
+                    - Suscipit labore et est.
+                    - Ut laudantium optio fugiat.
+                    - Atque maxime id dolores eveniet.
             state:
                 type: string
                 description: Comparison classification.
-                example: unreserved_but_live
+                example: matched
                 enum:
                     - matched
                     - reserved_but_unadvertised
@@ -550,19 +685,18 @@ definitions:
                     - conflict
         description: One allocation and its registry-versus-live classification.
         example:
-            expected: Maxime et alias in.
-            key: Corporis iure et accusamus.
-            kind: subnet_pool
+            expected: Ipsa et sequi dolores minus.
+            key: Excepturi ullam delectus maxime.
+            kind: service_address
             observed:
-                - Perspiciatis ipsam reiciendis qui quod laudantium.
-                - Enim praesentium.
-                - Omnis nisi quia modi qui quis.
+                - Dolores tempora est eaque neque illo in.
+                - Similique et.
             routes:
-                - A voluptatem dolorum quasi sed rem.
-                - Qui ex ullam repellat mollitia.
-                - Ducimus aut consequatur rerum est.
-                - Voluptas eos at beatae.
-            state: unreserved_but_live
+                - Error non nobis officia.
+                - Suscipit labore et est.
+                - Ut laudantium optio fugiat.
+                - Atque maxime id dolores eveniet.
+            state: matched
         required:
             - kind
             - state
@@ -576,7 +710,7 @@ definitions:
             drift_count:
                 type: integer
                 description: Number of non-matched entries.
-                example: 6510612366751535189
+                example: 742293101381618474
                 format: int64
                 minimum: 0
             entries:
@@ -585,135 +719,79 @@ definitions:
                     $ref: '#/definitions/ComparisonEntry'
                 description: Deterministically ordered comparison entries.
                 example:
-                    - expected: Maxime et alias in.
-                      key: Corporis iure et accusamus.
-                      kind: subnet_pool
+                    - expected: Ipsa et sequi dolores minus.
+                      key: Excepturi ullam delectus maxime.
+                      kind: service_address
                       observed:
-                        - Perspiciatis ipsam reiciendis qui quod laudantium.
-                        - Enim praesentium.
-                        - Omnis nisi quia modi qui quis.
+                        - Dolores tempora est eaque neque illo in.
+                        - Similique et.
                       routes:
-                        - A voluptatem dolorum quasi sed rem.
-                        - Qui ex ullam repellat mollitia.
-                        - Ducimus aut consequatur rerum est.
-                        - Voluptas eos at beatae.
-                      state: unreserved_but_live
-                    - expected: Maxime et alias in.
-                      key: Corporis iure et accusamus.
-                      kind: subnet_pool
+                        - Error non nobis officia.
+                        - Suscipit labore et est.
+                        - Ut laudantium optio fugiat.
+                        - Atque maxime id dolores eveniet.
+                      state: matched
+                    - expected: Ipsa et sequi dolores minus.
+                      key: Excepturi ullam delectus maxime.
+                      kind: service_address
                       observed:
-                        - Perspiciatis ipsam reiciendis qui quod laudantium.
-                        - Enim praesentium.
-                        - Omnis nisi quia modi qui quis.
+                        - Dolores tempora est eaque neque illo in.
+                        - Similique et.
                       routes:
-                        - A voluptatem dolorum quasi sed rem.
-                        - Qui ex ullam repellat mollitia.
-                        - Ducimus aut consequatur rerum est.
-                        - Voluptas eos at beatae.
-                      state: unreserved_but_live
-                    - expected: Maxime et alias in.
-                      key: Corporis iure et accusamus.
-                      kind: subnet_pool
-                      observed:
-                        - Perspiciatis ipsam reiciendis qui quod laudantium.
-                        - Enim praesentium.
-                        - Omnis nisi quia modi qui quis.
-                      routes:
-                        - A voluptatem dolorum quasi sed rem.
-                        - Qui ex ullam repellat mollitia.
-                        - Ducimus aut consequatur rerum est.
-                        - Voluptas eos at beatae.
-                      state: unreserved_but_live
-                    - expected: Maxime et alias in.
-                      key: Corporis iure et accusamus.
-                      kind: subnet_pool
-                      observed:
-                        - Perspiciatis ipsam reiciendis qui quod laudantium.
-                        - Enim praesentium.
-                        - Omnis nisi quia modi qui quis.
-                      routes:
-                        - A voluptatem dolorum quasi sed rem.
-                        - Qui ex ullam repellat mollitia.
-                        - Ducimus aut consequatur rerum est.
-                        - Voluptas eos at beatae.
-                      state: unreserved_but_live
+                        - Error non nobis officia.
+                        - Suscipit labore et est.
+                        - Ut laudantium optio fugiat.
+                        - Atque maxime id dolores eveniet.
+                      state: matched
             excluded:
                 type: array
                 items:
                     type: string
-                    example: Eligendi et rerum.
+                    example: Est sunt quibusdam.
                 description: 'Allocation kinds with no live counterpart: udp_port.'
                 example:
-                    - Eligendi et rerum.
-                    - Voluptates ex.
-                    - Consequatur at voluptas optio et.
-                    - Qui dolorem.
+                    - Est sunt quibusdam.
+                    - Id numquam natus enim.
+                    - Cumque quibusdam odio minus doloribus veritatis quam.
+                    - Sint assumenda amet veritatis cupiditate enim ea.
             live_tailnet:
                 type: string
                 description: Live control-plane tailnet, independent of the registry alias.
-                example: Id aperiam fugit enim similique doloribus velit.
+                example: Nemo sit qui.
         description: A complete comparison of one registry snapshot and live allocation inventory.
         example:
-            drift_count: 6510612366751535189
+            drift_count: 742293101381618474
             entries:
-                - expected: Maxime et alias in.
-                  key: Corporis iure et accusamus.
-                  kind: subnet_pool
+                - expected: Ipsa et sequi dolores minus.
+                  key: Excepturi ullam delectus maxime.
+                  kind: service_address
                   observed:
-                    - Perspiciatis ipsam reiciendis qui quod laudantium.
-                    - Enim praesentium.
-                    - Omnis nisi quia modi qui quis.
+                    - Dolores tempora est eaque neque illo in.
+                    - Similique et.
                   routes:
-                    - A voluptatem dolorum quasi sed rem.
-                    - Qui ex ullam repellat mollitia.
-                    - Ducimus aut consequatur rerum est.
-                    - Voluptas eos at beatae.
-                  state: unreserved_but_live
-                - expected: Maxime et alias in.
-                  key: Corporis iure et accusamus.
-                  kind: subnet_pool
+                    - Error non nobis officia.
+                    - Suscipit labore et est.
+                    - Ut laudantium optio fugiat.
+                    - Atque maxime id dolores eveniet.
+                  state: matched
+                - expected: Ipsa et sequi dolores minus.
+                  key: Excepturi ullam delectus maxime.
+                  kind: service_address
                   observed:
-                    - Perspiciatis ipsam reiciendis qui quod laudantium.
-                    - Enim praesentium.
-                    - Omnis nisi quia modi qui quis.
+                    - Dolores tempora est eaque neque illo in.
+                    - Similique et.
                   routes:
-                    - A voluptatem dolorum quasi sed rem.
-                    - Qui ex ullam repellat mollitia.
-                    - Ducimus aut consequatur rerum est.
-                    - Voluptas eos at beatae.
-                  state: unreserved_but_live
-                - expected: Maxime et alias in.
-                  key: Corporis iure et accusamus.
-                  kind: subnet_pool
-                  observed:
-                    - Perspiciatis ipsam reiciendis qui quod laudantium.
-                    - Enim praesentium.
-                    - Omnis nisi quia modi qui quis.
-                  routes:
-                    - A voluptatem dolorum quasi sed rem.
-                    - Qui ex ullam repellat mollitia.
-                    - Ducimus aut consequatur rerum est.
-                    - Voluptas eos at beatae.
-                  state: unreserved_but_live
-                - expected: Maxime et alias in.
-                  key: Corporis iure et accusamus.
-                  kind: subnet_pool
-                  observed:
-                    - Perspiciatis ipsam reiciendis qui quod laudantium.
-                    - Enim praesentium.
-                    - Omnis nisi quia modi qui quis.
-                  routes:
-                    - A voluptatem dolorum quasi sed rem.
-                    - Qui ex ullam repellat mollitia.
-                    - Ducimus aut consequatur rerum est.
-                    - Voluptas eos at beatae.
-                  state: unreserved_but_live
+                    - Error non nobis officia.
+                    - Suscipit labore et est.
+                    - Ut laudantium optio fugiat.
+                    - Atque maxime id dolores eveniet.
+                  state: matched
             excluded:
-                - Eligendi et rerum.
-                - Voluptates ex.
-                - Consequatur at voluptas optio et.
-                - Qui dolorem.
-            live_tailnet: Id aperiam fugit enim similique doloribus velit.
+                - Est sunt quibusdam.
+                - Id numquam natus enim.
+                - Cumque quibusdam odio minus doloribus veritatis quam.
+                - Sint assumenda amet veritatis cupiditate enim ea.
+            live_tailnet: Nemo sit qui.
         required:
             - live_tailnet
             - drift_count
@@ -746,15 +824,15 @@ definitions:
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
-        description: No child of the requested size is free inside the pool. (default view)
+                example: false
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
             temporary: false
-            timeout: true
+            timeout: false
         required:
             - name
             - id
@@ -769,7 +847,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: true
+                example: false
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -790,9 +868,9 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: pool, size, site, a live route, or reservation metadata is invalid. (default view)
+        description: Error response result type (default view)
         example:
-            fault: true
+            fault: false
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
@@ -812,53 +890,57 @@ definitions:
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Nam quia et distinctio necessitatibus.
+                example: Consequatur numquam dolores excepturi ratione.
             live_taken:
                 type: array
                 items:
                     type: string
-                    example: Beatae molestiae aut aliquam.
+                    example: Et minus excepturi consectetur vel officiis atque.
                 description: CIDR prefixes advertised by live devices, counted as taken alongside registry reservations.
                 example:
-                    - Beatae molestiae aut aliquam.
-                    - In molestias.
+                    - Et minus excepturi consectetur vel officiis atque.
+                    - Molestiae voluptatem quaerat magni alias.
+                    - Explicabo natus expedita praesentium enim rerum.
+                    - Quibusdam consectetur.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Hic aut et adipisci omnis ipsam sapiente.
+                example: Qui totam.
             pool:
                 type: string
                 description: IPv4 or IPv6 CIDR prefix to allocate from; masked to its network address.
-                example: Nemo laudantium dolores neque veniam doloremque eos.
+                example: Qui quasi molestiae molestiae.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1981-11-04T12:49:58Z"
+                example: "2001-04-05T06:12:25Z"
                 format: date-time
             site:
                 type: string
                 description: Site name to reserve the child for.
-                example: Cupiditate voluptatum.
+                example: Officia doloribus est eius quas sunt optio.
             size:
                 type: integer
                 description: Prefix length of the child to allocate, between the pool's length and the address width.
-                example: 4227288391465765948
+                example: 3038387140018466755
                 format: int64
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Aut libero quam explicabo unde a.
+                example: Sunt cumque.
         example:
-            description: Nam quia et distinctio necessitatibus.
+            description: Consequatur numquam dolores excepturi ratione.
             live_taken:
-                - Beatae molestiae aut aliquam.
-                - In molestias.
-            owner: Hic aut et adipisci omnis ipsam sapiente.
-            pool: Nemo laudantium dolores neque veniam doloremque eos.
-            reserved_at: "1981-11-04T12:49:58Z"
-            site: Cupiditate voluptatum.
-            size: 4227288391465765948
-            ticket: Aut libero quam explicabo unde a.
+                - Et minus excepturi consectetur vel officiis atque.
+                - Molestiae voluptatem quaerat magni alias.
+                - Explicabo natus expedita praesentium enim rerum.
+                - Quibusdam consectetur.
+            owner: Qui totam.
+            pool: Qui quasi molestiae molestiae.
+            reserved_at: "2001-04-05T06:12:25Z"
+            site: Officia doloribus est eius quas sunt optio.
+            size: 3038387140018466755
+            ticket: Sunt cumque.
         required:
             - pool
             - size
@@ -874,36 +956,36 @@ definitions:
             cidr:
                 type: string
                 description: Canonical subnet CIDR actually reserved.
-                example: Nisi quas est.
+                example: Expedita dolorum omnis perspiciatis qui ut omnis.
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Eligendi ullam impedit ipsum perferendis veritatis.
+                example: Consequatur cum explicabo.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Facere delectus nobis vel eius in repellendus.
+                example: Consequatur velit.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1986-11-13T00:34:35Z"
+                example: "1978-08-16T09:09:49Z"
                 format: date-time
             site:
                 type: string
                 description: Canonical site name actually written.
-                example: Qui natus molestiae qui iste quas quos.
+                example: Doloribus accusamus fuga neque dolores ut.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Totam suscipit facilis adipisci pariatur.
+                example: Aut dicta.
         example:
             changed: true
-            cidr: Nisi quas est.
-            description: Eligendi ullam impedit ipsum perferendis veritatis.
-            owner: Facere delectus nobis vel eius in repellendus.
-            reserved_at: "1986-11-13T00:34:35Z"
-            site: Qui natus molestiae qui iste quas quos.
-            ticket: Totam suscipit facilis adipisci pariatur.
+            cidr: Expedita dolorum omnis perspiciatis qui ut omnis.
+            description: Consequatur cum explicabo.
+            owner: Consequatur velit.
+            reserved_at: "1978-08-16T09:09:49Z"
+            site: Doloribus accusamus fuga neque dolores ut.
+            ticket: Aut dicta.
         required:
             - cidr
             - site
@@ -936,7 +1018,7 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: Policy or registry input could not be compared completely. (default view)
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
@@ -958,9 +1040,9 @@ definitions:
             policy:
                 type: string
                 description: Local HuJSON policy contents; no server-side file path is accepted.
-                example: Corrupti magnam inventore.
+                example: Tempore distinctio aliquid cupiditate autem aspernatur.
         example:
-            policy: Corrupti magnam inventore.
+            policy: Tempore distinctio aliquid cupiditate autem aspernatur.
         required:
             - policy
     IpamListUDPPortsInvalidInputResponseBody:
@@ -970,7 +1052,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: true
+                example: false
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -991,9 +1073,9 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: site is not a valid site/firewall-boundary label. (default view)
+        description: Error response result type (default view)
         example:
-            fault: true
+            fault: false
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
@@ -1034,7 +1116,7 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: Registry or live inventory could not be compared completely. (default view)
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
@@ -1072,19 +1154,19 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
-        description: address is not a bare IPv4 host or exact IPv4 /32 prefix. (default view)
+                example: false
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
-            timeout: true
+            temporary: true
+            timeout: false
         required:
             - name
             - id
@@ -1099,14 +1181,14 @@ definitions:
             address:
                 type: string
                 description: Canonical bare IPv4 host address released.
-                example: Ut hic.
+                example: Dolor perspiciatis.
             changed:
                 type: boolean
                 description: False when address was not reserved.
-                example: true
+                example: false
         example:
-            address: Ut hic.
-            changed: true
+            address: Dolor perspiciatis.
+            changed: false
         required:
             - address
             - changed
@@ -1138,7 +1220,7 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: id is not a valid 4via6 site ID. (default view)
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
@@ -1160,14 +1242,14 @@ definitions:
             changed:
                 type: boolean
                 description: False when id was not reserved.
-                example: false
+                example: true
             id:
                 type: string
                 description: Canonical site ID released.
-                example: Cupiditate doloremque unde in.
+                example: Ex aliquid a illum.
         example:
-            changed: false
-            id: Cupiditate doloremque unde in.
+            changed: true
+            id: Ex aliquid a illum.
         required:
             - id
             - changed
@@ -1194,18 +1276,18 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: cidr is not a valid IPv4 or IPv6 CIDR prefix. (default view)
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
+            temporary: true
             timeout: true
         required:
             - name
@@ -1221,14 +1303,14 @@ definitions:
             changed:
                 type: boolean
                 description: False when cidr was not reserved.
-                example: true
+                example: false
             cidr:
                 type: string
                 description: Canonical subnet CIDR released.
-                example: Veniam eius ut illum pariatur.
+                example: Est excepturi ut et omnis ipsa dolorem.
         example:
-            changed: true
-            cidr: Veniam eius ut illum pariatur.
+            changed: false
+            cidr: Est excepturi ut et omnis ipsa dolorem.
         required:
             - cidr
             - changed
@@ -1239,7 +1321,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: true
+                example: false
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -1260,9 +1342,9 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: site or port is invalid. (default view)
+        description: Error response result type (default view)
         example:
-            fault: true
+            fault: false
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
@@ -1282,19 +1364,19 @@ definitions:
             changed:
                 type: boolean
                 description: False when the site and port were not reserved.
-                example: false
+                example: true
             port:
                 type: string
                 description: Canonical decimal UDP port released.
-                example: Quam reprehenderit qui.
+                example: Quia veritatis dolorum molestiae ut.
             site:
                 type: string
                 description: Canonical site label containing the released port.
-                example: Accusantium quaerat ut vitae est dolore nulla.
+                example: Ut earum adipisci at beatae quam aut.
         example:
-            changed: false
-            port: Quam reprehenderit qui.
-            site: Accusantium quaerat ut vitae est dolore nulla.
+            changed: true
+            port: Quia veritatis dolorum molestiae ut.
+            site: Ut earum adipisci at beatae quam aut.
         required:
             - site
             - port
@@ -1322,19 +1404,19 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
-        description: address is already reserved for a different service. (default view)
+                example: false
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
-            timeout: true
+            temporary: true
+            timeout: false
         required:
             - name
             - id
@@ -1365,19 +1447,19 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
-        description: address, service, or reservation metadata is invalid. (default view)
+                example: false
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
-            timeout: true
+            temporary: true
+            timeout: false
         required:
             - name
             - id
@@ -1392,35 +1474,35 @@ definitions:
             address:
                 type: string
                 description: Bare IPv4 host or exact IPv4 /32 prefix to reserve.
-                example: Dolores repellat aliquam voluptatem quo nesciunt ad.
+                example: Distinctio qui sed ipsum ut.
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Consectetur cupiditate voluptatem quisquam.
+                example: Aperiam quo.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Beatae quia.
+                example: Quae facere deserunt sit saepe.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1975-09-10T03:22:10Z"
+                example: "1980-11-01T05:11:18Z"
                 format: date-time
             service:
                 type: string
                 description: Bare service name or canonical svc:<name> identity.
-                example: Esse magnam.
+                example: Non ut quidem dolores modi.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Fugit a.
+                example: Qui pariatur dignissimos.
         example:
-            address: Dolores repellat aliquam voluptatem quo nesciunt ad.
-            description: Consectetur cupiditate voluptatem quisquam.
-            owner: Beatae quia.
-            reserved_at: "1975-09-10T03:22:10Z"
-            service: Esse magnam.
-            ticket: Fugit a.
+            address: Distinctio qui sed ipsum ut.
+            description: Aperiam quo.
+            owner: Quae facere deserunt sit saepe.
+            reserved_at: "1980-11-01T05:11:18Z"
+            service: Non ut quidem dolores modi.
+            ticket: Qui pariatur dignissimos.
         required:
             - address
             - service
@@ -1431,7 +1513,7 @@ definitions:
             address:
                 type: string
                 description: Canonical bare IPv4 host address actually written.
-                example: Iusto reiciendis dolore.
+                example: Vitae aliquam facere et.
             changed:
                 type: boolean
                 description: False when the exact address, service, and metadata were already reserved.
@@ -1439,32 +1521,32 @@ definitions:
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Sed et doloremque nobis ut.
+                example: Mollitia exercitationem maxime.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Vitae maiores cupiditate.
+                example: Ab non.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1976-10-27T10:47:04Z"
+                example: "1972-05-25T01:18:55Z"
                 format: date-time
             service:
                 type: string
                 description: Canonical svc:<name> service identity actually written.
-                example: Ea dolor ex dolor libero quia.
+                example: Voluptatum enim incidunt et animi.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Dicta earum.
+                example: Omnis consequuntur.
         example:
-            address: Iusto reiciendis dolore.
+            address: Vitae aliquam facere et.
             changed: true
-            description: Sed et doloremque nobis ut.
-            owner: Vitae maiores cupiditate.
-            reserved_at: "1976-10-27T10:47:04Z"
-            service: Ea dolor ex dolor libero quia.
-            ticket: Dicta earum.
+            description: Mollitia exercitationem maxime.
+            owner: Ab non.
+            reserved_at: "1972-05-25T01:18:55Z"
+            service: Voluptatum enim incidunt et animi.
+            ticket: Omnis consequuntur.
         required:
             - address
             - service
@@ -1492,18 +1574,18 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: id is already reserved for a different site. (default view)
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
+            temporary: true
             timeout: true
         required:
             - name
@@ -1539,15 +1621,15 @@ definitions:
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
-        description: id, site, or reservation metadata is invalid. (default view)
+                example: false
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
             temporary: false
-            timeout: true
+            timeout: false
         required:
             - name
             - id
@@ -1562,35 +1644,35 @@ definitions:
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Ratione est omnis at voluptatem explicabo qui.
+                example: Dolores quia eveniet odit numquam ex.
             id:
                 type: string
                 description: 4via6 site ID to reserve.
-                example: Qui repudiandae in hic et porro quas.
+                example: Necessitatibus aperiam voluptatem quasi distinctio.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Eum fugit inventore sit.
+                example: Eveniet dolor sunt soluta tenetur et.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1984-12-10T06:42:10Z"
+                example: "2006-10-21T04:41:45Z"
                 format: date-time
             site:
                 type: string
                 description: Site name to reserve it for.
-                example: Aliquid facere.
+                example: Similique quia est quos neque rem.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Culpa magni cum omnis.
+                example: Est neque velit.
         example:
-            description: Ratione est omnis at voluptatem explicabo qui.
-            id: Qui repudiandae in hic et porro quas.
-            owner: Eum fugit inventore sit.
-            reserved_at: "1984-12-10T06:42:10Z"
-            site: Aliquid facere.
-            ticket: Culpa magni cum omnis.
+            description: Dolores quia eveniet odit numquam ex.
+            id: Necessitatibus aperiam voluptatem quasi distinctio.
+            owner: Eveniet dolor sunt soluta tenetur et.
+            reserved_at: "2006-10-21T04:41:45Z"
+            site: Similique quia est quos neque rem.
+            ticket: Est neque velit.
         required:
             - id
             - site
@@ -1601,40 +1683,40 @@ definitions:
             changed:
                 type: boolean
                 description: False when the exact id+site pair and metadata were already reserved.
-                example: true
+                example: false
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Dolor sed tempore suscipit qui id provident.
+                example: Neque ad delectus officiis corporis qui repudiandae.
             id:
                 type: string
                 description: Canonical site ID actually written.
-                example: Occaecati accusamus nobis asperiores.
+                example: Aliquid laudantium et.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Quisquam a ut dignissimos.
+                example: Corporis in enim hic aut ut.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1976-01-14T22:54:54Z"
+                example: "1975-01-23T08:37:40Z"
                 format: date-time
             site:
                 type: string
                 description: Canonical site name actually written.
-                example: Quod qui autem.
+                example: Et quasi praesentium odit enim repellat consequatur.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Voluptatem sed quo corporis asperiores corrupti.
+                example: Perspiciatis ea vel rem esse illum.
         example:
-            changed: true
-            description: Dolor sed tempore suscipit qui id provident.
-            id: Occaecati accusamus nobis asperiores.
-            owner: Quisquam a ut dignissimos.
-            reserved_at: "1976-01-14T22:54:54Z"
-            site: Quod qui autem.
-            ticket: Voluptatem sed quo corporis asperiores corrupti.
+            changed: false
+            description: Neque ad delectus officiis corporis qui repudiandae.
+            id: Aliquid laudantium et.
+            owner: Corporis in enim hic aut ut.
+            reserved_at: "1975-01-23T08:37:40Z"
+            site: Et quasi praesentium odit enim repellat consequatur.
+            ticket: Perspiciatis ea vel rem esse illum.
         required:
             - id
             - site
@@ -1662,19 +1744,19 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
-        description: cidr overlaps a subnet pool reserved for a different site. (default view)
+                example: false
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
-            timeout: true
+            temporary: true
+            timeout: false
         required:
             - name
             - id
@@ -1710,7 +1792,7 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: cidr, site, or reservation metadata is invalid. (default view)
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
@@ -1732,35 +1814,35 @@ definitions:
             cidr:
                 type: string
                 description: Canonical IPv4 or IPv6 CIDR prefix to reserve.
-                example: Iste voluptatem modi aut id illum rerum.
+                example: Sint et.
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Eos et nesciunt aperiam molestiae iusto quia.
+                example: Vel quo et aliquam ducimus quia ut.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Consequuntur facilis.
+                example: Animi nisi totam.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1999-05-20T14:51:36Z"
+                example: "2013-06-13T22:28:00Z"
                 format: date-time
             site:
                 type: string
                 description: Site name to reserve it for.
-                example: Occaecati assumenda quia.
+                example: Ab aut sequi soluta expedita accusantium.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Qui labore facilis deleniti.
+                example: Minima accusantium qui ratione quis sunt maiores.
         example:
-            cidr: Iste voluptatem modi aut id illum rerum.
-            description: Eos et nesciunt aperiam molestiae iusto quia.
-            owner: Consequuntur facilis.
-            reserved_at: "1999-05-20T14:51:36Z"
-            site: Occaecati assumenda quia.
-            ticket: Qui labore facilis deleniti.
+            cidr: Sint et.
+            description: Vel quo et aliquam ducimus quia ut.
+            owner: Animi nisi totam.
+            reserved_at: "2013-06-13T22:28:00Z"
+            site: Ab aut sequi soluta expedita accusantium.
+            ticket: Minima accusantium qui ratione quis sunt maiores.
         required:
             - cidr
             - site
@@ -1771,40 +1853,40 @@ definitions:
             changed:
                 type: boolean
                 description: False when the exact CIDR, site, and metadata were already reserved.
-                example: false
+                example: true
             cidr:
                 type: string
                 description: Canonical subnet CIDR actually written.
-                example: Est dolor.
+                example: Est aut molestiae voluptas.
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Et corporis iste.
+                example: Praesentium eum ad est possimus qui.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Est dolorem accusantium commodi.
+                example: Excepturi error nostrum harum.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "2009-01-30T14:45:12Z"
+                example: "2007-10-20T02:26:46Z"
                 format: date-time
             site:
                 type: string
                 description: Canonical site name actually written.
-                example: Et voluptatem sit iusto.
+                example: Saepe quos repellat reprehenderit assumenda dolorem quia.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Necessitatibus impedit ducimus facere quas.
+                example: Qui provident tempora similique ducimus aut.
         example:
-            changed: false
-            cidr: Est dolor.
-            description: Et corporis iste.
-            owner: Est dolorem accusantium commodi.
-            reserved_at: "2009-01-30T14:45:12Z"
-            site: Et voluptatem sit iusto.
-            ticket: Necessitatibus impedit ducimus facere quas.
+            changed: true
+            cidr: Est aut molestiae voluptas.
+            description: Praesentium eum ad est possimus qui.
+            owner: Excepturi error nostrum harum.
+            reserved_at: "2007-10-20T02:26:46Z"
+            site: Saepe quos repellat reprehenderit assumenda dolorem quia.
+            ticket: Qui provident tempora similique ducimus aut.
         required:
             - cidr
             - site
@@ -1816,7 +1898,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: true
+                example: false
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -1837,9 +1919,9 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: port is already reserved for a different device within the site. (default view)
+        description: Error response result type (default view)
         example:
-            fault: true
+            fault: false
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
@@ -1880,7 +1962,7 @@ definitions:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
-        description: site, port, or device is invalid. (default view)
+        description: Error response result type (default view)
         example:
             fault: true
             id: 123abc
@@ -1902,19 +1984,19 @@ definitions:
             device:
                 type: string
                 description: Device label to reserve the port for.
-                example: Iste ut labore nostrum.
+                example: Voluptates aspernatur tenetur et eaque.
             port:
                 type: string
                 description: Decimal UDP listen port to reserve, 1024-65535.
-                example: Assumenda officiis.
+                example: Ut rerum.
             site:
                 type: string
                 description: Site/firewall-boundary label for the reservation.
-                example: Et neque expedita.
+                example: Corrupti maiores occaecati incidunt sit.
         example:
-            device: Iste ut labore nostrum.
-            port: Assumenda officiis.
-            site: Et neque expedita.
+            device: Voluptates aspernatur tenetur et eaque.
+            port: Ut rerum.
+            site: Corrupti maiores occaecati incidunt sit.
         required:
             - site
             - port
@@ -1926,24 +2008,24 @@ definitions:
             changed:
                 type: boolean
                 description: False when the exact site, port, and device tuple was already reserved.
-                example: true
+                example: false
             device:
                 type: string
                 description: Canonical device label actually written.
-                example: Sed quia ut ex quasi ea.
+                example: Culpa rerum et.
             port:
                 type: string
                 description: Canonical decimal UDP port actually written.
-                example: Dolores impedit et.
+                example: Asperiores ut voluptates occaecati.
             site:
                 type: string
                 description: Canonical site label actually written.
-                example: Est est mollitia voluptatibus possimus.
+                example: Sit illo inventore aliquam sit fugit.
         example:
-            changed: true
-            device: Sed quia ut ex quasi ea.
-            port: Dolores impedit et.
-            site: Est est mollitia voluptatibus possimus.
+            changed: false
+            device: Culpa rerum et.
+            port: Asperiores ut voluptates occaecati.
+            site: Sit illo inventore aliquam sit fugit.
         required:
             - site
             - port
@@ -1956,20 +2038,22 @@ definitions:
             cidr:
                 type: string
                 description: Canonical effective CIDR.
-                example: Recusandae alias dolorem doloribus ea voluptas.
+                example: Magnam culpa maiores.
             ipset:
                 type: string
                 description: Defining ipset name.
-                example: Quis exercitationem aperiam velit quia.
+                example: Voluptatem explicabo.
             pools:
                 type: array
                 items:
                     type: string
-                    example: Enim qui quia animi aut.
+                    example: Non modi esse sequi minus beatae.
                 description: Sorted containing reservation CIDRs.
                 example:
-                    - Enim qui quia animi aut.
-                    - Odit laudantium sunt incidunt neque.
+                    - Non modi esse sequi minus beatae.
+                    - Ea illo autem minus dolorem.
+                    - Sapiente eveniet praesentium dolore nihil quo quo.
+                    - Rem et distinctio eum totam et.
             state:
                 type: string
                 description: Authored classification.
@@ -1979,11 +2063,13 @@ definitions:
                     - authored_but_unreserved
         description: One effective authored CIDR and its containing reservations.
         example:
-            cidr: Recusandae alias dolorem doloribus ea voluptas.
-            ipset: Quis exercitationem aperiam velit quia.
+            cidr: Magnam culpa maiores.
+            ipset: Voluptatem explicabo.
             pools:
-                - Enim qui quia animi aut.
-                - Odit laudantium sunt incidunt neque.
+                - Non modi esse sequi minus beatae.
+                - Ea illo autem minus dolorem.
+                - Sapiente eveniet praesentium dolore nihil quo quo.
+                - Rem et distinctio eum totam et.
             state: matched
         required:
             - ipset
@@ -2000,34 +2086,42 @@ definitions:
                     $ref: '#/definitions/PolicyAuthored'
                 description: Rows sorted by ipset name, then CIDR address and length.
                 example:
-                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
-                      ipset: Quis exercitationem aperiam velit quia.
+                    - cidr: Magnam culpa maiores.
+                      ipset: Voluptatem explicabo.
                       pools:
-                        - Enim qui quia animi aut.
-                        - Odit laudantium sunt incidunt neque.
+                        - Non modi esse sequi minus beatae.
+                        - Ea illo autem minus dolorem.
+                        - Sapiente eveniet praesentium dolore nihil quo quo.
+                        - Rem et distinctio eum totam et.
                       state: matched
-                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
-                      ipset: Quis exercitationem aperiam velit quia.
+                    - cidr: Magnam culpa maiores.
+                      ipset: Voluptatem explicabo.
                       pools:
-                        - Enim qui quia animi aut.
-                        - Odit laudantium sunt incidunt neque.
+                        - Non modi esse sequi minus beatae.
+                        - Ea illo autem minus dolorem.
+                        - Sapiente eveniet praesentium dolore nihil quo quo.
+                        - Rem et distinctio eum totam et.
                       state: matched
-                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
-                      ipset: Quis exercitationem aperiam velit quia.
+                    - cidr: Magnam culpa maiores.
+                      ipset: Voluptatem explicabo.
                       pools:
-                        - Enim qui quia animi aut.
-                        - Odit laudantium sunt incidunt neque.
+                        - Non modi esse sequi minus beatae.
+                        - Ea illo autem minus dolorem.
+                        - Sapiente eveniet praesentium dolore nihil quo quo.
+                        - Rem et distinctio eum totam et.
                       state: matched
-                    - cidr: Recusandae alias dolorem doloribus ea voluptas.
-                      ipset: Quis exercitationem aperiam velit quia.
+                    - cidr: Magnam culpa maiores.
+                      ipset: Voluptatem explicabo.
                       pools:
-                        - Enim qui quia animi aut.
-                        - Odit laudantium sunt incidunt neque.
+                        - Non modi esse sequi minus beatae.
+                        - Ea illo autem minus dolorem.
+                        - Sapiente eveniet praesentium dolore nihil quo quo.
+                        - Rem et distinctio eum totam et.
                       state: matched
             drift_count:
                 type: integer
                 description: Number of unmatched rows in both directions.
-                example: 839643861232554501
+                example: 4576862195755763705
                 format: int64
                 minimum: 0
             reserved:
@@ -2036,98 +2130,74 @@ definitions:
                     $ref: '#/definitions/PolicyReserved'
                 description: Rows sorted by CIDR address and length.
                 example:
-                    - cidr: Quo quia ab qui laboriosam.
+                    - cidr: Cupiditate unde molestiae laudantium dignissimos perferendis debitis.
                       ipsets:
-                        - Ratione qui.
-                        - Dolorum enim dolore cupiditate deserunt nam.
-                        - Fugiat officia.
-                        - Qui asperiores sapiente minus.
-                      site: Qui numquam exercitationem.
+                        - Qui aut odit harum laborum.
+                        - Ut ab dolor sequi facere quia error.
+                        - Ex sint qui et.
+                        - Quia voluptatem enim id a ut voluptatem.
+                      site: Iusto numquam laborum aut.
                       state: reserved_but_unreferenced
-                    - cidr: Quo quia ab qui laboriosam.
+                    - cidr: Cupiditate unde molestiae laudantium dignissimos perferendis debitis.
                       ipsets:
-                        - Ratione qui.
-                        - Dolorum enim dolore cupiditate deserunt nam.
-                        - Fugiat officia.
-                        - Qui asperiores sapiente minus.
-                      site: Qui numquam exercitationem.
-                      state: reserved_but_unreferenced
-                    - cidr: Quo quia ab qui laboriosam.
-                      ipsets:
-                        - Ratione qui.
-                        - Dolorum enim dolore cupiditate deserunt nam.
-                        - Fugiat officia.
-                        - Qui asperiores sapiente minus.
-                      site: Qui numquam exercitationem.
-                      state: reserved_but_unreferenced
-                    - cidr: Quo quia ab qui laboriosam.
-                      ipsets:
-                        - Ratione qui.
-                        - Dolorum enim dolore cupiditate deserunt nam.
-                        - Fugiat officia.
-                        - Qui asperiores sapiente minus.
-                      site: Qui numquam exercitationem.
+                        - Qui aut odit harum laborum.
+                        - Ut ab dolor sequi facere quia error.
+                        - Ex sint qui et.
+                        - Quia voluptatem enim id a ut voluptatem.
+                      site: Iusto numquam laborum aut.
                       state: reserved_but_unreferenced
         description: Complete static comparison of authored ipsets and reserved subnet pools.
         example:
             authored:
-                - cidr: Recusandae alias dolorem doloribus ea voluptas.
-                  ipset: Quis exercitationem aperiam velit quia.
+                - cidr: Magnam culpa maiores.
+                  ipset: Voluptatem explicabo.
                   pools:
-                    - Enim qui quia animi aut.
-                    - Odit laudantium sunt incidunt neque.
+                    - Non modi esse sequi minus beatae.
+                    - Ea illo autem minus dolorem.
+                    - Sapiente eveniet praesentium dolore nihil quo quo.
+                    - Rem et distinctio eum totam et.
                   state: matched
-                - cidr: Recusandae alias dolorem doloribus ea voluptas.
-                  ipset: Quis exercitationem aperiam velit quia.
+                - cidr: Magnam culpa maiores.
+                  ipset: Voluptatem explicabo.
                   pools:
-                    - Enim qui quia animi aut.
-                    - Odit laudantium sunt incidunt neque.
+                    - Non modi esse sequi minus beatae.
+                    - Ea illo autem minus dolorem.
+                    - Sapiente eveniet praesentium dolore nihil quo quo.
+                    - Rem et distinctio eum totam et.
                   state: matched
-                - cidr: Recusandae alias dolorem doloribus ea voluptas.
-                  ipset: Quis exercitationem aperiam velit quia.
+                - cidr: Magnam culpa maiores.
+                  ipset: Voluptatem explicabo.
                   pools:
-                    - Enim qui quia animi aut.
-                    - Odit laudantium sunt incidunt neque.
+                    - Non modi esse sequi minus beatae.
+                    - Ea illo autem minus dolorem.
+                    - Sapiente eveniet praesentium dolore nihil quo quo.
+                    - Rem et distinctio eum totam et.
                   state: matched
-                - cidr: Recusandae alias dolorem doloribus ea voluptas.
-                  ipset: Quis exercitationem aperiam velit quia.
+                - cidr: Magnam culpa maiores.
+                  ipset: Voluptatem explicabo.
                   pools:
-                    - Enim qui quia animi aut.
-                    - Odit laudantium sunt incidunt neque.
+                    - Non modi esse sequi minus beatae.
+                    - Ea illo autem minus dolorem.
+                    - Sapiente eveniet praesentium dolore nihil quo quo.
+                    - Rem et distinctio eum totam et.
                   state: matched
-            drift_count: 839643861232554501
+            drift_count: 4576862195755763705
             reserved:
-                - cidr: Quo quia ab qui laboriosam.
+                - cidr: Cupiditate unde molestiae laudantium dignissimos perferendis debitis.
                   ipsets:
-                    - Ratione qui.
-                    - Dolorum enim dolore cupiditate deserunt nam.
-                    - Fugiat officia.
-                    - Qui asperiores sapiente minus.
-                  site: Qui numquam exercitationem.
+                    - Qui aut odit harum laborum.
+                    - Ut ab dolor sequi facere quia error.
+                    - Ex sint qui et.
+                    - Quia voluptatem enim id a ut voluptatem.
+                  site: Iusto numquam laborum aut.
                   state: reserved_but_unreferenced
-                - cidr: Quo quia ab qui laboriosam.
+                - cidr: Cupiditate unde molestiae laudantium dignissimos perferendis debitis.
                   ipsets:
-                    - Ratione qui.
-                    - Dolorum enim dolore cupiditate deserunt nam.
-                    - Fugiat officia.
-                    - Qui asperiores sapiente minus.
-                  site: Qui numquam exercitationem.
-                  state: reserved_but_unreferenced
-                - cidr: Quo quia ab qui laboriosam.
-                  ipsets:
-                    - Ratione qui.
-                    - Dolorum enim dolore cupiditate deserunt nam.
-                    - Fugiat officia.
-                    - Qui asperiores sapiente minus.
-                  site: Qui numquam exercitationem.
-                  state: reserved_but_unreferenced
-                - cidr: Quo quia ab qui laboriosam.
-                  ipsets:
-                    - Ratione qui.
-                    - Dolorum enim dolore cupiditate deserunt nam.
-                    - Fugiat officia.
-                    - Qui asperiores sapiente minus.
-                  site: Qui numquam exercitationem.
+                    - Qui aut odit harum laborum.
+                    - Ut ab dolor sequi facere quia error.
+                    - Ex sint qui et.
+                    - Quia voluptatem enim id a ut voluptatem.
+                  site: Iusto numquam laborum aut.
                   state: reserved_but_unreferenced
         required:
             - drift_count
@@ -2140,22 +2210,22 @@ definitions:
             cidr:
                 type: string
                 description: Reserved CIDR.
-                example: Quo quia ab qui laboriosam.
+                example: Cupiditate unde molestiae laudantium dignissimos perferendis debitis.
             ipsets:
                 type: array
                 items:
                     type: string
-                    example: Ratione qui.
+                    example: Qui aut odit harum laborum.
                 description: Sorted ipsets with overlapping effective address space.
                 example:
-                    - Ratione qui.
-                    - Dolorum enim dolore cupiditate deserunt nam.
-                    - Fugiat officia.
-                    - Qui asperiores sapiente minus.
+                    - Qui aut odit harum laborum.
+                    - Ut ab dolor sequi facere quia error.
+                    - Ex sint qui et.
+                    - Quia voluptatem enim id a ut voluptatem.
             site:
                 type: string
                 description: Registry site label.
-                example: Qui numquam exercitationem.
+                example: Iusto numquam laborum aut.
             state:
                 type: string
                 description: Reserved classification.
@@ -2165,13 +2235,13 @@ definitions:
                     - reserved_but_unreferenced
         description: One reserved subnet pool and its referencing ipsets.
         example:
-            cidr: Quo quia ab qui laboriosam.
+            cidr: Cupiditate unde molestiae laudantium dignissimos perferendis debitis.
             ipsets:
-                - Ratione qui.
-                - Dolorum enim dolore cupiditate deserunt nam.
-                - Fugiat officia.
-                - Qui asperiores sapiente minus.
-            site: Qui numquam exercitationem.
+                - Qui aut odit harum laborum.
+                - Ut ab dolor sequi facere quia error.
+                - Ex sint qui et.
+                - Quia voluptatem enim id a ut voluptatem.
+            site: Iusto numquam laborum aut.
             state: reserved_but_unreferenced
         required:
             - cidr
@@ -2185,36 +2255,36 @@ definitions:
             address:
                 type: string
                 description: Canonical bare IPv4 host address.
-                example: Ut temporibus vero sit.
+                example: Accusamus provident.
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Officiis qui et.
+                example: Quidem sapiente voluptatem.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Aut est.
+                example: Qui voluptas corporis et pariatur.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1981-10-01T11:36:06Z"
+                example: "2009-09-06T05:13:56Z"
                 format: date-time
             service:
                 type: string
                 description: Canonical svc:<name> service identity.
-                example: Totam voluptates nulla voluptates.
+                example: Maiores eligendi blanditiis incidunt voluptas adipisci maiores.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Necessitatibus vero quisquam rerum sunt nulla.
+                example: Id velit dignissimos.
         description: An IPv4 host address reserved for a Tailscale Service.
         example:
-            address: Ut temporibus vero sit.
-            description: Officiis qui et.
-            owner: Aut est.
-            reserved_at: "1981-10-01T11:36:06Z"
-            service: Totam voluptates nulla voluptates.
-            ticket: Necessitatibus vero quisquam rerum sunt nulla.
+            address: Accusamus provident.
+            description: Quidem sapiente voluptatem.
+            owner: Qui voluptas corporis et pariatur.
+            reserved_at: "2009-09-06T05:13:56Z"
+            service: Maiores eligendi blanditiis incidunt voluptas adipisci maiores.
+            ticket: Id velit dignissimos.
         required:
             - address
             - service
@@ -2225,36 +2295,36 @@ definitions:
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Maxime porro rerum illum sed dicta.
+                example: Accusamus sapiente nesciunt consequatur.
             id:
                 type: string
                 description: 'Canonical site ID: a decimal integer, 0-65535.'
-                example: Est assumenda quibusdam.
+                example: Error ipsum illum soluta voluptas debitis.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Similique labore.
+                example: Tempore qui vel ab.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "2001-11-05T19:55:55Z"
+                example: "2009-03-24T17:11:36Z"
                 format: date-time
             site:
                 type: string
                 description: Site name reserved for this ID.
-                example: Nobis id rerum fugit eum.
+                example: Sint excepturi dicta porro.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Eum voluptatem consequatur in voluptatibus.
+                example: Qui et deleniti laboriosam est enim.
         description: A reserved 4via6 site ID.
         example:
-            description: Maxime porro rerum illum sed dicta.
-            id: Est assumenda quibusdam.
-            owner: Similique labore.
-            reserved_at: "2001-11-05T19:55:55Z"
-            site: Nobis id rerum fugit eum.
-            ticket: Eum voluptatem consequatur in voluptatibus.
+            description: Accusamus sapiente nesciunt consequatur.
+            id: Error ipsum illum soluta voluptas debitis.
+            owner: Tempore qui vel ab.
+            reserved_at: "2009-03-24T17:11:36Z"
+            site: Sint excepturi dicta porro.
+            ticket: Qui et deleniti laboriosam est enim.
         required:
             - id
             - site
@@ -2265,36 +2335,36 @@ definitions:
             cidr:
                 type: string
                 description: Canonical IPv4 or IPv6 CIDR prefix.
-                example: Sit corrupti dolorem harum voluptatum.
+                example: Molestias accusantium voluptatem pariatur.
             description:
                 type: string
                 description: Free-text description of why this address space is reserved.
-                example: Aperiam cumque minus aut illum non suscipit.
+                example: Qui ea.
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
-                example: Recusandae quaerat.
+                example: Voluptas assumenda earum ea facere.
             reserved_at:
                 type: string
                 description: RFC 3339 timestamp this reservation's metadata was recorded.
-                example: "1997-03-26T19:38:02Z"
+                example: "2001-09-22T10:18:33Z"
                 format: date-time
             site:
                 type: string
                 description: Site name reserved for this subnet pool.
-                example: Sit nulla recusandae perspiciatis sit saepe.
+                example: Dolorem et id non.
             ticket:
                 type: string
                 description: Tracking ticket or issue reference for this reservation.
-                example: Hic corporis.
+                example: Cupiditate vel nemo explicabo voluptatem dicta.
         description: A subnet CIDR pool reserved for a site.
         example:
-            cidr: Sit corrupti dolorem harum voluptatum.
-            description: Aperiam cumque minus aut illum non suscipit.
-            owner: Recusandae quaerat.
-            reserved_at: "1997-03-26T19:38:02Z"
-            site: Sit nulla recusandae perspiciatis sit saepe.
-            ticket: Hic corporis.
+            cidr: Molestias accusantium voluptatem pariatur.
+            description: Qui ea.
+            owner: Voluptas assumenda earum ea facere.
+            reserved_at: "2001-09-22T10:18:33Z"
+            site: Dolorem et id non.
+            ticket: Cupiditate vel nemo explicabo voluptatem dicta.
         required:
             - cidr
             - site
@@ -2305,20 +2375,20 @@ definitions:
             device:
                 type: string
                 description: Canonical device label that owns the port within the site.
-                example: Similique et ut quae.
+                example: Quam tenetur accusamus placeat nulla minus.
             port:
                 type: string
                 description: Canonical decimal UDP listen port, 1024-65535.
-                example: Ex qui.
+                example: Doloremque eum nisi quae nihil hic adipisci.
             site:
                 type: string
                 description: Canonical site/firewall-boundary label.
-                example: Eaque non qui nam atque.
+                example: Voluptatibus rerum.
         description: A UDP listen port reserved for a device within one site/firewall boundary.
         example:
-            device: Similique et ut quae.
-            port: Ex qui.
-            site: Eaque non qui nam atque.
+            device: Quam tenetur accusamus placeat nulla minus.
+            port: Doloremque eum nisi quae nihil hic adipisci.
+            site: Voluptatibus rerum.
         required:
             - site
             - port

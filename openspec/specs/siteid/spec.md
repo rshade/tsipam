@@ -39,7 +39,7 @@ further hostname or Tailscale-selector grammar is imposed.
 
 ### Requirement: Collision-safe and idempotent site-ID reservation
 
-`tail-ipam site-id reserve <id> <site-name>` SHALL create the tailnet
+`tsipam site-id reserve <id> <site-name>` SHALL create the tailnet
 registry when absent and reserve the canonical ID for the canonical site
 name. An ID already reserved for a different site SHALL be refused without
 overwriting the existing entry, reported through CLI exit 1 and HTTP conflict
@@ -78,7 +78,7 @@ on the other registry maps (subnet pools, service addresses, UDP ports).
 
 ### Requirement: Idempotent site-ID release
 
-`tail-ipam site-id release <id>` SHALL remove the canonical ID's reservation
+`tsipam site-id release <id>` SHALL remove the canonical ID's reservation
 when present and report `changed=true`. Releasing an unreserved ID from an
 existing registry SHALL succeed as a no-op with `changed=false`. A missing
 registry file SHALL remain an unreadable-registry error rather than being
@@ -110,7 +110,7 @@ with an error and leave the file byte-for-byte unchanged.
 
 ### Requirement: Deterministic site-ID listing
 
-`tail-ipam site-id list` SHALL return every site-ID reservation. Human output
+`tsipam site-id list` SHALL return every site-ID reservation. Human output
 SHALL contain one tab-separated `id<TAB>site` line per reservation, with the
 metadata columns from `owner`/`ticket`/`description`/`reserved` appended when
 present. JSON output SHALL carry a `site_ids` array in the versioned

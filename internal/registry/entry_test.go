@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 // TestLoadRejectsControlCharactersInStoredMetadata is the regression test for

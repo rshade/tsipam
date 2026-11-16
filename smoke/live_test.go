@@ -361,7 +361,7 @@ func TestLiveMatchingRules(t *testing.T) {
 
 // TestLiveNextFreeEdges pins next-free's validation and exhaustion behavior
 // against the live route set. Exhaustion exits 2 with nothing on stdout so
-// the README's `subnet reserve "$(tail-ipam calc next-free ...)"` composition
+// the README's `subnet reserve "$(tsipam calc next-free ...)"` composition
 // fails at the right command (#347, #356).
 func TestLiveNextFreeEdges(t *testing.T) {
 	t.Parallel()

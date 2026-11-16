@@ -3,7 +3,7 @@
 // ipam HTTP server
 //
 // Command:
-// $ goa gen github.com/rshade/tailscale-utils/tail-ipam/design
+// $ goa gen github.com/rshade/tsipam/design
 
 package server
 
@@ -11,7 +11,7 @@ import (
 	"context"
 	"net/http"
 
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	ipam "github.com/rshade/tsipam/gen/ipam"
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
 )

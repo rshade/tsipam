@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "tool": "tsipam",
+  "command": "site-id reserve",
+  "status": "ok",
+  "message": "reserved site ID 7 for \"hq-vpc\"",
+  "tailnet": "local",
+  "changed": true,
+  "id": "7",
+  "site": "hq-vpc"
+}

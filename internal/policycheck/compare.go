@@ -8,7 +8,7 @@ import (
 	"github.com/rshade/tsacl/pkg/ipcalc"
 	"github.com/rshade/tsacl/pkg/policycore/addrspace"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 // Comparison states are shared by the service and CLI renderers.

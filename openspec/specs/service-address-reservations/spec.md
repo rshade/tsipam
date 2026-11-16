@@ -67,7 +67,7 @@ eligible for explicit reservation regardless of the other registry maps.
 
 ### Requirement: Collision-safe and idempotent reservation
 
-`tail-ipam service reserve <addr> <service-name>` and the corresponding API
+`tsipam service reserve <addr> <service-name>` and the corresponding API
 operation SHALL create the tailnet registry when it is absent and reserve the
 canonical address for the canonical service. An address already owned by a
 different service SHALL be refused without overwriting the existing entry; the
@@ -147,7 +147,7 @@ malformed service-address map SHALL NOT block operations on the other maps.
 
 ### Requirement: Idempotent service-address release
 
-`tail-ipam service release <addr>` and the corresponding API operation SHALL
+`tsipam service release <addr>` and the corresponding API operation SHALL
 remove the canonical address reservation when present and report
 `changed=true`. Releasing an unreserved address from an existing registry
 SHALL succeed as a no-op with `changed=false`. A missing registry file SHALL
@@ -196,7 +196,7 @@ byte-for-byte unchanged.
 
 ### Requirement: Deterministic service-address listing
 
-`tail-ipam service list` and the corresponding API operation SHALL return all
+`tsipam service list` and the corresponding API operation SHALL return all
 service-address reservations sorted by numeric IPv4 address, independent of
 registry member order. Human output SHALL contain one tab-separated
 `address<TAB>service` line per reservation, followed by the established third
@@ -226,18 +226,18 @@ release SHALL be carried without treating the optional `/32` slash as a path
 separator. The CLI SHALL execute these operations through the generated HTTP
 client and in-process loopback server, not by calling the registry directly.
 The `service` command group and all three subcommands SHALL appear in
-`tail-ipam -schema`.
+`tsipam -schema`.
 
 #### Scenario: CLI reservation traverses the transport
 
-- **WHEN** `tail-ipam service reserve 100.100.100.7 payments` runs in local
+- **WHEN** `tsipam service reserve 100.100.100.7 payments` runs in local
   mode
 - **THEN** it uses the generated reserve operation over the loopback HTTP
   transport and returns the canonical API result
 
 #### Scenario: Schema catalogs service commands
 
-- **WHEN** `tail-ipam -schema` runs
+- **WHEN** `tsipam -schema` runs
 - **THEN** the command catalog includes `service reserve`, `service release`,
   and `service list`
 

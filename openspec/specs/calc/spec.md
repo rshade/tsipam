@@ -9,7 +9,7 @@ Provides stateless IPv4/IPv6 subnet and CIDR arithmetic (`calc split`,
 
 ### Requirement: Splitting a CIDR into equal child prefixes
 
-`tail-ipam calc split <cidr> --prefix <bits>` SHALL divide the given CIDR into
+`tsipam calc split <cidr> --prefix <bits>` SHALL divide the given CIDR into
 equal-sized child prefixes of the target length and print one child per line
 in ascending order. A 4-in-6 mapped IPv4 prefix (`::ffff:a.b.c.d/n` with
 `n >= 96`) SHALL be normalized to its plain IPv4 form before splitting, so its
@@ -39,7 +39,7 @@ a failure (exit 1) rather than truncated, and SHALL write nothing to stdout.
 
 ### Requirement: Reporting block facts for a CIDR
 
-`tail-ipam calc info <cidr>` SHALL report the network address, first/last
+`tsipam calc info <cidr>` SHALL report the network address, first/last
 usable address, and usable-host count for IPv4 and IPv6 CIDRs, masking any
 supplied host bits to the network address first. For IPv4, a broadcast address
 SHALL be reported for prefixes shorter than `/31` and SHALL be omitted entirely
@@ -117,7 +117,7 @@ address ranges cannot silently overflow a consumer's integer parsing.
 
 ### Requirement: Calc suggests available IPv4 and IPv6 child blocks
 
-`tail-ipam calc next-free <pool-cidr> --size <prefix>` SHALL return the first
+`tsipam calc next-free <pool-cidr> --size <prefix>` SHALL return the first
 available IPv4 or IPv6 child CIDR of the requested size within the canonical
 pool. It SHALL exclude every overlapping same-family subnet-pool reservation
 for the selected registry tailnet and every overlapping same-family route
@@ -162,7 +162,7 @@ SHALL replace IPv6 suggestions and pool identifiers in exhaustion messages.
 
 #### Scenario: Single suggestion is usable in shell substitution
 
-- **WHEN** an operator runs `tail-ipam calc next-free 10.0.0.0/24 --size 26`
+- **WHEN** an operator runs `tsipam calc next-free 10.0.0.0/24 --size 26`
   and the first child is available
 - **THEN** human stdout is exactly `10.0.0.0/26` followed by a newline
 
@@ -190,7 +190,7 @@ SHALL replace IPv6 suggestions and pool identifiers in exhaustion messages.
 
 ### Requirement: Aggregate supplied CIDRs
 
-`tail-ipam calc aggregate <cidr...>` SHALL accept one or more supplied IPv4
+`tsipam calc aggregate <cidr...>` SHALL accept one or more supplied IPv4
 or IPv6 CIDRs and print their deterministic minimal CIDR cover, one
 normalized CIDR per line in ascending network-address order. Duplicate,
 covered, and adjacent sibling CIDRs SHALL collapse into that cover. A CIDR
@@ -284,19 +284,19 @@ empty usable range.
 
 #### Scenario: Host bits are masked to the containing block
 
-- **WHEN** `tail-ipam calc info 192.168.1.37/24` runs
+- **WHEN** `tsipam calc info 192.168.1.37/24` runs
 - **THEN** it reports the same facts as `192.168.1.0/24`, including usable
   range `192.168.1.1` through `192.168.1.254` and 254 usable hosts
 
 #### Scenario: Point-to-point block has two usable addresses
 
-- **WHEN** `tail-ipam calc info 10.0.0.0/31` runs
+- **WHEN** `tsipam calc info 10.0.0.0/31` runs
 - **THEN** network and first usable are `10.0.0.0`, last usable is
   `10.0.0.1`, usable hosts is 2, broadcast is omitted, and the command exits 0
 
 #### Scenario: Host route has one usable address
 
-- **WHEN** `tail-ipam calc info 10.0.0.5/32` runs
+- **WHEN** `tsipam calc info 10.0.0.5/32` runs
 - **THEN** network, first usable, and last usable are all `10.0.0.5`, usable
   hosts is 1, broadcast is omitted, and the command exits 0
 
@@ -308,7 +308,7 @@ its plain IPv4 equivalent before block-fact reporting, consistent with
 
 #### Scenario: Mapped input has the same facts as plain IPv4
 
-- **WHEN** `tail-ipam calc info ::ffff:10.0.0.0/120` runs
+- **WHEN** `tsipam calc info ::ffff:10.0.0.0/120` runs
 - **THEN** it reports the facts for `10.0.0.0/24` and exits 0
 
 ### Requirement: Calc info accepts one CIDR and rejects malformed input
@@ -321,7 +321,7 @@ an error on stderr naming the invalid input, and nothing on stdout.
 
 #### Scenario: Malformed CIDR is a usage error
 
-- **WHEN** `tail-ipam calc info not-a-cidr` runs
+- **WHEN** `tsipam calc info not-a-cidr` runs
 - **THEN** it exits 2, stdout is empty, and stderr names `not-a-cidr`
 
 ### Requirement: Calc info renders block facts in the versioned envelope
@@ -337,32 +337,32 @@ no diagnostic or banner text; diagnostics SHALL go to stderr.
 
 #### Scenario: JSON envelope contains the complete block payload
 
-- **WHEN** `tail-ipam calc info 10.1.2.0/30 --format json` runs
+- **WHEN** `tsipam calc info 10.1.2.0/30 --format json` runs
 - **THEN** stdout is one JSON envelope whose `block_info` reports prefix
   `10.1.2.0/30`, network `10.1.2.0`, broadcast `10.1.2.3`, first usable
   `10.1.2.1`, last usable `10.1.2.2`, and usable hosts `"2"`
 
 #### Scenario: Human output uses tab-separated facts
 
-- **WHEN** `tail-ipam calc info 192.168.0.0/16` runs with human format
+- **WHEN** `tsipam calc info 192.168.0.0/16` runs with human format
 - **THEN** stdout contains one `fact<TAB>value` line per reported fact,
   including usable hosts 65534, with no log or banner text
 
 ### Requirement: Calc info is discoverable through schema
 
-The `calc info` subcommand SHALL appear in `tail-ipam -schema` alongside
+The `calc info` subcommand SHALL appear in `tsipam -schema` alongside
 the other commands. The schema's sanitization description SHALL document
 that stateless calc output is exempt from sanitization.
 
 #### Scenario: Schema lists calc info and its sanitization exemption
 
-- **WHEN** `tail-ipam -schema` runs
+- **WHEN** `tsipam -schema` runs
 - **THEN** the catalog includes `calc info` and its sanitization description
   explains that stateless calc output remains unredacted
 
 ### Requirement: Aggregate subnet reservations from the selected registry
 
-`tail-ipam calc aggregate --from-registry` SHALL summarize all subnet-pool
+`tsipam calc aggregate --from-registry` SHALL summarize all subnet-pool
 reservations in the selected registry using the same normalization and
 minimal-cover calculation as positional aggregation. It SHALL perform the
 read through the registry API, without collecting live device routes or
@@ -450,7 +450,7 @@ long flags SHALL behave identically to their double-dash spellings.
 When no requested IPv4 or IPv6 child is available, `calc next-free` SHALL
 exit 2, write the exhaustion message to stderr, and write nothing to stdout
 in either output format, so the documented composition
-`tail-ipam subnet reserve "$(tail-ipam calc next-free ...)"` fails at the
+`tsipam subnet reserve "$(tsipam calc next-free ...)"` fails at the
 composing command instead of passing text as a CIDR. Target widths shorter
 than the canonical pool or greater than the address-family width SHALL be
 usage errors.

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/policycheck"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/policycheck"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 //nolint:gochecknoglobals // Golden update flags must be registered at package scope.

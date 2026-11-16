@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/devices"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/ipamsvc"
+	ipam "github.com/rshade/tsipam/gen/ipam"
+	"github.com/rshade/tsipam/internal/devices"
+	"github.com/rshade/tsipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/ipamsvc"
 )
 
 func TestPlanUsesOneRegistrySnapshot(t *testing.T) {

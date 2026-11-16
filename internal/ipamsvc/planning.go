@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/planner"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	ipam "github.com/rshade/tsipam/gen/ipam"
+	"github.com/rshade/tsipam/internal/planner"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 // Plan compares one registry snapshot with complete live allocation inventory.

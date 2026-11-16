@@ -9,7 +9,7 @@ and `Hostname`. The copy loop keeps `Name`, `Addresses`, and
 `AdvertisedRoutes`. `deviceRecord` and `renderDevices` mirror that.
 
 `tail-acl` leaves `tag:` selectors visible at `--sanitize identity` and
-redacts them only at `strict` (`sanitizeOrdinarySelector`). `tail-ipam`
+redacts them only at `strict` (`sanitizeOrdinarySelector`). `tsipam`
 today documents `strict` as equivalent to `identity`. #377 and #375 disagree
 on tags. This change follows the `tail-acl` rule and narrows the equivalence
 sentence to every field except device tags.
@@ -64,7 +64,7 @@ working.
    through. Enabled routes use the existing `networkKind` helper.
 
 6. **Schema text.** Replace the sentence that says `strict` is equivalent
-   to `identity` with the tag exception. Other tail-ipam fields stay
+   to `identity` with the tag exception. Other tsipam fields stay
    equivalent.
 
 ## Risks / Trade-offs
@@ -77,7 +77,7 @@ working.
 
 ## Migration Plan
 
-Ship as one `feat(tail-ipam)` change. No registry migration. Rollback is
+Ship as one `feat(tsipam)` change. No registry migration. Rollback is
 reverting the commit. OpenSpec archive waits until the PR merges.
 
 ## Open Questions

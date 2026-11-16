@@ -3,7 +3,7 @@
 // ipam service
 //
 // Command:
-// $ goa gen github.com/rshade/tailscale-utils/tail-ipam/design
+// $ goa gen github.com/rshade/tsipam/design
 
 package ipam
 
@@ -53,7 +53,7 @@ type Service interface {
 }
 
 // APIName is the name of the API as defined in the design.
-const APIName = "tail-ipam"
+const APIName = "tsipam"
 
 // APIVersion is the version of the API as defined in the design.
 const APIVersion = "0.0.1"

@@ -1,6 +1,6 @@
 # Registry and live state
 
-`tail-ipam` keeps a file of address-space intent and compares it with what
+`tsipam` keeps a file of address-space intent and compares it with what
 the tailnet is doing. This page explains why the file exists, what the
 comparison can and cannot conclude, and where the tool stops and its
 siblings begin.
@@ -80,10 +80,10 @@ belongs after merge.
 
 - `tail-acl` authors policy. Its `ipset` command labels or edits address
   space in the policy text; it has no allocation state and no collision
-  detection. `tail-ipam` reads the policy it writes.
+  detection. `tsipam` reads the policy it writes.
 - `tailnet-audit` inspects what is live for its own sake: overlapping routes
   and colliding site IDs among advertised routes, regardless of intent.
-  `tail-ipam` compares live state with intent and leaves live-only analysis
+  `tsipam` compares live state with intent and leaves live-only analysis
   there.
 
 The registry sits between them, recording what was decided so both the

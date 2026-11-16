@@ -1,4 +1,4 @@
-// Package diagnostics defines the small logging surface used by tail-ipam's
+// Package diagnostics defines the small logging surface used by tsipam's
 // I/O layers. A *slog.Logger satisfies Logger; keeping the interface here
 // prevents collection and registry packages from owning logger construction.
 package diagnostics

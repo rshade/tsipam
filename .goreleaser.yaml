@@ -1,23 +1,21 @@
-# Run from THIS module directory (paths below are module-relative):
-#   cd tail-ipam && GORELEASER_CURRENT_TAG=v0.1.0 goreleaser release --clean
-# git tags stay prefixed (tail-ipam/vX.Y.Z); OSS goreleaser can't strip the
-# prefix, so the release workflow passes the clean semver via
-# GORELEASER_CURRENT_TAG and creates a job-local clean tag for validation.
-# release-please owns the prefixed tag, changelog, and GitHub
-# Release object; the workflow builds with `--skip=publish` and attaches the
-# dist/ archives via `gh release upload "<full-prefixed-tag>"` (goreleaser's
-# own publisher can't target a slash-prefixed tag).
-# Local smoke test: `GORELEASER_CURRENT_TAG=v0.1.0 goreleaser release --snapshot --clean`.
-# The env var is required because `git describe` ignores module tag prefixes
-# and can otherwise stamp a sibling module's version into this tool.
+# release-please owns the vX.Y.Z tag, changelog and GitHub Release object; the
+# release workflow builds with `--skip=publish`, smoke-tests dist/, and attaches
+# it to that release with `gh release upload`.
+# Local smoke test: `mise run release-check` or `mise run smoke-release`.
 version: 2
 
-project_name: tail-ipam
+project_name: tsipam
+
+before:
+  hooks:
+    # The archives' NOTICE carries the inventory of linked third-party modules,
+    # generated from go.mod so dependency bumps cannot leave it stale.
+    - scripts/notice.sh .release/NOTICE
 
 builds:
-  - id: tail-ipam
-    main: ./cmd/tail-ipam
-    binary: tail-ipam
+  - id: tsipam
+    main: ./cmd/tsipam
+    binary: tsipam
     env:
       - CGO_ENABLED=0
     ldflags:
@@ -33,8 +31,9 @@ archives:
         formats: [zip]
     files:
       - LICENSE
-      - NOTICE
       - README.md
+      - src: .release/NOTICE
+        strip_parent: true
 
 checksum:
   name_template: checksums.txt

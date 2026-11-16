@@ -1,0 +1,36 @@
+title = "tsipam gitleaks config"
+
+[extend]
+useDefault = true
+
+# The sanitize tests and the redaction how-to use a fixed, obviously fake
+# TAILSCALE_SANITIZE_KEY. Allowlist that exact value. Do not add `paths` here:
+# gitleaks 8.30 skips a matching path outright, even with condition = "AND", so
+# a real key in the same file would go unreported.
+[[allowlists]]
+description = "placeholder sanitize key in tests and docs"
+regexTarget = "secret"
+regexes = ['''^0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef$''']
+
+# Tailscale credentials. The default ruleset has no Tailscale rule. Real keys
+# are tskey-<kind>-<id>-<secret>; placeholders lack the second segment, so they
+# do not match.
+[[rules]]
+id = "tailscale-key"
+description = "Tailscale API, auth, OAuth client, SCIM or webhook key"
+regex = '''tskey-(?:api|auth|client|scim|webhook)-[A-Za-z0-9]{8,}-[A-Za-z0-9]{20,}'''
+keywords = ["tskey-"]
+
+# A real MagicDNS name identifies a tailnet. Only example.ts.net is allowed in
+# fixtures, docs and tests.
+[[rules]]
+id = "tailnet-dns-name"
+description = "MagicDNS name other than example.ts.net"
+regex = '''(?i)\b[a-z0-9][a-z0-9-]*\.ts\.net\b'''
+keywords = [".ts.net"]
+# The match is the label before .ts.net, so host.example.ts.net yields
+# example.ts.net. Anchor the allowance to the whole match, or acme-example
+# would pass.
+[[rules.allowlists]]
+regexTarget = "secret"
+regexes = ['''(?i)^example\.ts\.net$''']

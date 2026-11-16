@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/ipamsvc"
+	ipam "github.com/rshade/tsipam/gen/ipam"
+	"github.com/rshade/tsipam/internal/ipamsvc"
 )
 
 func TestCheckPolicyService(t *testing.T) {

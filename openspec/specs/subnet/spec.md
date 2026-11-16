@@ -29,7 +29,7 @@ SHALL name the canonical form the operator should use instead.
 
 ### Requirement: Collision-safe reservation with cross-site overlap detection
 
-`tail-ipam subnet reserve <cidr> <site-name>` SHALL create the registry when
+`tsipam subnet reserve <cidr> <site-name>` SHALL create the registry when
 absent and reserve the exact CIDR for the site. An exact-CIDR reservation
 already owned by a different site SHALL be refused as a collision. A new
 CIDR that overlaps any existing pool owned by a *different* site SHALL also
@@ -76,7 +76,7 @@ maps.
 
 ### Requirement: Idempotent subnet-pool release
 
-`tail-ipam subnet release <cidr>` SHALL remove the canonical CIDR's
+`tsipam subnet release <cidr>` SHALL remove the canonical CIDR's
 reservation when present and report `changed=true`. Releasing an unreserved
 CIDR from an existing registry SHALL succeed as a no-op with
 `changed=false`. A missing registry file SHALL remain an unreadable-registry
@@ -110,7 +110,7 @@ release SHALL fail with an error and leave the file byte-for-byte unchanged.
 
 ### Requirement: Deterministic subnet-pool listing
 
-`tail-ipam subnet list` SHALL return every subnet-pool reservation sorted by
+`tsipam subnet list` SHALL return every subnet-pool reservation sorted by
 network address, then by prefix length. Human output SHALL contain one
 tab-separated `cidr<TAB>site` line per reservation, with metadata columns
 appended when present. JSON output SHALL carry a `subnet_pools` array in the
@@ -125,7 +125,7 @@ versioned envelope, with an empty registry map represented as an empty array.
 
 ### Requirement: Atomic next-free allocation under the registry lock
 
-`tail-ipam subnet allocate <pool-cidr> --size <prefix> <site-name>` SHALL
+`tsipam subnet allocate <pool-cidr> --size <prefix> <site-name>` SHALL
 reserve the first available child CIDR of the requested prefix length
 within the canonical pool for the site, creating the registry when absent.
 The pick and the write SHALL happen inside one locked read-decide-write

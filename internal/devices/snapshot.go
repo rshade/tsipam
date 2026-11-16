@@ -7,7 +7,7 @@ import (
 
 	tsapi "tailscale.com/client/tailscale/v2"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/diagnostics"
 )
 
 // Service contains the identity and assigned addresses needed for comparison.

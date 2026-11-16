@@ -3,18 +3,20 @@
 // ipam HTTP client encoders and decoders
 //
 // Command:
-// $ goa gen github.com/rshade/tailscale-utils/tail-ipam/design
+// $ goa gen github.com/rshade/tsipam/design
 
 package client
 
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	ipam "github.com/rshade/tsipam/gen/ipam"
 	goahttp "goa.design/goa/v3/http"
 	goa "goa.design/goa/v3/pkg"
 )
@@ -32,7 +34,9 @@ func (c *Client) BuildPlanRequest(ctx context.Context, v any) (*http.Request, er
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: PlanIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/plan", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: PlanIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "plan", u.String(), err)
@@ -66,18 +70,24 @@ func EncodePlanRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.R
 //   - "comparison_failed" (type *goa.ServiceError): http.StatusBadGateway
 //   - error: internal error
 func DecodePlanResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "plan", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "plan", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -110,7 +120,10 @@ func DecodePlanResponse(decoder func(*http.Response) goahttp.Decoder, restoreBod
 			}
 			return nil, NewPlanComparisonFailed(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "plan", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "plan", resp.StatusCode, string(body))
 		}
 	}
@@ -129,7 +142,9 @@ func (c *Client) BuildCheckPolicyRequest(ctx context.Context, v any) (*http.Requ
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: CheckPolicyIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/check-policy", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: CheckPolicyIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("POST", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "check_policy", u.String(), err)
@@ -164,18 +179,24 @@ func EncodeCheckPolicyRequest(encoder func(*http.Request) goahttp.Encoder) func(
 //   - "policy_check_failed" (type *goa.ServiceError): http.StatusBadRequest
 //   - error: internal error
 func DecodeCheckPolicyResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "check_policy", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "check_policy", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -208,7 +229,10 @@ func DecodeCheckPolicyResponse(decoder func(*http.Response) goahttp.Decoder, res
 			}
 			return nil, NewCheckPolicyPolicyCheckFailed(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "check_policy", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "check_policy", resp.StatusCode, string(body))
 		}
 	}
@@ -227,7 +251,9 @@ func (c *Client) BuildListSiteIdsRequest(ctx context.Context, v any) (*http.Requ
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListSiteIdsIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/site-ids", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListSiteIdsIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "list_site_ids", u.String(), err)
@@ -243,18 +269,24 @@ func (c *Client) BuildListSiteIdsRequest(ctx context.Context, v any) (*http.Requ
 // ipam list_site_ids endpoint. restoreBody controls whether the response body
 // should be restored after having been read.
 func DecodeListSiteIdsResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_site_ids", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "list_site_ids", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -268,7 +300,7 @@ func DecodeListSiteIdsResponse(decoder func(*http.Response) goahttp.Decoder, res
 			}
 			for _, e := range body {
 				if e != nil {
-					if err2 := ValidateSiteIDReservationResponse(e); err2 != nil {
+					if err2 := validateSiteIDReservationResponse(e, "body[*]"); err2 != nil {
 						err = goa.MergeErrors(err, err2)
 					}
 				}
@@ -279,7 +311,10 @@ func DecodeListSiteIdsResponse(decoder func(*http.Response) goahttp.Decoder, res
 			res := NewListSiteIdsSiteIDReservationOK(body)
 			return res, nil
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_site_ids", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "list_site_ids", resp.StatusCode, string(body))
 		}
 	}
@@ -298,7 +333,9 @@ func (c *Client) BuildReserveSiteIDRequest(ctx context.Context, v any) (*http.Re
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveSiteIDIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/site-ids", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveSiteIDIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("POST", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "reserve_site_id", u.String(), err)
@@ -334,18 +371,24 @@ func EncodeReserveSiteIDRequest(encoder func(*http.Request) goahttp.Encoder) fun
 //   - "collision" (type *goa.ServiceError): http.StatusConflict
 //   - error: internal error
 func DecodeReserveSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_site_id", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "reserve_site_id", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -392,7 +435,10 @@ func DecodeReserveSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, r
 			}
 			return nil, NewReserveSiteIDCollision(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_site_id", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "reserve_site_id", resp.StatusCode, string(body))
 		}
 	}
@@ -413,7 +459,9 @@ func (c *Client) BuildReleaseSiteIDRequest(ctx context.Context, v any) (*http.Re
 		tailnet = p.Tailnet
 		id = p.ID
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseSiteIDIpamPath(tailnet, id)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/site-ids/%v", url.PathEscape(fmt.Sprint(tailnet)), url.PathEscape(fmt.Sprint(id)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseSiteIDIpamPath(tailnet, id), RawPath: rawPath}
 	req, err := http.NewRequest("DELETE", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "release_site_id", u.String(), err)
@@ -432,18 +480,24 @@ func (c *Client) BuildReleaseSiteIDRequest(ctx context.Context, v any) (*http.Re
 //   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
 //   - error: internal error
 func DecodeReleaseSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_site_id", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "release_site_id", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -476,7 +530,10 @@ func DecodeReleaseSiteIDResponse(decoder func(*http.Response) goahttp.Decoder, r
 			}
 			return nil, NewReleaseSiteIDInvalidInput(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_site_id", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "release_site_id", resp.StatusCode, string(body))
 		}
 	}
@@ -495,7 +552,9 @@ func (c *Client) BuildListSubnetPoolsRequest(ctx context.Context, v any) (*http.
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListSubnetPoolsIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/subnet-pools", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListSubnetPoolsIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "list_subnet_pools", u.String(), err)
@@ -511,18 +570,24 @@ func (c *Client) BuildListSubnetPoolsRequest(ctx context.Context, v any) (*http.
 // the ipam list_subnet_pools endpoint. restoreBody controls whether the
 // response body should be restored after having been read.
 func DecodeListSubnetPoolsResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_subnet_pools", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "list_subnet_pools", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -536,7 +601,7 @@ func DecodeListSubnetPoolsResponse(decoder func(*http.Response) goahttp.Decoder,
 			}
 			for _, e := range body {
 				if e != nil {
-					if err2 := ValidateSubnetPoolReservationResponse(e); err2 != nil {
+					if err2 := validateSubnetPoolReservationResponse(e, "body[*]"); err2 != nil {
 						err = goa.MergeErrors(err, err2)
 					}
 				}
@@ -547,7 +612,10 @@ func DecodeListSubnetPoolsResponse(decoder func(*http.Response) goahttp.Decoder,
 			res := NewListSubnetPoolsSubnetPoolReservationOK(body)
 			return res, nil
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_subnet_pools", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "list_subnet_pools", resp.StatusCode, string(body))
 		}
 	}
@@ -566,7 +634,9 @@ func (c *Client) BuildReserveSubnetPoolRequest(ctx context.Context, v any) (*htt
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveSubnetPoolIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/subnet-pools", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveSubnetPoolIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("POST", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "reserve_subnet_pool", u.String(), err)
@@ -602,18 +672,24 @@ func EncodeReserveSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder)
 //   - "collision" (type *goa.ServiceError): http.StatusConflict
 //   - error: internal error
 func DecodeReserveSubnetPoolResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_subnet_pool", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "reserve_subnet_pool", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -660,7 +736,10 @@ func DecodeReserveSubnetPoolResponse(decoder func(*http.Response) goahttp.Decode
 			}
 			return nil, NewReserveSubnetPoolCollision(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_subnet_pool", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "reserve_subnet_pool", resp.StatusCode, string(body))
 		}
 	}
@@ -680,7 +759,9 @@ func (c *Client) BuildAllocateSubnetPoolRequest(ctx context.Context, v any) (*ht
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: AllocateSubnetPoolIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/subnet-pools/allocate", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: AllocateSubnetPoolIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("POST", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "allocate_subnet_pool", u.String(), err)
@@ -716,18 +797,24 @@ func EncodeAllocateSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder
 //   - "exhausted" (type *goa.ServiceError): http.StatusUnprocessableEntity
 //   - error: internal error
 func DecodeAllocateSubnetPoolResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "allocate_subnet_pool", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "allocate_subnet_pool", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -774,7 +861,10 @@ func DecodeAllocateSubnetPoolResponse(decoder func(*http.Response) goahttp.Decod
 			}
 			return nil, NewAllocateSubnetPoolExhausted(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "allocate_subnet_pool", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "allocate_subnet_pool", resp.StatusCode, string(body))
 		}
 	}
@@ -793,7 +883,9 @@ func (c *Client) BuildReleaseSubnetPoolRequest(ctx context.Context, v any) (*htt
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseSubnetPoolIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/subnet-pools", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseSubnetPoolIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("DELETE", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "release_subnet_pool", u.String(), err)
@@ -827,18 +919,24 @@ func EncodeReleaseSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder)
 //   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
 //   - error: internal error
 func DecodeReleaseSubnetPoolResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_subnet_pool", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "release_subnet_pool", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -871,7 +969,10 @@ func DecodeReleaseSubnetPoolResponse(decoder func(*http.Response) goahttp.Decode
 			}
 			return nil, NewReleaseSubnetPoolInvalidInput(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_subnet_pool", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "release_subnet_pool", resp.StatusCode, string(body))
 		}
 	}
@@ -891,7 +992,9 @@ func (c *Client) BuildListServiceAddressesRequest(ctx context.Context, v any) (*
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListServiceAddressesIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/service-addresses", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListServiceAddressesIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "list_service_addresses", u.String(), err)
@@ -907,18 +1010,24 @@ func (c *Client) BuildListServiceAddressesRequest(ctx context.Context, v any) (*
 // by the ipam list_service_addresses endpoint. restoreBody controls whether
 // the response body should be restored after having been read.
 func DecodeListServiceAddressesResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_service_addresses", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "list_service_addresses", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -932,7 +1041,7 @@ func DecodeListServiceAddressesResponse(decoder func(*http.Response) goahttp.Dec
 			}
 			for _, e := range body {
 				if e != nil {
-					if err2 := ValidateServiceAddressReservationResponse(e); err2 != nil {
+					if err2 := validateServiceAddressReservationResponse(e, "body[*]"); err2 != nil {
 						err = goa.MergeErrors(err, err2)
 					}
 				}
@@ -943,7 +1052,10 @@ func DecodeListServiceAddressesResponse(decoder func(*http.Response) goahttp.Dec
 			res := NewListServiceAddressesServiceAddressReservationOK(body)
 			return res, nil
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_service_addresses", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "list_service_addresses", resp.StatusCode, string(body))
 		}
 	}
@@ -963,7 +1075,9 @@ func (c *Client) BuildReserveServiceAddressRequest(ctx context.Context, v any) (
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveServiceAddressIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/service-addresses", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveServiceAddressIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("POST", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "reserve_service_address", u.String(), err)
@@ -999,18 +1113,24 @@ func EncodeReserveServiceAddressRequest(encoder func(*http.Request) goahttp.Enco
 //   - "collision" (type *goa.ServiceError): http.StatusConflict
 //   - error: internal error
 func DecodeReserveServiceAddressResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_service_address", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "reserve_service_address", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -1057,7 +1177,10 @@ func DecodeReserveServiceAddressResponse(decoder func(*http.Response) goahttp.De
 			}
 			return nil, NewReserveServiceAddressCollision(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_service_address", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "reserve_service_address", resp.StatusCode, string(body))
 		}
 	}
@@ -1077,7 +1200,9 @@ func (c *Client) BuildReleaseServiceAddressRequest(ctx context.Context, v any) (
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseServiceAddressIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/service-addresses", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseServiceAddressIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("DELETE", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "release_service_address", u.String(), err)
@@ -1111,18 +1236,24 @@ func EncodeReleaseServiceAddressRequest(encoder func(*http.Request) goahttp.Enco
 //   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
 //   - error: internal error
 func DecodeReleaseServiceAddressResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_service_address", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "release_service_address", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -1155,7 +1286,10 @@ func DecodeReleaseServiceAddressResponse(decoder func(*http.Response) goahttp.De
 			}
 			return nil, NewReleaseServiceAddressInvalidInput(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_service_address", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "release_service_address", resp.StatusCode, string(body))
 		}
 	}
@@ -1174,7 +1308,9 @@ func (c *Client) BuildListUDPPortsRequest(ctx context.Context, v any) (*http.Req
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListUDPPortsIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/udp-ports", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListUDPPortsIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "list_udp_ports", u.String(), err)
@@ -1210,18 +1346,24 @@ func EncodeListUDPPortsRequest(encoder func(*http.Request) goahttp.Encoder) func
 //   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
 //   - error: internal error
 func DecodeListUDPPortsResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_udp_ports", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "list_udp_ports", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -1235,7 +1377,7 @@ func DecodeListUDPPortsResponse(decoder func(*http.Response) goahttp.Decoder, re
 			}
 			for _, e := range body {
 				if e != nil {
-					if err2 := ValidateUDPPortReservationResponse(e); err2 != nil {
+					if err2 := validateUDPPortReservationResponse(e, "body[*]"); err2 != nil {
 						err = goa.MergeErrors(err, err2)
 					}
 				}
@@ -1260,7 +1402,10 @@ func DecodeListUDPPortsResponse(decoder func(*http.Response) goahttp.Decoder, re
 			}
 			return nil, NewListUDPPortsInvalidInput(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_udp_ports", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "list_udp_ports", resp.StatusCode, string(body))
 		}
 	}
@@ -1279,7 +1424,9 @@ func (c *Client) BuildReserveUDPPortRequest(ctx context.Context, v any) (*http.R
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveUDPPortIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/udp-ports", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReserveUDPPortIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("POST", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "reserve_udp_port", u.String(), err)
@@ -1315,18 +1462,24 @@ func EncodeReserveUDPPortRequest(encoder func(*http.Request) goahttp.Encoder) fu
 //   - "collision" (type *goa.ServiceError): http.StatusConflict
 //   - error: internal error
 func DecodeReserveUDPPortResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_udp_port", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "reserve_udp_port", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -1373,7 +1526,10 @@ func DecodeReserveUDPPortResponse(decoder func(*http.Response) goahttp.Decoder, 
 			}
 			return nil, NewReserveUDPPortCollision(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "reserve_udp_port", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "reserve_udp_port", resp.StatusCode, string(body))
 		}
 	}
@@ -1392,7 +1548,9 @@ func (c *Client) BuildReleaseUDPPortRequest(ctx context.Context, v any) (*http.R
 		}
 		tailnet = p.Tailnet
 	}
-	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseUDPPortIpamPath(tailnet)}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/udp-ports", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ReleaseUDPPortIpamPath(tailnet), RawPath: rawPath}
 	req, err := http.NewRequest("DELETE", u.String(), nil)
 	if err != nil {
 		return nil, goahttp.ErrInvalidURL("ipam", "release_udp_port", u.String(), err)
@@ -1427,18 +1585,24 @@ func EncodeReleaseUDPPortRequest(encoder func(*http.Request) goahttp.Encoder) fu
 //   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
 //   - error: internal error
 func DecodeReleaseUDPPortResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
-	return func(resp *http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
 		if restoreBody {
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_udp_port", err)
 			}
 			resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			defer func() {
 				resp.Body = io.NopCloser(bytes.NewBuffer(b))
 			}()
 		} else {
-			defer resp.Body.Close()
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "release_udp_port", err))
+				}
+			}()
 		}
 		switch resp.StatusCode {
 		case http.StatusOK:
@@ -1471,7 +1635,10 @@ func DecodeReleaseUDPPortResponse(decoder func(*http.Response) goahttp.Decoder, 
 			}
 			return nil, NewReleaseUDPPortInvalidInput(&body)
 		default:
-			body, _ := io.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "release_udp_port", err)
+			}
 			return nil, goahttp.ErrInvalidResponse("ipam", "release_udp_port", resp.StatusCode, string(body))
 		}
 	}

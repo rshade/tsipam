@@ -1,0 +1,540 @@
+{
+  "name": "tsipam",
+  "version": "tsipam dev",
+  "schema_version": "1",
+  "description": "Allocate and plan Tailscale address space through a local, comment-preserving registry and read-only control-plane inventory.",
+  "sanitization": "TAILSCALE_SANITIZE=off|identity|strict sanitizes rendered output after collection; a non-off environment value overrides --sanitize. Device names, addresses, and routes; device users and hostnames; tailnet routing keys; site names; service identities; reservation owners; reserved subnet CIDRs; reserved service addresses; and UDP-port site and device labels are replaced. Device tags stay visible at identity as policy vocabulary and are redacted at strict. Device OS, authorized, and ephemeral stay visible. UDP port numbers remain visible. strict otherwise matches identity. calc split, positional aggregate, and info output (stateless arithmetic over CLI-supplied CIDRs) is not sanitized because it contains no tailnet-derived data; calc aggregate --from-registry and calc next-free output reflects registry or live-route data and is sanitized. plan/check redact comparison identities and both tailnet sources; numeric site IDs and drift counts remain visible. check-policy redacts ipset names, CIDRs, site labels, and registry aliases; drift counts remain visible. Set TAILSCALE_SANITIZE_KEY (64 hex characters) for stable tailnet-scoped placeholders; without it placeholders are artifact-scoped.",
+  "flags": [
+    {
+      "name": "format",
+      "usage": "output format: human|json",
+      "default": "human"
+    },
+    {
+      "name": "sanitize",
+      "usage": "output sanitization level: off|identity|strict (a non-off TAILSCALE_SANITIZE value overrides this flag)",
+      "default": "off"
+    },
+    {
+      "name": "schema",
+      "usage": "print the machine-readable tool schema (JSON) and exit",
+      "default": "false"
+    },
+    {
+      "name": "verbose",
+      "usage": "log operational details to stderr",
+      "default": "false"
+    },
+    {
+      "name": "version",
+      "usage": "print version and exit",
+      "default": "false"
+    }
+  ],
+  "commands": [
+    {
+      "name": "calc",
+      "summary": "Subnet and IP arithmetic and allocation planning.",
+      "usage": "calc"
+    },
+    {
+      "name": "calc aggregate",
+      "summary": "Summarize supplied or reserved CIDRs into their minimal covering set.",
+      "usage": "calc aggregate [cidr...]",
+      "flags": [
+        {
+          "name": "from-registry",
+          "usage": "aggregate subnet-pool reservations instead of positional CIDRs",
+          "default": "false"
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "calc info",
+      "summary": "Report network, usable range, and host count for a CIDR.",
+      "usage": "calc info \u003ccidr\u003e"
+    },
+    {
+      "name": "calc next-free",
+      "summary": "Suggest available IPv4 or IPv6 child CIDRs from a subnet pool.",
+      "usage": "calc next-free \u003cpool-cidr\u003e",
+      "flags": [
+        {
+          "name": "all",
+          "usage": "return every available child subnet",
+          "default": "false"
+        },
+        {
+          "name": "count",
+          "usage": "number of suggestions to return",
+          "default": "1"
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "size",
+          "usage": "target prefix length (number of bits in each suggested child subnet)",
+          "default": "0",
+          "required": true
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "calc split",
+      "summary": "Split a CIDR into equal-sized child prefixes.",
+      "usage": "calc split \u003ccidr\u003e",
+      "flags": [
+        {
+          "name": "prefix",
+          "usage": "target prefix length (number of bits in each child subnet)",
+          "default": "0",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "check",
+      "summary": "Check registry allocations against live state; exit 1 on drift.",
+      "usage": "check",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "check-policy",
+      "summary": "Check authored ipsets against subnet reservations; exit 1 on drift.",
+      "usage": "check-policy \u003cacl-file\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "devices",
+      "summary": "Inspect devices on the tailnet (read-only).",
+      "usage": "devices"
+    },
+    {
+      "name": "devices list",
+      "summary": "List devices with addresses, routes, tags, and identity fields.",
+      "usage": "devices list",
+      "flags": [
+        {
+          "name": "tag",
+          "usage": "Show only devices carrying this tag. A value without the tag: prefix is treated as tag:\u003cvalue\u003e.",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "plan",
+      "summary": "Compare registry allocations with live state (read-only).",
+      "usage": "plan",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "port",
+      "summary": "Manage per-device UDP listen-port reservations.",
+      "usage": "port"
+    },
+    {
+      "name": "port list",
+      "summary": "List UDP listen-port reservations, optionally filtered by site.",
+      "usage": "port list",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "site",
+          "usage": "site/firewall-boundary label",
+          "default": ""
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "port release",
+      "summary": "Release a UDP listen-port reservation from a site.",
+      "usage": "port release \u003cport\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "site",
+          "usage": "site/firewall-boundary label",
+          "default": "",
+          "required": true
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "port reserve",
+      "summary": "Reserve a UDP listen port for a device within a site.",
+      "usage": "port reserve \u003cport\u003e \u003cdevice\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "site",
+          "usage": "site/firewall-boundary label",
+          "default": "",
+          "required": true
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "service",
+      "summary": "Manage per-service IPv4 address reservations.",
+      "usage": "service"
+    },
+    {
+      "name": "service list",
+      "summary": "List reserved service addresses.",
+      "usage": "service list",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "service release",
+      "summary": "Release a reserved service address.",
+      "usage": "service release \u003caddress\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "service reserve",
+      "summary": "Reserve an IPv4 host address for a Tailscale Service.",
+      "usage": "service reserve \u003caddress\u003e \u003cservice-name\u003e",
+      "flags": [
+        {
+          "name": "description",
+          "usage": "free-text description of why this address space is reserved",
+          "default": ""
+        },
+        {
+          "name": "owner",
+          "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "reserved-at",
+          "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        },
+        {
+          "name": "ticket",
+          "usage": "tracking ticket or issue reference for this reservation",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "site-id",
+      "summary": "Manage the 4via6 site-ID registry.",
+      "usage": "site-id"
+    },
+    {
+      "name": "site-id list",
+      "summary": "List reserved 4via6 site IDs.",
+      "usage": "site-id list",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "site-id release",
+      "summary": "Release a reserved 4via6 site ID.",
+      "usage": "site-id release \u003cid\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "site-id reserve",
+      "summary": "Reserve a 4via6 site ID for a site.",
+      "usage": "site-id reserve \u003cid\u003e \u003csite-name\u003e",
+      "flags": [
+        {
+          "name": "description",
+          "usage": "free-text description of why this address space is reserved",
+          "default": ""
+        },
+        {
+          "name": "owner",
+          "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "reserved-at",
+          "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        },
+        {
+          "name": "ticket",
+          "usage": "tracking ticket or issue reference for this reservation",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "subnet",
+      "summary": "Manage subnet CIDR pool reservations.",
+      "usage": "subnet"
+    },
+    {
+      "name": "subnet allocate",
+      "summary": "Reserve the next free child CIDR of a pool for a site.",
+      "usage": "subnet allocate \u003cpool-cidr\u003e \u003csite-name\u003e",
+      "flags": [
+        {
+          "name": "description",
+          "usage": "free-text description of why this address space is reserved",
+          "default": ""
+        },
+        {
+          "name": "owner",
+          "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "reserved-at",
+          "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "size",
+          "usage": "prefix length of the child subnet to allocate",
+          "default": "0",
+          "required": true
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        },
+        {
+          "name": "ticket",
+          "usage": "tracking ticket or issue reference for this reservation",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "subnet list",
+      "summary": "List reserved subnet CIDR pools.",
+      "usage": "subnet list",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "subnet release",
+      "summary": "Release a reserved subnet CIDR pool.",
+      "usage": "subnet release \u003ccidr\u003e",
+      "flags": [
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "subnet reserve",
+      "summary": "Reserve a subnet CIDR pool for a site.",
+      "usage": "subnet reserve \u003ccidr\u003e \u003csite-name\u003e",
+      "flags": [
+        {
+          "name": "description",
+          "usage": "free-text description of why this address space is reserved",
+          "default": ""
+        },
+        {
+          "name": "owner",
+          "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "reserved-at",
+          "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        },
+        {
+          "name": "ticket",
+          "usage": "tracking ticket or issue reference for this reservation",
+          "default": ""
+        }
+      ]
+    }
+  ],
+  "exit_codes": [
+    {
+      "code": 0,
+      "description": "success"
+    },
+    {
+      "code": 1,
+      "description": "a valid operation was refused, such as a registry collision or a calc split producing too many subnets to materialize, or check/check-policy found allocation drift"
+    },
+    {
+      "code": 2,
+      "description": "invalid invocation, collection failure, unreadable registry or policy, incomplete policy comparison, or output failure"
+    }
+  ]
+}

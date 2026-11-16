@@ -1,5 +1,5 @@
-// Package design is the goa DSL source for tail-ipam's ipam service. It is
-// not compiled into the tail-ipam binary; `goa gen`/`goa example` read it to
+// Package design is the goa DSL source for tsipam's ipam service. It is
+// not compiled into the tsipam binary; `goa gen`/`goa example` read it to
 // produce ../gen and the service scaffolding. See ../README.md.
 package design
 
@@ -64,8 +64,8 @@ var UDPPortReservation = Type("UDPPortReservation", func() {
 	Required("site", "port", "device")
 })
 
-var _ = API("tail-ipam", func() {
-	Title("tail-ipam address-space registry API")
+var _ = API("tsipam", func() {
+	Title("tsipam address-space registry API")
 	Description("Plans and allocates Tailscale address space through 4via6 site IDs, subnet CIDR pools, " +
 		"per-service IPv4 addresses, and per-device UDP listen ports. " +
 		"Paths are tailnet-scoped (/tailnet/{tailnet}/ipam/...) to mirror Tailscale's own " +

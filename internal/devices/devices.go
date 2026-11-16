@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/viper"
 	tsapi "tailscale.com/client/tailscale/v2"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/diagnostics"
 )
 
 // APITimeout bounds every Tailscale API request.
@@ -93,7 +93,7 @@ func List(ctx context.Context, getenv func(string) string, logger diagnostics.Lo
 // newClient builds the official v2 API client via tscli's constructor
 // (github.com/jaxxstorm/tscli/pkg/tscli.New), which reads its configuration
 // from viper. Populating those keys here -- rather than adopting viper as
-// tail-ipam's own config system -- keeps the dependency narrowly scoped to
+// tsipam's own config system -- keeps the dependency narrowly scoped to
 // "how we talk to the API," matching the exception recorded in CONTEXT.md.
 func newClient(getenv func(string) string) (*tsapi.Client, error) {
 	if getenv == nil {

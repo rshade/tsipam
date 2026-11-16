@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 func TestReserveServiceAddressCreatesListsAndIsIdempotent(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 func regPath(t *testing.T) string {
@@ -430,7 +430,7 @@ func TestReserveSiteIDAmendingUnNormalizedFileKeyDoesNotDuplicate(t *testing.T) 
 // rawReservationMapMember used to silently drop a map key when the entry
 // object either lacked its subject field or carried a non-string value for
 // it -- exactly the shape RawEntries feeds into the sanitizer's identity
-// inventory (see registerKnownIdentityInventory in cmd/tail-ipam/main.go), so
+// inventory (see registerKnownIdentityInventory in cmd/tsipam/main.go), so
 // a dropped key meant the value it named was never registered as a sweep
 // candidate even though Load's own error text names it regardless.
 func TestRawEntriesAlwaysReturnsTheMapKey(t *testing.T) {

@@ -3,12 +3,12 @@
 // ipam HTTP client types
 //
 // Command:
-// $ goa gen github.com/rshade/tailscale-utils/tail-ipam/design
+// $ goa gen github.com/rshade/tsipam/design
 
 package client
 
 import (
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	ipam "github.com/rshade/tsipam/gen/ipam"
 	goa "goa.design/goa/v3/pkg"
 )
 
@@ -1259,7 +1259,7 @@ func ValidatePlanResponseBody(body *PlanResponseBody) (err error) {
 	}
 	for _, e := range body.Entries {
 		if e != nil {
-			if err2 := ValidateComparisonEntryResponseBody(e); err2 != nil {
+			if err2 := validateComparisonEntryResponseBody(e, "body.entries[*]"); err2 != nil {
 				err = goa.MergeErrors(err, err2)
 			}
 		}
@@ -1268,7 +1268,7 @@ func ValidatePlanResponseBody(body *PlanResponseBody) (err error) {
 }
 
 // ValidateCheckPolicyResponseBody runs the validations defined on
-// check_policy_response_body
+// CheckPolicyResponseBody
 func ValidateCheckPolicyResponseBody(body *CheckPolicyResponseBody) (err error) {
 	if body.DriftCount == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("drift_count", "body"))
@@ -1286,14 +1286,14 @@ func ValidateCheckPolicyResponseBody(body *CheckPolicyResponseBody) (err error) 
 	}
 	for _, e := range body.Authored {
 		if e != nil {
-			if err2 := ValidatePolicyAuthoredResponseBody(e); err2 != nil {
+			if err2 := validatePolicyAuthoredResponseBody(e, "body.authored[*]"); err2 != nil {
 				err = goa.MergeErrors(err, err2)
 			}
 		}
 	}
 	for _, e := range body.Reserved {
 		if e != nil {
-			if err2 := ValidatePolicyReservedResponseBody(e); err2 != nil {
+			if err2 := validatePolicyReservedResponseBody(e, "body.reserved[*]"); err2 != nil {
 				err = goa.MergeErrors(err, err2)
 			}
 		}
@@ -1302,7 +1302,7 @@ func ValidateCheckPolicyResponseBody(body *CheckPolicyResponseBody) (err error) 
 }
 
 // ValidateReserveSiteIDResponseBody runs the validations defined on
-// reserve_site_id_response_body
+// ReserveSiteIDResponseBody
 func ValidateReserveSiteIDResponseBody(body *ReserveSiteIDResponseBody) (err error) {
 	if body.ID == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
@@ -1320,7 +1320,7 @@ func ValidateReserveSiteIDResponseBody(body *ReserveSiteIDResponseBody) (err err
 }
 
 // ValidateReleaseSiteIDResponseBody runs the validations defined on
-// release_site_id_response_body
+// ReleaseSiteIDResponseBody
 func ValidateReleaseSiteIDResponseBody(body *ReleaseSiteIDResponseBody) (err error) {
 	if body.ID == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
@@ -1332,7 +1332,7 @@ func ValidateReleaseSiteIDResponseBody(body *ReleaseSiteIDResponseBody) (err err
 }
 
 // ValidateReserveSubnetPoolResponseBody runs the validations defined on
-// reserve_subnet_pool_response_body
+// ReserveSubnetPoolResponseBody
 func ValidateReserveSubnetPoolResponseBody(body *ReserveSubnetPoolResponseBody) (err error) {
 	if body.CIDR == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
@@ -1350,7 +1350,7 @@ func ValidateReserveSubnetPoolResponseBody(body *ReserveSubnetPoolResponseBody) 
 }
 
 // ValidateAllocateSubnetPoolResponseBody runs the validations defined on
-// allocate_subnet_pool_response_body
+// AllocateSubnetPoolResponseBody
 func ValidateAllocateSubnetPoolResponseBody(body *AllocateSubnetPoolResponseBody) (err error) {
 	if body.CIDR == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
@@ -1368,7 +1368,7 @@ func ValidateAllocateSubnetPoolResponseBody(body *AllocateSubnetPoolResponseBody
 }
 
 // ValidateReleaseSubnetPoolResponseBody runs the validations defined on
-// release_subnet_pool_response_body
+// ReleaseSubnetPoolResponseBody
 func ValidateReleaseSubnetPoolResponseBody(body *ReleaseSubnetPoolResponseBody) (err error) {
 	if body.CIDR == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
@@ -1380,7 +1380,7 @@ func ValidateReleaseSubnetPoolResponseBody(body *ReleaseSubnetPoolResponseBody) 
 }
 
 // ValidateReserveServiceAddressResponseBody runs the validations defined on
-// reserve_service_address_response_body
+// ReserveServiceAddressResponseBody
 func ValidateReserveServiceAddressResponseBody(body *ReserveServiceAddressResponseBody) (err error) {
 	if body.Address == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("address", "body"))
@@ -1398,7 +1398,7 @@ func ValidateReserveServiceAddressResponseBody(body *ReserveServiceAddressRespon
 }
 
 // ValidateReleaseServiceAddressResponseBody runs the validations defined on
-// release_service_address_response_body
+// ReleaseServiceAddressResponseBody
 func ValidateReleaseServiceAddressResponseBody(body *ReleaseServiceAddressResponseBody) (err error) {
 	if body.Address == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("address", "body"))
@@ -1410,7 +1410,7 @@ func ValidateReleaseServiceAddressResponseBody(body *ReleaseServiceAddressRespon
 }
 
 // ValidateReserveUDPPortResponseBody runs the validations defined on
-// reserve_udp_port_response_body
+// ReserveUDPPortResponseBody
 func ValidateReserveUDPPortResponseBody(body *ReserveUDPPortResponseBody) (err error) {
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
@@ -1428,7 +1428,7 @@ func ValidateReserveUDPPortResponseBody(body *ReserveUDPPortResponseBody) (err e
 }
 
 // ValidateReleaseUDPPortResponseBody runs the validations defined on
-// release_udp_port_response_body
+// ReleaseUDPPortResponseBody
 func ValidateReleaseUDPPortResponseBody(body *ReleaseUDPPortResponseBody) (err error) {
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
@@ -1443,7 +1443,7 @@ func ValidateReleaseUDPPortResponseBody(body *ReleaseUDPPortResponseBody) (err e
 }
 
 // ValidatePlanComparisonFailedResponseBody runs the validations defined on
-// plan_comparison_failed_response_body
+// PlanComparisonFailedResponseBody
 func ValidatePlanComparisonFailedResponseBody(body *PlanComparisonFailedResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1467,7 +1467,7 @@ func ValidatePlanComparisonFailedResponseBody(body *PlanComparisonFailedResponse
 }
 
 // ValidateCheckPolicyPolicyCheckFailedResponseBody runs the validations
-// defined on check_policy_policy_check_failed_response_body
+// defined on CheckPolicyPolicyCheckFailedResponseBody
 func ValidateCheckPolicyPolicyCheckFailedResponseBody(body *CheckPolicyPolicyCheckFailedResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1491,7 +1491,7 @@ func ValidateCheckPolicyPolicyCheckFailedResponseBody(body *CheckPolicyPolicyChe
 }
 
 // ValidateReserveSiteIDInvalidInputResponseBody runs the validations defined
-// on reserve_site_id_invalid_input_response_body
+// on ReserveSiteIDInvalidInputResponseBody
 func ValidateReserveSiteIDInvalidInputResponseBody(body *ReserveSiteIDInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1515,7 +1515,7 @@ func ValidateReserveSiteIDInvalidInputResponseBody(body *ReserveSiteIDInvalidInp
 }
 
 // ValidateReserveSiteIDCollisionResponseBody runs the validations defined on
-// reserve_site_id_collision_response_body
+// ReserveSiteIDCollisionResponseBody
 func ValidateReserveSiteIDCollisionResponseBody(body *ReserveSiteIDCollisionResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1539,7 +1539,7 @@ func ValidateReserveSiteIDCollisionResponseBody(body *ReserveSiteIDCollisionResp
 }
 
 // ValidateReleaseSiteIDInvalidInputResponseBody runs the validations defined
-// on release_site_id_invalid_input_response_body
+// on ReleaseSiteIDInvalidInputResponseBody
 func ValidateReleaseSiteIDInvalidInputResponseBody(body *ReleaseSiteIDInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1563,7 +1563,7 @@ func ValidateReleaseSiteIDInvalidInputResponseBody(body *ReleaseSiteIDInvalidInp
 }
 
 // ValidateReserveSubnetPoolInvalidInputResponseBody runs the validations
-// defined on reserve_subnet_pool_invalid_input_response_body
+// defined on ReserveSubnetPoolInvalidInputResponseBody
 func ValidateReserveSubnetPoolInvalidInputResponseBody(body *ReserveSubnetPoolInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1587,7 +1587,7 @@ func ValidateReserveSubnetPoolInvalidInputResponseBody(body *ReserveSubnetPoolIn
 }
 
 // ValidateReserveSubnetPoolCollisionResponseBody runs the validations defined
-// on reserve_subnet_pool_collision_response_body
+// on ReserveSubnetPoolCollisionResponseBody
 func ValidateReserveSubnetPoolCollisionResponseBody(body *ReserveSubnetPoolCollisionResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1611,7 +1611,7 @@ func ValidateReserveSubnetPoolCollisionResponseBody(body *ReserveSubnetPoolColli
 }
 
 // ValidateAllocateSubnetPoolInvalidInputResponseBody runs the validations
-// defined on allocate_subnet_pool_invalid_input_response_body
+// defined on AllocateSubnetPoolInvalidInputResponseBody
 func ValidateAllocateSubnetPoolInvalidInputResponseBody(body *AllocateSubnetPoolInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1635,7 +1635,7 @@ func ValidateAllocateSubnetPoolInvalidInputResponseBody(body *AllocateSubnetPool
 }
 
 // ValidateAllocateSubnetPoolExhaustedResponseBody runs the validations defined
-// on allocate_subnet_pool_exhausted_response_body
+// on AllocateSubnetPoolExhaustedResponseBody
 func ValidateAllocateSubnetPoolExhaustedResponseBody(body *AllocateSubnetPoolExhaustedResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1659,7 +1659,7 @@ func ValidateAllocateSubnetPoolExhaustedResponseBody(body *AllocateSubnetPoolExh
 }
 
 // ValidateReleaseSubnetPoolInvalidInputResponseBody runs the validations
-// defined on release_subnet_pool_invalid_input_response_body
+// defined on ReleaseSubnetPoolInvalidInputResponseBody
 func ValidateReleaseSubnetPoolInvalidInputResponseBody(body *ReleaseSubnetPoolInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1683,7 +1683,7 @@ func ValidateReleaseSubnetPoolInvalidInputResponseBody(body *ReleaseSubnetPoolIn
 }
 
 // ValidateReserveServiceAddressInvalidInputResponseBody runs the validations
-// defined on reserve_service_address_invalid_input_response_body
+// defined on ReserveServiceAddressInvalidInputResponseBody
 func ValidateReserveServiceAddressInvalidInputResponseBody(body *ReserveServiceAddressInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1707,7 +1707,7 @@ func ValidateReserveServiceAddressInvalidInputResponseBody(body *ReserveServiceA
 }
 
 // ValidateReserveServiceAddressCollisionResponseBody runs the validations
-// defined on reserve_service_address_collision_response_body
+// defined on ReserveServiceAddressCollisionResponseBody
 func ValidateReserveServiceAddressCollisionResponseBody(body *ReserveServiceAddressCollisionResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1731,7 +1731,7 @@ func ValidateReserveServiceAddressCollisionResponseBody(body *ReserveServiceAddr
 }
 
 // ValidateReleaseServiceAddressInvalidInputResponseBody runs the validations
-// defined on release_service_address_invalid_input_response_body
+// defined on ReleaseServiceAddressInvalidInputResponseBody
 func ValidateReleaseServiceAddressInvalidInputResponseBody(body *ReleaseServiceAddressInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1755,7 +1755,7 @@ func ValidateReleaseServiceAddressInvalidInputResponseBody(body *ReleaseServiceA
 }
 
 // ValidateListUDPPortsInvalidInputResponseBody runs the validations defined on
-// list_udp_ports_invalid_input_response_body
+// ListUDPPortsInvalidInputResponseBody
 func ValidateListUDPPortsInvalidInputResponseBody(body *ListUDPPortsInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1779,7 +1779,7 @@ func ValidateListUDPPortsInvalidInputResponseBody(body *ListUDPPortsInvalidInput
 }
 
 // ValidateReserveUDPPortInvalidInputResponseBody runs the validations defined
-// on reserve_udp_port_invalid_input_response_body
+// on ReserveUDPPortInvalidInputResponseBody
 func ValidateReserveUDPPortInvalidInputResponseBody(body *ReserveUDPPortInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1803,7 +1803,7 @@ func ValidateReserveUDPPortInvalidInputResponseBody(body *ReserveUDPPortInvalidI
 }
 
 // ValidateReserveUDPPortCollisionResponseBody runs the validations defined on
-// reserve_udp_port_collision_response_body
+// ReserveUDPPortCollisionResponseBody
 func ValidateReserveUDPPortCollisionResponseBody(body *ReserveUDPPortCollisionResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1827,7 +1827,7 @@ func ValidateReserveUDPPortCollisionResponseBody(body *ReserveUDPPortCollisionRe
 }
 
 // ValidateReleaseUDPPortInvalidInputResponseBody runs the validations defined
-// on release_udp_port_invalid_input_response_body
+// on ReleaseUDPPortInvalidInputResponseBody
 func ValidateReleaseUDPPortInvalidInputResponseBody(body *ReleaseUDPPortInvalidInputResponseBody) (err error) {
 	if body.Name == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
@@ -1851,7 +1851,7 @@ func ValidateReleaseUDPPortInvalidInputResponseBody(body *ReleaseUDPPortInvalidI
 }
 
 // ValidateComparisonEntryResponseBody runs the validations defined on
-// ComparisonEntryResponseBody
+// ComparisonEntry
 func ValidateComparisonEntryResponseBody(body *ComparisonEntryResponseBody) (err error) {
 	if body.Kind == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
@@ -1881,8 +1881,39 @@ func ValidateComparisonEntryResponseBody(body *ComparisonEntryResponseBody) (err
 	return
 }
 
+// validateComparisonEntryResponseBody checks ComparisonEntry and reports
+// errors using the path supplied by its caller
+func validateComparisonEntryResponseBody(body *ComparisonEntryResponseBody, path string) (err error) {
+	if body.Kind == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("kind", path))
+	}
+	if body.State == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("state", path))
+	}
+	if body.Key == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("key", path))
+	}
+	if body.Observed == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("observed", path))
+	}
+	if body.Routes == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("routes", path))
+	}
+	if body.Kind != nil {
+		if !(*body.Kind == "site_id" || *body.Kind == "subnet_pool" || *body.Kind == "service_address") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError(path+".kind", *body.Kind, []any{"site_id", "subnet_pool", "service_address"}))
+		}
+	}
+	if body.State != nil {
+		if !(*body.State == "matched" || *body.State == "reserved_but_unadvertised" || *body.State == "unreserved_but_live" || *body.State == "conflict") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError(path+".state", *body.State, []any{"matched", "reserved_but_unadvertised", "unreserved_but_live", "conflict"}))
+		}
+	}
+	return
+}
+
 // ValidatePolicyAuthoredResponseBody runs the validations defined on
-// PolicyAuthoredResponseBody
+// PolicyAuthored
 func ValidatePolicyAuthoredResponseBody(body *PolicyAuthoredResponseBody) (err error) {
 	if body.IPSet == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("ipset", "body"))
@@ -1904,8 +1935,31 @@ func ValidatePolicyAuthoredResponseBody(body *PolicyAuthoredResponseBody) (err e
 	return
 }
 
+// validatePolicyAuthoredResponseBody checks PolicyAuthored and reports errors
+// using the path supplied by its caller
+func validatePolicyAuthoredResponseBody(body *PolicyAuthoredResponseBody, path string) (err error) {
+	if body.IPSet == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("ipset", path))
+	}
+	if body.CIDR == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", path))
+	}
+	if body.State == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("state", path))
+	}
+	if body.Pools == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("pools", path))
+	}
+	if body.State != nil {
+		if !(*body.State == "matched" || *body.State == "authored_but_unreserved") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError(path+".state", *body.State, []any{"matched", "authored_but_unreserved"}))
+		}
+	}
+	return
+}
+
 // ValidatePolicyReservedResponseBody runs the validations defined on
-// PolicyReservedResponseBody
+// PolicyReserved
 func ValidatePolicyReservedResponseBody(body *PolicyReservedResponseBody) (err error) {
 	if body.CIDR == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
@@ -1927,8 +1981,31 @@ func ValidatePolicyReservedResponseBody(body *PolicyReservedResponseBody) (err e
 	return
 }
 
+// validatePolicyReservedResponseBody checks PolicyReserved and reports errors
+// using the path supplied by its caller
+func validatePolicyReservedResponseBody(body *PolicyReservedResponseBody, path string) (err error) {
+	if body.CIDR == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", path))
+	}
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", path))
+	}
+	if body.State == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("state", path))
+	}
+	if body.IPSets == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("ipsets", path))
+	}
+	if body.State != nil {
+		if !(*body.State == "matched" || *body.State == "reserved_but_unreferenced") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError(path+".state", *body.State, []any{"matched", "reserved_but_unreferenced"}))
+		}
+	}
+	return
+}
+
 // ValidateSiteIDReservationResponse runs the validations defined on
-// SiteIDReservationResponse
+// SiteIDReservation
 func ValidateSiteIDReservationResponse(body *SiteIDReservationResponse) (err error) {
 	if body.ID == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
@@ -1942,8 +2019,23 @@ func ValidateSiteIDReservationResponse(body *SiteIDReservationResponse) (err err
 	return
 }
 
+// validateSiteIDReservationResponse checks SiteIDReservation and reports
+// errors using the path supplied by its caller
+func validateSiteIDReservationResponse(body *SiteIDReservationResponse, path string) (err error) {
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", path))
+	}
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", path))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat(path+".reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
 // ValidateSubnetPoolReservationResponse runs the validations defined on
-// SubnetPoolReservationResponse
+// SubnetPoolReservation
 func ValidateSubnetPoolReservationResponse(body *SubnetPoolReservationResponse) (err error) {
 	if body.CIDR == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "body"))
@@ -1957,8 +2049,23 @@ func ValidateSubnetPoolReservationResponse(body *SubnetPoolReservationResponse) 
 	return
 }
 
+// validateSubnetPoolReservationResponse checks SubnetPoolReservation and
+// reports errors using the path supplied by its caller
+func validateSubnetPoolReservationResponse(body *SubnetPoolReservationResponse, path string) (err error) {
+	if body.CIDR == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("cidr", path))
+	}
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", path))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat(path+".reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
 // ValidateServiceAddressReservationResponse runs the validations defined on
-// ServiceAddressReservationResponse
+// ServiceAddressReservation
 func ValidateServiceAddressReservationResponse(body *ServiceAddressReservationResponse) (err error) {
 	if body.Address == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("address", "body"))
@@ -1972,8 +2079,23 @@ func ValidateServiceAddressReservationResponse(body *ServiceAddressReservationRe
 	return
 }
 
+// validateServiceAddressReservationResponse checks ServiceAddressReservation
+// and reports errors using the path supplied by its caller
+func validateServiceAddressReservationResponse(body *ServiceAddressReservationResponse, path string) (err error) {
+	if body.Address == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("address", path))
+	}
+	if body.Service == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("service", path))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat(path+".reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
 // ValidateUDPPortReservationResponse runs the validations defined on
-// UDPPortReservationResponse
+// UDPPortReservation
 func ValidateUDPPortReservationResponse(body *UDPPortReservationResponse) (err error) {
 	if body.Site == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("site", "body"))
@@ -1983,6 +2105,21 @@ func ValidateUDPPortReservationResponse(body *UDPPortReservationResponse) (err e
 	}
 	if body.Device == nil {
 		err = goa.MergeErrors(err, goa.MissingFieldError("device", "body"))
+	}
+	return
+}
+
+// validateUDPPortReservationResponse checks UDPPortReservation and reports
+// errors using the path supplied by its caller
+func validateUDPPortReservationResponse(body *UDPPortReservationResponse, path string) (err error) {
+	if body.Site == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("site", path))
+	}
+	if body.Port == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("port", path))
+	}
+	if body.Device == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("device", path))
 	}
 	return
 }

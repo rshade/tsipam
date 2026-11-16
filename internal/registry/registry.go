@@ -1,5 +1,5 @@
 // Package registry provides comment-preserving, HuJSON-backed read/write
-// access to the tail-ipam address-space registry — the declarative source of
+// access to the tsipam address-space registry — the declarative source of
 // truth for reserved Tailscale allocations. It supports 4via6 site IDs,
 // subnet-CIDR pools, per-service IPv4 address reservations, and per-device UDP
 // listen-port reservations scoped to a site/firewall boundary.
@@ -20,7 +20,7 @@ import (
 
 	"github.com/rshade/tsacl/pkg/policycore/hujsonedit"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/diagnostics"
 )
 
 const (
@@ -61,7 +61,7 @@ const (
 	lockAcquireTimeout = 5 * time.Second
 )
 
-// Registry is the tail-ipam address-space allocation ledger, canonicalized by
+// Registry is the tsipam address-space allocation ledger, canonicalized by
 // Load. SiteIDs maps a canonical 4via6 site ID (see NormalizeSiteID) to its
 // site; SubnetPools maps a canonical CIDR (see NormalizeSubnetCIDR) to its
 // site; ServiceAddresses maps a canonical IPv4 address (see
@@ -559,7 +559,7 @@ func canonicalizeServiceAddresses(
 
 // withRegistryLock runs fn while holding an exclusive, cross-process lock on
 // path, so a caller's read-decide-write span (Load, decide, then
-// WritePatch/create) is atomic with respect to other tail-ipam invocations
+// WritePatch/create) is atomic with respect to other tsipam invocations
 // against the same registry file. The lock is a plain lockfile at
 // path+".lock", acquired with O_CREATE|O_EXCL and released by removing it
 // when fn returns.
@@ -586,7 +586,7 @@ func withRegistryLock(path string, logger diagnostics.Logger, fn func() error) e
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf(
-				"acquiring lock: timed out after %s waiting for a concurrent tail-ipam to finish",
+				"acquiring lock: timed out after %s waiting for a concurrent tsipam to finish",
 				lockAcquireTimeout)
 		}
 		time.Sleep(lockRetryInterval)

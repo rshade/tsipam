@@ -132,7 +132,7 @@ runs. Diagnostics SHALL not expose credentials or unknown API response bodies.
 
 ### Requirement: Document authority and observability limits
 
-Documentation SHALL identify tail-ipam as authoritative for registry-versus-live
+Documentation SHALL identify tsipam as authoritative for registry-versus-live
 allocation drift, and tailnet-audit issues #221/#222 as the separate live-only
 route-overlap and site-ID-collision checks. Plan/check SHALL NOT duplicate
 those collision findings. A match SHALL mean observed allocation presence,

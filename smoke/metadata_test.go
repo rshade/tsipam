@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-// moduleDir is the tail-ipam module relative to this package, the working
+// moduleDir is the tsipam module relative to this package, the working
 // directory `go test` gives the suite.
 const moduleDir = ".."
 
@@ -42,12 +42,9 @@ func releaseMetadataFrom(dist, repo string) (releaseMetadata, error) {
 	return releaseMetadata{
 		Tag:     "v" + version,
 		Version: version,
-		Commit:  tagCommit(repo, releaseTag(version)),
+		Commit:  tagCommit(repo, "v"+version),
 	}, nil
 }
-
-// releaseTag is the monorepo tag release-please cuts for a tail-ipam version.
-func releaseTag(version string) string { return "tail-ipam/v" + version }
 
 func readMetadataFile(path string) (releaseMetadata, error) {
 	var meta releaseMetadata
@@ -77,7 +74,7 @@ func archiveVersion(dist string) (string, error) {
 	found := slices.Sorted(maps.Keys(versions))
 	switch len(found) {
 	case 0:
-		return "", fmt.Errorf("%s has no metadata.json and no tail-ipam release archives", dist)
+		return "", fmt.Errorf("%s has no metadata.json and no tsipam release archives", dist)
 	case 1:
 		return found[0], nil
 	default:
@@ -85,9 +82,9 @@ func archiveVersion(dist string) (string, error) {
 	}
 }
 
-// archiveVersionOf parses <version> out of tail-ipam_<version>_<target><ext>.
+// archiveVersionOf parses <version> out of tsipam_<version>_<target><ext>.
 func archiveVersionOf(name string) (string, bool) {
-	rest, ok := strings.CutPrefix(name, "tail-ipam_")
+	rest, ok := strings.CutPrefix(name, "tsipam_")
 	if !ok {
 		return "", false
 	}
@@ -126,7 +123,7 @@ func TestReleaseMetadataFromPrefersMetadataJSON(t *testing.T) {
 func TestReleaseMetadataFromDerivesVersionAndCommit(t *testing.T) {
 	t.Parallel()
 	dist := fakeDist(t, append(releaseArchives("1.2.3"), "checksums.txt")...)
-	repo, commit := taggedRepo(t, "tail-ipam/v1.2.3")
+	repo, commit := taggedRepo(t, "v1.2.3")
 
 	meta, err := releaseMetadataFrom(dist, repo)
 	if err != nil {
@@ -171,7 +168,7 @@ func TestReleaseMetadataFromRequiresArchives(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for a dist without archives")
 	}
-	containsAll(t, err.Error(), "metadata.json", "no tail-ipam release archives")
+	containsAll(t, err.Error(), "metadata.json", "no tsipam release archives")
 }
 
 // releaseArchives names the archive goreleaser writes for every target.

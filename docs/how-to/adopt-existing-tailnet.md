@@ -1,4 +1,4 @@
-# Adopt tail-ipam for an existing tailnet
+# Adopt tsipam for an existing tailnet
 
 Use this guide when subnet routes, 4via6 site IDs, or Tailscale Services are
 already live and you want a registry that records them, so that from now on
@@ -21,7 +21,7 @@ export TAILSCALE_OAUTH_CLIENT_SECRET=...
 `TAILSCALE_TAILNET` always names the live source. The registry file uses the
 same key unless you pass `--tailnet` to choose an alias such as `production`.
 
-Decide where the registry lives. This guide uses `/etc/tail-ipam`; any
+Decide where the registry lives. This guide uses `/etc/tsipam`; any
 directory you can commit to version control works.
 
 ## 1. Start from an empty registry
@@ -29,14 +29,14 @@ directory you can commit to version control works.
 `plan` and `check` read an existing file rather than creating one:
 
 ```bash
-mkdir -p /etc/tail-ipam
-echo '{}' > /etc/tail-ipam/production.ipam.hujson
+mkdir -p /etc/tsipam
+echo '{}' > /etc/tsipam/production.ipam.hujson
 ```
 
 ## 2. See what is live
 
 ```bash
-tail-ipam plan --registry-dir /etc/tail-ipam --tailnet production
+tsipam plan --registry-dir /etc/tsipam --tailnet production
 ```
 
 `plan` always exits `0` after a complete comparison. Each row names an
@@ -68,14 +68,14 @@ placeholder label. The key is what `reserve` takes; for services the observed
 identity is the label:
 
 ```bash
-tail-ipam plan --registry-dir /etc/tail-ipam --tailnet production --format json |
+tsipam plan --registry-dir /etc/tsipam --tailnet production --format json |
   jq -r '.comparison.entries[] | select(.state == "unreserved_but_live") |
          [.kind, .key, (.observed[0] // "")] | @tsv' |
   while IFS=$'\t' read -r kind key first; do
     case "$kind" in
-      site_id)         tail-ipam site-id reserve "$key" unlabeled --registry-dir /etc/tail-ipam --tailnet production ;;
-      subnet_pool)     tail-ipam subnet reserve "$key" unlabeled --registry-dir /etc/tail-ipam --tailnet production ;;
-      service_address) tail-ipam service reserve "$key" "$first" --registry-dir /etc/tail-ipam --tailnet production ;;
+      site_id)         tsipam site-id reserve "$key" unlabeled --registry-dir /etc/tsipam --tailnet production ;;
+      subnet_pool)     tsipam subnet reserve "$key" unlabeled --registry-dir /etc/tsipam --tailnet production ;;
+      service_address) tsipam service reserve "$key" "$first" --registry-dir /etc/tsipam --tailnet production ;;
     esac
   done
 ```
@@ -90,7 +90,7 @@ broad pool than many routes, reserve the pool and skip the routes it contains.
 ## 4. Confirm the registry matches
 
 ```bash
-tail-ipam check --registry-dir /etc/tail-ipam --tailnet production
+tsipam check --registry-dir /etc/tsipam --tailnet production
 echo $?
 # 0
 ```
@@ -107,8 +107,8 @@ right, reserving the same key and site again amends only the metadata flags
 you pass, so ownership can be filled in as you learn it:
 
 ```bash
-tail-ipam subnet reserve 10.10.20.0/24 hq-vpc --owner network-team --ticket NET-42 \
-  --registry-dir /etc/tail-ipam --tailnet production
+tsipam subnet reserve 10.10.20.0/24 hq-vpc --owner network-team --ticket NET-42 \
+  --registry-dir /etc/tsipam --tailnet production
 ```
 
 Then run `check` on a schedule or in CI so the next unregistered route is

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	ipamclient "github.com/rshade/tailscale-utils/tail-ipam/gen/http/ipam/client"
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/loopback"
+	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
+	ipam "github.com/rshade/tsipam/gen/ipam"
+	"github.com/rshade/tsipam/internal/loopback"
 )
 
 func TestRunServesOneRequestOverTheGeneratedClient(t *testing.T) {
@@ -66,7 +66,7 @@ func TestRunLeavesNoSocketDirectoryBehind(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	leftover, err := filepath.Glob(filepath.Join(tmpDir, "tail-ipam-*"))
+	leftover, err := filepath.Glob(filepath.Join(tmpDir, "tsipam-*"))
 	if err != nil {
 		t.Fatalf("globbing after Run: %v", err)
 	}

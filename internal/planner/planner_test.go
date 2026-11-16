@@ -9,9 +9,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/devices"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/planner"
-	"github.com/rshade/tailscale-utils/tail-ipam/internal/registry"
+	"github.com/rshade/tsipam/internal/devices"
+	"github.com/rshade/tsipam/internal/planner"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 //nolint:gochecknoglobals // test flags must be registered at package scope

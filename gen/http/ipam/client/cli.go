@@ -3,7 +3,7 @@
 // ipam HTTP client CLI support package
 //
 // Command:
-// $ goa gen github.com/rshade/tailscale-utils/tail-ipam/design
+// $ goa gen github.com/rshade/tsipam/design
 
 package client
 
@@ -11,20 +11,26 @@ import (
 	"encoding/json"
 	"fmt"
 
-	ipam "github.com/rshade/tailscale-utils/tail-ipam/gen/ipam"
+	ipam "github.com/rshade/tsipam/gen/ipam"
 	goa "goa.design/goa/v3/pkg"
 )
 
 // BuildPlanPayload builds the payload for the ipam plan endpoint from CLI
 // flags.
-func BuildPlanPayload(ipamPlanTailnet string, ipamPlanLiveTailnet string) (*ipam.PlanPayload, error) {
+func BuildPlanPayload(ipamPlanTailnet *string, ipamPlanLiveTailnet *string) (*ipam.PlanPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamPlanTailnet
+		if ipamPlanTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamPlanTailnet
 	}
 	var liveTailnet string
 	{
-		liveTailnet = ipamPlanLiveTailnet
+		if ipamPlanLiveTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --live-tailnet")
+		}
+		liveTailnet = *ipamPlanLiveTailnet
 	}
 	v := &ipam.PlanPayload{}
 	v.Tailnet = tailnet
@@ -35,18 +41,24 @@ func BuildPlanPayload(ipamPlanTailnet string, ipamPlanLiveTailnet string) (*ipam
 
 // BuildCheckPolicyPayload builds the payload for the ipam check_policy
 // endpoint from CLI flags.
-func BuildCheckPolicyPayload(ipamCheckPolicyBody string, ipamCheckPolicyTailnet string) (*ipam.CheckPolicyPayload, error) {
+func BuildCheckPolicyPayload(ipamCheckPolicyBody *string, ipamCheckPolicyTailnet *string) (*ipam.CheckPolicyPayload, error) {
 	var err error
 	var body CheckPolicyRequestBody
 	{
-		err = json.Unmarshal([]byte(ipamCheckPolicyBody), &body)
+		if ipamCheckPolicyBody == nil {
+			return nil, fmt.Errorf("missing required flag --body")
+		}
+		err = json.Unmarshal([]byte(*ipamCheckPolicyBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"policy\": \"Corrupti magnam inventore.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"policy\": \"Tempore distinctio aliquid cupiditate autem aspernatur.\"\n   }'")
 		}
 	}
 	var tailnet string
 	{
-		tailnet = ipamCheckPolicyTailnet
+		if ipamCheckPolicyTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamCheckPolicyTailnet
 	}
 	v := &ipam.CheckPolicyPayload{
 		Policy: body.Policy,
@@ -58,10 +70,13 @@ func BuildCheckPolicyPayload(ipamCheckPolicyBody string, ipamCheckPolicyTailnet 
 
 // BuildListSiteIdsPayload builds the payload for the ipam list_site_ids
 // endpoint from CLI flags.
-func BuildListSiteIdsPayload(ipamListSiteIdsTailnet string) (*ipam.ListSiteIdsPayload, error) {
+func BuildListSiteIdsPayload(ipamListSiteIdsTailnet *string) (*ipam.ListSiteIdsPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamListSiteIdsTailnet
+		if ipamListSiteIdsTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamListSiteIdsTailnet
 	}
 	v := &ipam.ListSiteIdsPayload{}
 	v.Tailnet = tailnet
@@ -71,13 +86,16 @@ func BuildListSiteIdsPayload(ipamListSiteIdsTailnet string) (*ipam.ListSiteIdsPa
 
 // BuildReserveSiteIDPayload builds the payload for the ipam reserve_site_id
 // endpoint from CLI flags.
-func BuildReserveSiteIDPayload(ipamReserveSiteIDBody string, ipamReserveSiteIDTailnet string) (*ipam.ReserveSiteIDPayload, error) {
+func BuildReserveSiteIDPayload(ipamReserveSiteIDBody *string, ipamReserveSiteIDTailnet *string) (*ipam.ReserveSiteIDPayload, error) {
 	var err error
 	var body ReserveSiteIDRequestBody
 	{
-		err = json.Unmarshal([]byte(ipamReserveSiteIDBody), &body)
+		if ipamReserveSiteIDBody == nil {
+			return nil, fmt.Errorf("missing required flag --body")
+		}
+		err = json.Unmarshal([]byte(*ipamReserveSiteIDBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Ratione est omnis at voluptatem explicabo qui.\",\n      \"id\": \"Qui repudiandae in hic et porro quas.\",\n      \"owner\": \"Eum fugit inventore sit.\",\n      \"reserved_at\": \"1984-12-10T06:42:10Z\",\n      \"site\": \"Aliquid facere.\",\n      \"ticket\": \"Culpa magni cum omnis.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Dolores quia eveniet odit numquam ex.\",\n      \"id\": \"Necessitatibus aperiam voluptatem quasi distinctio.\",\n      \"owner\": \"Eveniet dolor sunt soluta tenetur et.\",\n      \"reserved_at\": \"2006-10-21T04:41:45Z\",\n      \"site\": \"Similique quia est quos neque rem.\",\n      \"ticket\": \"Est neque velit.\"\n   }'")
 		}
 		if body.ReservedAt != nil {
 			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
@@ -88,7 +106,10 @@ func BuildReserveSiteIDPayload(ipamReserveSiteIDBody string, ipamReserveSiteIDTa
 	}
 	var tailnet string
 	{
-		tailnet = ipamReserveSiteIDTailnet
+		if ipamReserveSiteIDTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamReserveSiteIDTailnet
 	}
 	v := &ipam.ReserveSiteIDPayload{
 		ID:          body.ID,
@@ -105,14 +126,20 @@ func BuildReserveSiteIDPayload(ipamReserveSiteIDBody string, ipamReserveSiteIDTa
 
 // BuildReleaseSiteIDPayload builds the payload for the ipam release_site_id
 // endpoint from CLI flags.
-func BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnet string, ipamReleaseSiteIDID string) (*ipam.ReleaseSiteIDPayload, error) {
+func BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnet *string, ipamReleaseSiteIDID *string) (*ipam.ReleaseSiteIDPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamReleaseSiteIDTailnet
+		if ipamReleaseSiteIDTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamReleaseSiteIDTailnet
 	}
 	var id string
 	{
-		id = ipamReleaseSiteIDID
+		if ipamReleaseSiteIDID == nil {
+			return nil, fmt.Errorf("missing required flag --id")
+		}
+		id = *ipamReleaseSiteIDID
 	}
 	v := &ipam.ReleaseSiteIDPayload{}
 	v.Tailnet = tailnet
@@ -123,10 +150,13 @@ func BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnet string, ipamReleaseSiteI
 
 // BuildListSubnetPoolsPayload builds the payload for the ipam
 // list_subnet_pools endpoint from CLI flags.
-func BuildListSubnetPoolsPayload(ipamListSubnetPoolsTailnet string) (*ipam.ListSubnetPoolsPayload, error) {
+func BuildListSubnetPoolsPayload(ipamListSubnetPoolsTailnet *string) (*ipam.ListSubnetPoolsPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamListSubnetPoolsTailnet
+		if ipamListSubnetPoolsTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamListSubnetPoolsTailnet
 	}
 	v := &ipam.ListSubnetPoolsPayload{}
 	v.Tailnet = tailnet
@@ -136,13 +166,16 @@ func BuildListSubnetPoolsPayload(ipamListSubnetPoolsTailnet string) (*ipam.ListS
 
 // BuildReserveSubnetPoolPayload builds the payload for the ipam
 // reserve_subnet_pool endpoint from CLI flags.
-func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody string, ipamReserveSubnetPoolTailnet string) (*ipam.ReserveSubnetPoolPayload, error) {
+func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody *string, ipamReserveSubnetPoolTailnet *string) (*ipam.ReserveSubnetPoolPayload, error) {
 	var err error
 	var body ReserveSubnetPoolRequestBody
 	{
-		err = json.Unmarshal([]byte(ipamReserveSubnetPoolBody), &body)
+		if ipamReserveSubnetPoolBody == nil {
+			return nil, fmt.Errorf("missing required flag --body")
+		}
+		err = json.Unmarshal([]byte(*ipamReserveSubnetPoolBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"cidr\": \"Iste voluptatem modi aut id illum rerum.\",\n      \"description\": \"Eos et nesciunt aperiam molestiae iusto quia.\",\n      \"owner\": \"Consequuntur facilis.\",\n      \"reserved_at\": \"1999-05-20T14:51:36Z\",\n      \"site\": \"Occaecati assumenda quia.\",\n      \"ticket\": \"Qui labore facilis deleniti.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"cidr\": \"Sint et.\",\n      \"description\": \"Vel quo et aliquam ducimus quia ut.\",\n      \"owner\": \"Animi nisi totam.\",\n      \"reserved_at\": \"2013-06-13T22:28:00Z\",\n      \"site\": \"Ab aut sequi soluta expedita accusantium.\",\n      \"ticket\": \"Minima accusantium qui ratione quis sunt maiores.\"\n   }'")
 		}
 		if body.ReservedAt != nil {
 			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
@@ -153,7 +186,10 @@ func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody string, ipamReserve
 	}
 	var tailnet string
 	{
-		tailnet = ipamReserveSubnetPoolTailnet
+		if ipamReserveSubnetPoolTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamReserveSubnetPoolTailnet
 	}
 	v := &ipam.ReserveSubnetPoolPayload{
 		CIDR:        body.CIDR,
@@ -170,13 +206,16 @@ func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody string, ipamReserve
 
 // BuildAllocateSubnetPoolPayload builds the payload for the ipam
 // allocate_subnet_pool endpoint from CLI flags.
-func BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBody string, ipamAllocateSubnetPoolTailnet string) (*ipam.AllocateSubnetPoolPayload, error) {
+func BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBody *string, ipamAllocateSubnetPoolTailnet *string) (*ipam.AllocateSubnetPoolPayload, error) {
 	var err error
 	var body AllocateSubnetPoolRequestBody
 	{
-		err = json.Unmarshal([]byte(ipamAllocateSubnetPoolBody), &body)
+		if ipamAllocateSubnetPoolBody == nil {
+			return nil, fmt.Errorf("missing required flag --body")
+		}
+		err = json.Unmarshal([]byte(*ipamAllocateSubnetPoolBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Nam quia et distinctio necessitatibus.\",\n      \"live_taken\": [\n         \"Beatae molestiae aut aliquam.\",\n         \"In molestias.\"\n      ],\n      \"owner\": \"Hic aut et adipisci omnis ipsam sapiente.\",\n      \"pool\": \"Nemo laudantium dolores neque veniam doloremque eos.\",\n      \"reserved_at\": \"1981-11-04T12:49:58Z\",\n      \"site\": \"Cupiditate voluptatum.\",\n      \"size\": 4227288391465765948,\n      \"ticket\": \"Aut libero quam explicabo unde a.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Consequatur numquam dolores excepturi ratione.\",\n      \"live_taken\": [\n         \"Et minus excepturi consectetur vel officiis atque.\",\n         \"Molestiae voluptatem quaerat magni alias.\",\n         \"Explicabo natus expedita praesentium enim rerum.\",\n         \"Quibusdam consectetur.\"\n      ],\n      \"owner\": \"Qui totam.\",\n      \"pool\": \"Qui quasi molestiae molestiae.\",\n      \"reserved_at\": \"2001-04-05T06:12:25Z\",\n      \"site\": \"Officia doloribus est eius quas sunt optio.\",\n      \"size\": 3038387140018466755,\n      \"ticket\": \"Sunt cumque.\"\n   }'")
 		}
 		if body.ReservedAt != nil {
 			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
@@ -187,7 +226,10 @@ func BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBody string, ipamAlloc
 	}
 	var tailnet string
 	{
-		tailnet = ipamAllocateSubnetPoolTailnet
+		if ipamAllocateSubnetPoolTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamAllocateSubnetPoolTailnet
 	}
 	v := &ipam.AllocateSubnetPoolPayload{
 		Pool:        body.Pool,
@@ -211,14 +253,20 @@ func BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBody string, ipamAlloc
 
 // BuildReleaseSubnetPoolPayload builds the payload for the ipam
 // release_subnet_pool endpoint from CLI flags.
-func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet string, ipamReleaseSubnetPoolCidr string) (*ipam.ReleaseSubnetPoolPayload, error) {
+func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet *string, ipamReleaseSubnetPoolCidr *string) (*ipam.ReleaseSubnetPoolPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamReleaseSubnetPoolTailnet
+		if ipamReleaseSubnetPoolTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamReleaseSubnetPoolTailnet
 	}
 	var cidr string
 	{
-		cidr = ipamReleaseSubnetPoolCidr
+		if ipamReleaseSubnetPoolCidr == nil {
+			return nil, fmt.Errorf("missing required flag --cidr")
+		}
+		cidr = *ipamReleaseSubnetPoolCidr
 	}
 	v := &ipam.ReleaseSubnetPoolPayload{}
 	v.Tailnet = tailnet
@@ -229,10 +277,13 @@ func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet string, ipamRele
 
 // BuildListServiceAddressesPayload builds the payload for the ipam
 // list_service_addresses endpoint from CLI flags.
-func BuildListServiceAddressesPayload(ipamListServiceAddressesTailnet string) (*ipam.ListServiceAddressesPayload, error) {
+func BuildListServiceAddressesPayload(ipamListServiceAddressesTailnet *string) (*ipam.ListServiceAddressesPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamListServiceAddressesTailnet
+		if ipamListServiceAddressesTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamListServiceAddressesTailnet
 	}
 	v := &ipam.ListServiceAddressesPayload{}
 	v.Tailnet = tailnet
@@ -242,13 +293,16 @@ func BuildListServiceAddressesPayload(ipamListServiceAddressesTailnet string) (*
 
 // BuildReserveServiceAddressPayload builds the payload for the ipam
 // reserve_service_address endpoint from CLI flags.
-func BuildReserveServiceAddressPayload(ipamReserveServiceAddressBody string, ipamReserveServiceAddressTailnet string) (*ipam.ReserveServiceAddressPayload, error) {
+func BuildReserveServiceAddressPayload(ipamReserveServiceAddressBody *string, ipamReserveServiceAddressTailnet *string) (*ipam.ReserveServiceAddressPayload, error) {
 	var err error
 	var body ReserveServiceAddressRequestBody
 	{
-		err = json.Unmarshal([]byte(ipamReserveServiceAddressBody), &body)
+		if ipamReserveServiceAddressBody == nil {
+			return nil, fmt.Errorf("missing required flag --body")
+		}
+		err = json.Unmarshal([]byte(*ipamReserveServiceAddressBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"address\": \"Dolores repellat aliquam voluptatem quo nesciunt ad.\",\n      \"description\": \"Consectetur cupiditate voluptatem quisquam.\",\n      \"owner\": \"Beatae quia.\",\n      \"reserved_at\": \"1975-09-10T03:22:10Z\",\n      \"service\": \"Esse magnam.\",\n      \"ticket\": \"Fugit a.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"address\": \"Distinctio qui sed ipsum ut.\",\n      \"description\": \"Aperiam quo.\",\n      \"owner\": \"Quae facere deserunt sit saepe.\",\n      \"reserved_at\": \"1980-11-01T05:11:18Z\",\n      \"service\": \"Non ut quidem dolores modi.\",\n      \"ticket\": \"Qui pariatur dignissimos.\"\n   }'")
 		}
 		if body.ReservedAt != nil {
 			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
@@ -259,7 +313,10 @@ func BuildReserveServiceAddressPayload(ipamReserveServiceAddressBody string, ipa
 	}
 	var tailnet string
 	{
-		tailnet = ipamReserveServiceAddressTailnet
+		if ipamReserveServiceAddressTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamReserveServiceAddressTailnet
 	}
 	v := &ipam.ReserveServiceAddressPayload{
 		Address:     body.Address,
@@ -276,14 +333,20 @@ func BuildReserveServiceAddressPayload(ipamReserveServiceAddressBody string, ipa
 
 // BuildReleaseServiceAddressPayload builds the payload for the ipam
 // release_service_address endpoint from CLI flags.
-func BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnet string, ipamReleaseServiceAddressAddress string) (*ipam.ReleaseServiceAddressPayload, error) {
+func BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnet *string, ipamReleaseServiceAddressAddress *string) (*ipam.ReleaseServiceAddressPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamReleaseServiceAddressTailnet
+		if ipamReleaseServiceAddressTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamReleaseServiceAddressTailnet
 	}
 	var address string
 	{
-		address = ipamReleaseServiceAddressAddress
+		if ipamReleaseServiceAddressAddress == nil {
+			return nil, fmt.Errorf("missing required flag --address")
+		}
+		address = *ipamReleaseServiceAddressAddress
 	}
 	v := &ipam.ReleaseServiceAddressPayload{}
 	v.Tailnet = tailnet
@@ -294,15 +357,18 @@ func BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnet string, 
 
 // BuildListUDPPortsPayload builds the payload for the ipam list_udp_ports
 // endpoint from CLI flags.
-func BuildListUDPPortsPayload(ipamListUDPPortsTailnet string, ipamListUDPPortsSite string) (*ipam.ListUDPPortsPayload, error) {
+func BuildListUDPPortsPayload(ipamListUDPPortsTailnet *string, ipamListUDPPortsSite *string) (*ipam.ListUDPPortsPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamListUDPPortsTailnet
+		if ipamListUDPPortsTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamListUDPPortsTailnet
 	}
 	var site *string
 	{
-		if ipamListUDPPortsSite != "" {
-			site = &ipamListUDPPortsSite
+		if ipamListUDPPortsSite != nil {
+			site = ipamListUDPPortsSite
 		}
 	}
 	v := &ipam.ListUDPPortsPayload{}
@@ -314,18 +380,24 @@ func BuildListUDPPortsPayload(ipamListUDPPortsTailnet string, ipamListUDPPortsSi
 
 // BuildReserveUDPPortPayload builds the payload for the ipam reserve_udp_port
 // endpoint from CLI flags.
-func BuildReserveUDPPortPayload(ipamReserveUDPPortBody string, ipamReserveUDPPortTailnet string) (*ipam.ReserveUDPPortPayload, error) {
+func BuildReserveUDPPortPayload(ipamReserveUDPPortBody *string, ipamReserveUDPPortTailnet *string) (*ipam.ReserveUDPPortPayload, error) {
 	var err error
 	var body ReserveUDPPortRequestBody
 	{
-		err = json.Unmarshal([]byte(ipamReserveUDPPortBody), &body)
+		if ipamReserveUDPPortBody == nil {
+			return nil, fmt.Errorf("missing required flag --body")
+		}
+		err = json.Unmarshal([]byte(*ipamReserveUDPPortBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"device\": \"Iste ut labore nostrum.\",\n      \"port\": \"Assumenda officiis.\",\n      \"site\": \"Et neque expedita.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"device\": \"Voluptates aspernatur tenetur et eaque.\",\n      \"port\": \"Ut rerum.\",\n      \"site\": \"Corrupti maiores occaecati incidunt sit.\"\n   }'")
 		}
 	}
 	var tailnet string
 	{
-		tailnet = ipamReserveUDPPortTailnet
+		if ipamReserveUDPPortTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamReserveUDPPortTailnet
 	}
 	v := &ipam.ReserveUDPPortPayload{
 		Site:   body.Site,
@@ -339,18 +411,27 @@ func BuildReserveUDPPortPayload(ipamReserveUDPPortBody string, ipamReserveUDPPor
 
 // BuildReleaseUDPPortPayload builds the payload for the ipam release_udp_port
 // endpoint from CLI flags.
-func BuildReleaseUDPPortPayload(ipamReleaseUDPPortTailnet string, ipamReleaseUDPPortSite string, ipamReleaseUDPPortPort string) (*ipam.ReleaseUDPPortPayload, error) {
+func BuildReleaseUDPPortPayload(ipamReleaseUDPPortTailnet *string, ipamReleaseUDPPortSite *string, ipamReleaseUDPPortPort *string) (*ipam.ReleaseUDPPortPayload, error) {
 	var tailnet string
 	{
-		tailnet = ipamReleaseUDPPortTailnet
+		if ipamReleaseUDPPortTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamReleaseUDPPortTailnet
 	}
 	var site string
 	{
-		site = ipamReleaseUDPPortSite
+		if ipamReleaseUDPPortSite == nil {
+			return nil, fmt.Errorf("missing required flag --site")
+		}
+		site = *ipamReleaseUDPPortSite
 	}
 	var port string
 	{
-		port = ipamReleaseUDPPortPort
+		if ipamReleaseUDPPortPort == nil {
+			return nil, fmt.Errorf("missing required flag --port")
+		}
+		port = *ipamReleaseUDPPortPort
 	}
 	v := &ipam.ReleaseUDPPortPayload{}
 	v.Tailnet = tailnet

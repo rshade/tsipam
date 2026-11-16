@@ -3,13 +3,11 @@
 // HTTP request path constructors for the ipam service.
 //
 // Command:
-// $ goa gen github.com/rshade/tailscale-utils/tail-ipam/design
+// $ goa gen github.com/rshade/tsipam/design
 
 package server
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // PlanIpamPath returns the URL path to the ipam service plan HTTP endpoint.
 func PlanIpamPath(tailnet string) string {
