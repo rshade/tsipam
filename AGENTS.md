@@ -83,9 +83,9 @@ fix does not. Specs describe behavior that exists; archive a change once its PR
 merges.
 
 The pinned `npm:@fission-ai/openspec` CLI generates files under `.agents/`,
-`.claude/` and `.github/`. When Renovate bumps it, the `OpenSpec refresh`
-workflow runs `openspec update` on the PR and pushes the result; its
-`OPENSPEC_REFRESH_TOKEN` secret lets the push retrigger CI.
+`.claude/` and `.github/`. The `OpenSpec files` workflow runs `openspec update`
+on every PR and fails if it changes anything, so after a Renovate bump run
+`mise exec npm:@fission-ai/openspec -- openspec update` and commit the result.
 
 ## Commit & Pull Request Guidelines
 

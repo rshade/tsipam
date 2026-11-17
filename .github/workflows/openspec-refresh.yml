@@ -1,46 +1,39 @@
-name: OpenSpec refresh
+name: OpenSpec files
 
 on:
   pull_request:
-    paths:
-      - mise.toml
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: openspec-refresh-${{ github.head_ref }}
+  group: openspec-files-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  refresh:
-    name: Regenerate OpenSpec files
-    if: >-
-      github.actor == 'renovate[bot]' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+  current:
+    name: Generated files are current
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
     timeout-minutes: 10
     steps:
-      - name: Check out the Renovate branch
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.OPENSPEC_REFRESH_TOKEN || github.token }}
+          persist-credentials: false
 
-      - name: Install pinned tools
+      - name: Install the OpenSpec CLI
         uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+        with:
+          install_args: node npm:@fission-ai/openspec
 
-      - name: Refresh generated OpenSpec files
+      - name: Regenerate OpenSpec files
         run: mise exec npm:@fission-ai/openspec -- openspec update
 
-      - name: Commit any regenerated files
+      - name: Fail if the generated files changed
         run: |
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "OpenSpec files are current"
-            exit 0
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "::error::OpenSpec generated files are out of date. Run 'mise exec npm:@fission-ai/openspec -- openspec update' and commit the result."
+            exit 1
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all
-          git commit -m "chore(deps): refresh generated OpenSpec files"
-          git push
