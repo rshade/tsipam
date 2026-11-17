@@ -5,16 +5,23 @@
 ### Requirement: Schema documents the server and remote selection
 
 `tsipam -schema` SHALL list `serve` with its `registry`, `service`,
-`hostname`, `advertise-tags`, `state-dir`, and `health-listen` flags. Every
-registry-backed command SHALL list a `server` flag beside its registry
-selectors. Help and schema SHALL state that `--server` excludes
+`hostname`, `advertise-tags`, `capability`, `state-dir`, and
+`health-listen` flags, and SHALL list `whoami` with its `server` flag.
+Every registry-backed command SHALL list a `server` flag beside its
+registry selectors. Help and schema SHALL state that `--server` excludes
 `--registry` and `--registry-dir`, and SHALL name `TSIPAM_SERVER`.
 
 #### Scenario: The serve command is discoverable
 
 - **WHEN** an operator runs `tsipam -schema`
 - **THEN** the `commands` array includes `serve`, and its flag list
-  includes `registry`, `advertise-tags`, and `state-dir`
+  includes `registry`, `advertise-tags`, `capability`, and `state-dir`
+
+#### Scenario: The whoami command is discoverable
+
+- **WHEN** an operator runs `tsipam -schema`
+- **THEN** the `commands` array includes `whoami`, and its flag list
+  includes `server`
 
 #### Scenario: Registry commands advertise the server flag
 

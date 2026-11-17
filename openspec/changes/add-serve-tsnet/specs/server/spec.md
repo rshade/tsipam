@@ -14,7 +14,8 @@ holding its storage or Tailscale API credentials themselves.
 API over HTTPS on port 443 as the Tailscale Service named by `--service`
 (default `svc:tsipam`). It SHALL accept connections only through that
 Service and SHALL NOT listen on any other tailnet or host address, except
-the optional health listener.
+the optional health listener and the loopback socket the Service forwards
+to.
 
 #### Scenario: A tailnet client reaches the Service by name
 
@@ -27,6 +28,42 @@ the optional health listener.
 
 - **WHEN** a tailnet client connects to the Service on port 80
 - **THEN** no registry API response is returned
+
+### Requirement: Caller addresses come from a PROXY header
+
+The server SHALL take each caller's tailnet address from the PROXY protocol
+header that the Service forwarder sends at the start of a connection, and
+SHALL close a forwarded connection that does not begin with a valid PROXY
+header before reading any request.
+
+#### Scenario: The forwarded caller address is used
+
+- **WHEN** a tailnet device calls the Service and its connection reaches
+  the server from a loopback address
+- **THEN** the server identifies the caller from the device's tailnet
+  address in the PROXY header, not from the loopback address
+
+#### Scenario: A connection without a PROXY header is closed
+
+- **WHEN** a local process connects to the forwarded loopback socket and
+  sends an HTTP request with no PROXY header
+- **THEN** the connection is closed and no registry API response is
+  returned
+
+### Requirement: The capability name is validated at startup
+
+`tsipam serve` SHALL accept `--capability <name>` (default
+`github.com/rshade/tsipam/cap/ipam`) and SHALL log it at startup. It SHALL
+exit 2 before joining the tailnet when the name has no `/cap/` segment, or
+when its domain is `tailscale.com` or a subdomain of it, with a stderr
+message naming `--capability`.
+
+#### Scenario: A tailscale.com capability is refused
+
+- **WHEN** an operator runs `tsipam serve` with
+  `--capability tailscale.com/cap/ipam`
+- **THEN** it exits 2 before joining the tailnet, and stderr names
+  `--capability` and says the `tailscale.com` domain is reserved
 
 ### Requirement: Server nodes are tagged
 

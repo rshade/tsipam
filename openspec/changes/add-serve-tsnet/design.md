@@ -19,15 +19,36 @@ Facts verified in `tailscale.com@v1.104.5` from the module cache:
 - `tsnet.Server.ListenService(name, mode)` advertises the node as a Service
   host. Hosts must be tagged, and the Service needs approval by an admin or
   an auto-approver.
-- `tsnet.ServiceModeTCP{Port, TerminateTLS}` gives the application a raw
-  connection after TLS termination. `ServiceModeHTTP` proxies through
-  serve, and serve deliberately sets no identity headers for tagged nodes
-  (`ipn/ipnlocal/serve.go:1174`).
+- `ListenService` does not hand the application tailnet connections. It
+  binds a host socket with `net.Listen("tcp", "localhost:0")` and points
+  serve's TCP forwarder at it (`tsnet/tsnet.go`, `ListenService`). An
+  accepted connection's `RemoteAddr` is therefore loopback, never the
+  caller.
+- `tsnet.ServiceModeTCP{Port, TerminateTLS, PROXYProtocolVersion}`: with
+  `PROXYProtocolVersion` set, serve writes a PROXY protocol header carrying
+  the caller's tailnet source address before forwarding
+  (`ipn/ipnlocal/serve.go:743`, through `github.com/pires/go-proxyproto`,
+  Apache-2.0, already a `tailscale.com` dependency). `ServiceModeHTTP`
+  proxies through serve, and serve deliberately sets no identity headers
+  for tagged nodes (`ipn/ipnlocal/serve.go:1174`).
 - `LocalClient().WhoIs` returns `UserProfile`, `Node` (with tags), and
-  `CapMap`. `tailcfg.UnmarshalCapJSON[T](capMap, name)` decodes capability
-  values.
+  `CapMap`. `WhoIsForService(ctx, addr, svc)` returns the same with
+  `CapMap` scoped to the Service. `tailcfg.UnmarshalCapJSON[T](capMap,
+  name)` decodes capability values.
 - `tsnet.Server` has `Dir`, `Hostname`, `AuthKey`, `AdvertiseTags`, and
   `Store`.
+
+Facts from the sibling project tail-watch, checked on a lab tailnet on
+2026-10-17 (its archived `add-ui-authorization` design, D2):
+
+- An app grant whose `dst` is only `svc:<name>` is returned by
+  `WhoIsForService` and **not** by plain `WhoIs`.
+- `WhoIs` accepts a bare IPv4 address, a bare IPv6 address, and
+  `ip:port`.
+- The policy API rejects a capability name in the `tailscale.com` domain.
+- A `*` grant destination does not cover a `svc:` destination, so a Service
+  needs its own network grant. A Service must be defined in the admin
+  console before advertising it has any visible effect.
 
 Constraints from the repo:
 
@@ -69,8 +90,12 @@ Constraints from the repo:
 
 `tsipam serve` creates `tsnet.Server{Dir: stateDir, Hostname,
 AdvertiseTags, AuthKey: TS_AUTHKEY}`, calls `Up`, then
-`ListenService(service, tsnet.ServiceModeTCP{Port: 443, TerminateTLS: true})`,
-and runs a standard `http.Server` with the goa handler on that listener.
+`ListenService(service, tsnet.ServiceModeTCP{Port: 443, TerminateTLS: true,
+PROXYProtocolVersion: 2})`. It wraps the returned listener in a
+`proxyproto.Listener` whose policy is `REQUIRE`, so a connection without a
+valid PROXY header is closed before any HTTP is read, and runs a standard
+`http.Server` with the goa handler on the wrapped listener. The wrapped
+connection's `RemoteAddr` is the caller's tailnet source address.
 
 *Alternatives considered:*
 
@@ -83,27 +108,78 @@ and runs a standard `http.Server` with the goa handler on that listener.
   clients to one node's name and loses the stable `svc:` address that lets
   the host change.
 
-*Assumption, checked by task 1.1:* a connection accepted on the Service
-listener reports the caller's tailnet IP as `RemoteAddr`, so `WhoIs`
-resolves it; and grant app capabilities whose `dst` is `svc:tsipam` appear
-in that `WhoIs` `CapMap`. If either is false, the change stops and
-returns to design; there is no silent fallback.
+*Assumption, checked by the live test in task 1.2:* through a real
+Service, the PROXY header's source address is the caller's tailnet
+address, and `WhoIsForService` on that address returns a grant whose `dst`
+is the Service. The tail-watch result makes the second likely but was
+observed through `tailscale serve` on a kernel node, not tsnet. If either
+is false, the change stops and returns to design; there is no silent
+fallback.
 
-### Identity once per connection
+### The local-process gap
 
-`http.Server.ConnContext` stores the connection's remote address. A
-middleware calls `WhoIs` the first time a connection carries a request and
-caches the resulting `Caller{Login, NodeName, Tags, Caps}` on that
-connection. If `WhoIs` fails, the request is denied with `forbidden`. The
+The forwarded socket is an ordinary loopback port. Any process that can
+reach the server's loopback interface can connect to it and send a PROXY
+header naming another peer's tailnet address, and `WhoIsForService` will
+then report that peer's identity and grants. In Kubernetes every container
+in a pod shares one network namespace, so a sidecar is such a process.
+
+This change does not close the gap; tsnet offers no in-process Service
+listener to close it with. The deployment guide says plainly that the
+`tsipam serve` container must be the only workload in its pod and network
+namespace, with no sidecars, and `docs/reference/authorization.md` states
+the trust boundary. tail-watch documents the same gap for its loopback
+listener. If tsnet later exposes an in-process Service listener, switching
+to it closes the gap without changing the API.
+
+### Identity on every request
+
+`http.Server.ConnContext` stores the connection's PROXY-derived source
+address. A middleware calls
+`LocalClient().WhoIsForService(ctx, addr, service)` on every request and
+builds `Caller{Login, NodeName, Tags, Caps}`. The `CapMap` is scoped to the
+Service, so a grant must name `svc:tsipam` (or a tag the host carries) to
+apply. If the lookup fails, the request is denied with `forbidden`. The
 middleware puts the `Caller` in the request context and sets
 `registry.WithActor(ctx, actor)`, where actor is `user:<login>` or
 `node:<node-name>`.
+
+There is no cache. Caching per connection would let a goa client keep a
+revoked grant for as long as it held a keep-alive connection. A lookup on
+every request means a revoked grant takes effect on the caller's next
+request. The tsnet `LocalClient` is served in process, so the call does
+not leave the process. If the live test measures it as too slow, a cache
+keyed by address with a TTL of at most 5 seconds is the fallback, and the
+spec's "next request" wording would become "within 5 seconds".
+
+### The capability name is configurable and validated
+
+`--capability` names the peer capability, defaulting to
+`github.com/rshade/tsipam/cap/ipam`. A second server on the same tailnet,
+such as staging, can use its own name so the grants of one never authorize
+the other. Startup refuses a name without a `/cap/` segment, and a name
+whose domain is `tailscale.com` or a subdomain of it, because the policy
+API rejects those and a grant could never match.
+
+### `whoami` shows the caller what the server sees
+
+A new goa method `whoami` (`GET /whoami`) needs no action. It returns
+`identified`, `login` (empty for a tagged node), `node`, `tags`, the
+capability name, the decoded capability values (`grants`), and
+`ignored_values`, the count of values that did not parse. When the lookup
+fails, it returns `identified: false` instead of `forbidden`, so a denied
+caller can see why. `tsipam whoami` calls it and needs `--server` or
+`TSIPAM_SERVER`; without one it exits 2. Under sanitization, `login` and
+`node` are redacted like `owner`. This mirrors tail-watch's
+`GET /api/v1/me`.
 
 ### Authorization is a pure function plus a transaction guard
 
 `internal/server/authz` decodes the capability values into
 `[]Grant{Actions, Tailnets, Sites, Services}` and evaluates them with
-`path.Match` globs. Two checkpoints apply them:
+`path.Match` globs. Each value is decoded on its own, as tail-watch's
+`roleFromCaps` does, so one malformed value is ignored without discarding
+the valid values beside it. Two checkpoints apply them:
 
 1. **At method entry** (a goa endpoint middleware), the method's action and
    the registry alias are checked. A caller with no action on the alias is
@@ -194,7 +270,8 @@ If the call fails, the command fails closed with exit 2.
 - The error `forbidden` (HTTP 403) is added to every method through an
   API-level `Error` plus a `Response("forbidden", StatusForbidden)` in each
   HTTP block.
-- New methods: `list_live_routes` and `list_identities`.
+- New methods: `list_live_routes`, `list_identities`, and `whoami`.
+  `whoami` is the one method that does not return `forbidden`.
 - `plan.live_tailnet` becomes optional.
 - No goa `Security` schemes. Authentication happens at the network layer,
   and an empty scheme would mislead OpenAPI readers. The OpenAPI
@@ -204,8 +281,9 @@ If the call fails, the command fails closed with exit 2.
 
 Flags: `--registry` (required, `sqlite://` only), `--service`
 (`svc:tsipam`), `--hostname` (`tsipam`), `--advertise-tags` (required),
-`--state-dir` (`/var/lib/tsipam/tsnet`), and `--health-listen` (empty by
-default).
+`--capability` (`github.com/rshade/tsipam/cap/ipam`), `--state-dir`
+(`/var/lib/tsipam/tsnet`), and `--health-listen` (empty by default).
+Startup logs the capability name and the Service name.
 
 The registry opens before the tailnet node starts, so a bad database fails
 fast. tsnet's own log lines go to the diagnostics logger at debug level,
@@ -225,17 +303,31 @@ then closes the store.
 - **A Secret** for `TS_AUTHKEY` (tagged `tag:tsipam`) and the Tailscale API
   OAuth client.
 - **Probes** on `--health-listen :8080`.
+- **No sidecars.** The pod runs only `tsipam serve`, because anything that
+  shares its network namespace can forge a PROXY header (see "The
+  local-process gap").
+- **Define the Service first** in the admin console (`svc:tsipam`, TCP
+  443). Advertising an undefined Service does nothing visible.
 - **Policy snippet:** `tagOwners` for `tag:tsipam`; `autoApprovers.services`
-  for `svc:tsipam` approving `tag:tsipam`; grants with the
-  `github.com/rshade/tsipam/cap/ipam` app capability.
+  for `svc:tsipam` approving `tag:tsipam`; a network grant with
+  `dst: ["svc:tsipam"]` and `ip: ["tcp:443"]`, needed even in a tailnet
+  that allows `*`; and app grants of the capability whose `dst` is
+  `svc:tsipam`.
+- **Troubleshooting order**, after tail-watch's: the name does not resolve
+  (Service undefined or host not approved); the connection times out
+  (approval pending or no network grant); `tsipam whoami` reports no
+  grants (the app grant targets something other than `svc:tsipam`).
 
 ## Risks / Trade-offs
 
-- [The Service listener's `RemoteAddr` is not the peer IP, or capabilities
-  are not delivered to Service hosts] → Task 1.1 prototypes both before any
-  other work. Failing either reopens the design.
+- [The PROXY header's source is not the caller, or `WhoIsForService` does
+  not return Service grants on a tsnet host] → The live test in task 1.2
+  checks both before any other work. Failing either reopens the design.
+- [A local process forges a PROXY header] → Not closed by this change. The
+  deployment forbids sidecars and the authorization reference states the
+  trust boundary. See "The local-process gap".
 - [`tailscale.com` is a large dependency: govulncheck exposure, build time,
-  Windows and macOS cross-compiles] → Task 2.1 adds it and runs
+  Windows and macOS cross-compiles] → Task 1.1 adds it and runs
   `mise run cross`, `govulncheck`, and `license-check` first. If Windows
   fails, `serve` gets a build constraint and the client stays portable.
 - [One replica means a few seconds of unavailability on restart] → Accepted.
@@ -243,8 +335,13 @@ then closes the store.
   with exit 2, which CI retries.
 - [Capability globs are easy to get wrong] → `authz` is a pure function with
   table tests, and denial messages name the missing action and scope kind.
-- [`WhoIs` adds latency] → Cached per connection. The HTTP keep-alive
-  connections that goa clients use make this one lookup per command.
+- [A lookup on every request adds latency] → The tsnet `LocalClient` runs
+  in process, and the live test records the lookup time. A cache of at most
+  5 seconds is the fallback (see "Identity on every request").
+- [A grant aimed at the node tag instead of `svc:tsipam`] → It may or may
+  not appear in the Service-scoped map. The docs lead with `svc:tsipam` as
+  the grant destination, and `tsipam whoami` shows what the server
+  actually received.
 - [The first request after a fresh deploy waits for certificate issuance] →
   The client's 60-second timeout covers it. The docs mention the first
   slow request.
@@ -262,6 +359,10 @@ then closes the store.
    the server's database first if it has newer reservations).
 
 ## Open Questions
+
+- Should a server refuse to start when it detects other processes in its
+  network namespace? Detection is unreliable across runtimes, so the docs
+  carry the rule for now.
 
 - Should node state move to a Kubernetes Secret (`kubestore`) so the
   volume holds only data? This is deferrable, since the volume already

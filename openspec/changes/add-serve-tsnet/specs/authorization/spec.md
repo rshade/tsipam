@@ -10,10 +10,13 @@ token system.
 
 ### Requirement: Identify callers by tailnet identity
 
-The server SHALL identify each connection from its tailnet source address,
-as a user (login name) or a tagged node (node name and tags). It SHALL NOT
-trust identity carried in request headers or bodies. A connection whose
-identity cannot be resolved SHALL be denied.
+The server SHALL identify the caller of each request from the connection's
+tailnet source address, as a user (login name) or a tagged node (node name
+and tags), using a lookup scoped to the server's Service. It SHALL resolve
+identity and capabilities again for every request and SHALL NOT reuse a
+previous request's result. It SHALL NOT trust identity carried in HTTP
+request headers or bodies. A request whose caller cannot be resolved SHALL
+be denied.
 
 #### Scenario: A tagged CI node is identified
 
@@ -27,13 +30,28 @@ identity cannot be resolved SHALL be denied.
 - **THEN** authorization uses the connection's resolved identity, not the
   header
 
+#### Scenario: A revoked grant applies on the next request
+
+- **WHEN** a caller holding `{"actions": ["reserve"]}` keeps one HTTP
+  connection open, the grant is removed from the tailnet policy, and the
+  caller sends another reserve on the same connection after the policy
+  change reaches the server's node
+- **THEN** that reserve is denied and nothing is written
+
 ### Requirement: Capability grants authorize actions
 
-The server SHALL authorize from the values of the peer capability
-`github.com/rshade/tsipam/cap/ipam` granted to the caller for the Service.
-Each value is an object with `actions` (required: `read`, `reserve`,
-`release`, `allocate`, `admin`) and optional `tailnets`, `sites`, and
-`services` glob lists. Values are combined as a union.
+The server SHALL authorize from the values of the peer capability named by
+`--capability` (default `github.com/rshade/tsipam/cap/ipam`) granted to the
+caller for the Service. Each value is an object with `actions` (required:
+`read`, `reserve`, `release`, `allocate`, `admin`) and optional `tailnets`,
+`sites`, and `services` glob lists. Values are combined as a union.
+
+#### Scenario: A grant to the Service is honored
+
+- **WHEN** the only app grant naming the capability has
+  `dst: ["svc:tsipam"]` and value `{"actions": ["read"]}`, and its source
+  runs `subnet list`
+- **THEN** the list succeeds
 
 #### Scenario: A grant allows listing
 
@@ -51,8 +69,9 @@ Each value is an object with `actions` (required: `read`, `reserve`,
 
 A request SHALL be denied unless at least one capability value grants its
 action and matches every scope that applies to it. `admin` SHALL grant
-every action. A value that does not parse SHALL grant nothing, and SHALL be
-logged with the capability name but without the caller's identity.
+every action. A value that does not parse SHALL grant nothing, SHALL NOT
+prevent the caller's other values from granting, and SHALL be logged with
+the capability name but without the caller's identity.
 
 #### Scenario: No grant means no access
 
@@ -65,6 +84,12 @@ logged with the capability name but without the caller's identity.
 - **WHEN** a caller's only value is `{"actions": "read"}` (a string, not a
   list)
 - **THEN** every request from that caller is denied
+
+#### Scenario: A malformed value does not cancel a valid one
+
+- **WHEN** a caller holds `{"actions": "read"}` from one grant and
+  `{"actions": ["read"]}` from another, and runs `subnet list`
+- **THEN** the list succeeds
 
 ### Requirement: Method actions and scopes
 
@@ -139,3 +164,34 @@ Actor values SHALL be redacted under sanitization as owner values are.
   the server
 - **THEN** `registry history` shows the event with actor
   `node:ci-runner-7`
+
+### Requirement: Callers can see their own identity and grants
+
+`tsipam whoami` SHALL report, as a JSON result, what the server resolved for
+the calling request: `identified`, `login` (empty for a tagged node),
+`node`, `tags`, `capability`, the decoded capability values as `grants`,
+and `ignored_values`, the count of values that did not parse. Under
+sanitization, `login` and `node` SHALL be redacted as owner values are.
+
+#### Scenario: A caller with no grant sees why
+
+- **WHEN** a member with no tsipam capability runs
+  `tsipam whoami --server https://tsipam.example.ts.net`
+- **THEN** it exits 0 and reports `identified: true`, the member's login,
+  and an empty `grants` list
+
+### Requirement: Whoami is never denied and needs a server
+
+`tsipam whoami` SHALL need no action. It SHALL return `identified: false`
+with exit 0 when the caller cannot be resolved, instead of being denied. It
+SHALL require `--server` or `TSIPAM_SERVER` and exit 2 without one.
+
+#### Scenario: An unresolved caller is reported, not denied
+
+- **WHEN** the server's identity lookup fails for a `whoami` request
+- **THEN** the command exits 0 and reports `identified: false`
+
+#### Scenario: Whoami needs a server
+
+- **WHEN** `tsipam whoami` runs with neither `--server` nor `TSIPAM_SERVER`
+- **THEN** it exits 2 with empty stdout and stderr naming `--server`

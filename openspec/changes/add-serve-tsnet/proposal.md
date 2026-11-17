@@ -17,13 +17,19 @@ tailnet that knows who is calling.
   the Tailscale Service `svc:tsipam` (reachable as
   `https://tsipam.<tailnet>.ts.net`). It runs one replica against a SQLite
   registry and refuses `file://` registries.
-- Identify every caller with `WhoIs` on the connection's tailnet address.
-  Users and tagged nodes (CI runners) are both identified; nothing is read
-  from request headers.
-- Authorize every request from the grant app capability
-  `github.com/rshade/tsipam/cap/ipam`: actions `read`, `reserve`, `release`,
-  `allocate`, and `admin`, optionally scoped by registry alias, site, and
-  service globs. With no matching grant, the request is denied.
+- Identify the caller of every request with a Service-scoped
+  `WhoIsForService` lookup on the caller's tailnet address, which the
+  Service forwarder delivers in a PROXY protocol header. Users and tagged
+  nodes (CI runners) are both identified; nothing is read from HTTP
+  request headers. Identity is resolved per request, so a revoked grant
+  applies on the next request.
+- Authorize every request from a grant app capability, by default
+  `github.com/rshade/tsipam/cap/ipam` and configurable with `--capability`:
+  actions `read`, `reserve`, `release`, `allocate`, and `admin`, optionally
+  scoped by registry alias, site, and service globs. With no matching
+  grant, the request is denied.
+- Add `tsipam whoami`, which shows a caller the identity and grants the
+  server resolved for them.
 - Record the caller as the actor of every audited change. A new reservation
   made without `--owner` records the caller as its owner.
 - Add `--server <url>` and `TSIPAM_SERVER` to every registry-backed command.
@@ -37,8 +43,9 @@ tailnet that knows who is calling.
   TLS failures exit 2 with empty stdout. The exit-code catalog stays at three
   codes and the JSON envelope does not change.
 - Document a container and Kubernetes deployment: a StatefulSet with one
-  replica, a `ReadWriteOncePod` volume on block storage, and the tailnet
-  policy (tag owner, Service auto-approval, capability grants).
+  replica and no sidecars, a `ReadWriteOncePod` volume on block storage,
+  and the tailnet policy (tag owner, Service definition and auto-approval,
+  a network grant to `svc:tsipam`, capability grants).
 
 ## Capabilities
 
@@ -51,7 +58,8 @@ tailnet that knows who is calling.
   with local storage, transport and TLS failures, and how sanitization works
   against a server.
 - `authorization`: caller identity, the capability format, how actions and
-  scopes are evaluated, denial behavior, and recording the actor.
+  scopes are evaluated, denial behavior, recording the actor, and
+  `whoami`.
 
 ### Modified Capabilities
 
@@ -61,8 +69,8 @@ tailnet that knows who is calling.
   reservation is new and `--owner` is omitted.
 - `subnet`: remote `subnet allocate` collects live routes on the server.
 - `calc`: remote `calc next-free` reads live routes from the server.
-- `schema`: the catalog lists `serve` and the `server` flag, and describes
-  the new failures that exit 2.
+- `schema`: the catalog lists `serve`, `whoami`, and the `server` flag,
+  and describes the new failures that exit 2.
 
 ## Impact
 
@@ -71,11 +79,15 @@ tailnet that knows who is calling.
   (HTTPS client counterpart of `internal/loopback`); `internal/ipamsvc`
   (authorization guard, server-side live reads, owner default, new methods);
   `cmd/tsipam/main.go` (storage selection, sanitizer seeding, exit codes).
-- **API:** `design/` gains `forbidden`, `list_live_routes`, and
-  `list_identities`; `plan.live_tailnet` and `allocate_subnet_pool.live_taken`
-  become server-filled in remote mode. `gen/` is regenerated.
+- **API:** `design/` gains `forbidden`, `list_live_routes`,
+  `list_identities`, and `whoami`; `plan.live_tailnet` and
+  `allocate_subnet_pool.live_taken` become server-filled in remote mode.
+  `gen/` is regenerated.
 - **Dependencies:** `tailscale.com` (BSD-3-Clause, on the allowlist) for
-  `tsnet` and `tailcfg`.
+  `tsnet` and `tailcfg`; `github.com/pires/go-proxyproto` (Apache-2.0),
+  already required by `tailscale.com`, becomes a direct import.
+- **Precedent:** tail-watch's `ui-authorization` capability, whose lab
+  findings on `WhoIsForService` this design relies on.
 - **Depends on:** `refactor-registry-store` (`Ledger`, `Store`),
   `add-sqlite-store` (`--registry` URLs, the `events` table with `actor`).
 - **Enables:** `add-server-observability` (drift timer, `/metrics`,
