@@ -1,9 +1,14 @@
 package hujsonstore_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -163,6 +168,133 @@ func TestPutPreservesComment(t *testing.T) {
 	if !strings.Contains(string(got), want) {
 		t.Fatalf("registry = %s, want the comment preserved", got)
 	}
+}
+
+func TestPutRejectsInvalidMapInsteadOfReplacingIt(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := hujsonstore.Path(dir, "example.ts.net")
+	seed := []byte(`{"siteIDs":{"1":"hq","1":"branch"}}`)
+	if err := os.WriteFile(path, seed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := hujsonstore.New(dir, nil)
+	called := false
+	err := store.Update(context.Background(), "example.ts.net", registry.TxOptions{}, func(tx registry.Tx) error {
+		called = true
+		return tx.PutSiteID("2", registry.Entry{Site: "lab"})
+	})
+	if !called {
+		t.Fatal("fn did not run")
+	}
+	if err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("PutSiteID error = %v, want the duplicate-key map error", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, seed) {
+		t.Fatalf("registry = %s, want the invalid map left unchanged", got)
+	}
+}
+
+func TestPutUDPPortRejectsPartialMap(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := hujsonstore.Path(dir, "example.ts.net")
+	seed := []byte(`{"udpPorts":{"branch":{"nope":"fw","41641":"fw"},"hq":{"41641":"fw","41642":"edge"}}}`)
+	if err := os.WriteFile(path, seed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store := hujsonstore.New(dir, nil)
+	called := false
+	err := store.Update(context.Background(), "example.ts.net", registry.TxOptions{}, func(tx registry.Tx) error {
+		called = true
+		return tx.PutUDPPort("hq", "41642", "edge")
+	})
+	if !called {
+		t.Fatal("fn did not run")
+	}
+	if err == nil || !strings.Contains(err.Error(), "UDP port") {
+		t.Fatalf("PutUDPPort error = %v, want the invalid UDP map error", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, seed) {
+		t.Fatalf("registry = %s, want the partial UDP map left unchanged", got)
+	}
+}
+
+func TestRepairWriteFailureIsCommitError(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("ulimit-based write-failure injection needs a POSIX shell")
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no POSIX shell available to inject the write failure")
+	}
+	dir := t.TempDir()
+	path := hujsonstore.Path(dir, "example.ts.net")
+	seed := []byte(`{
+	"serviceAddresses": {
+		"100.100.100.7": {"service":"svc:a","owner":"bad\u0007owner"},
+		"10.0.0.5": "svc:b"
+	}
+}
+`)
+	if err := os.WriteFile(path, seed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const script = `ulimit -f 0 && trap '' XFSZ && exec "$0" "$@"`
+	cmd := exec.Command("sh", "-c", script, os.Args[0], "-test.run=^TestHelperRepairWriteFailure$")
+	cmd.Env = append(os.Environ(), "TSIPAM_REPAIR_WRITE_FAIL=1", "TSIPAM_REPAIR_WRITE_PATH="+path)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	_ = cmd.Run()
+	output := out.String()
+	if strings.Contains(output, "HELPER_RESULT: unexpected-success") {
+		t.Skip("environment does not enforce RLIMIT_FSIZE")
+	}
+	const wantPrefix = `repairing serviceAddresses: removing "100.100.100.7" would fix it, but writing the repaired registry failed:`
+	if !strings.Contains(output, wantPrefix) {
+		t.Fatalf("helper output = %q, want prefix %q", output, wantPrefix)
+	}
+	if strings.Contains(output, "releasing service address") {
+		t.Fatalf("helper output = %q, want the repair sentence without a release prefix", output)
+	}
+	if !strings.Contains(output, "HELPER_RESULT: commit-error") {
+		t.Fatalf("helper output = %q, want a CommitError", output)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, seed) {
+		t.Fatalf("registry = %s, want the unrepaired bytes", got)
+	}
+}
+
+func TestHelperRepairWriteFailure(t *testing.T) {
+	t.Parallel()
+	if os.Getenv("TSIPAM_REPAIR_WRITE_FAIL") != "1" {
+		t.Skip("only runs as TestRepairWriteFailureIsCommitError's subprocess helper")
+	}
+	path := os.Getenv("TSIPAM_REPAIR_WRITE_PATH")
+	ledger := registry.NewLedger(hujsonstore.New(filepath.Dir(path), nil), nil)
+	_, _, err := ledger.ReleaseServiceAddress(context.Background(), "example.ts.net", "100.100.100.7")
+	if err == nil {
+		fmt.Fprintln(os.Stdout, "HELPER_RESULT: unexpected-success")
+		os.Exit(1)
+	}
+	if _, ok := errors.AsType[*registry.CommitError](err); ok {
+		fmt.Fprintln(os.Stdout, "HELPER_RESULT: commit-error")
+	}
+	fmt.Fprintln(os.Stdout, err.Error())
+	os.Exit(1)
 }
 
 func TestRawReaders(t *testing.T) {

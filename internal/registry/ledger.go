@@ -56,6 +56,11 @@ func wrapCommit(err error, format string, args ...any) error {
 	if _, ok := errors.AsType[*CommitError](err); !ok {
 		return err
 	}
+	// Repair text is already final. Prefixing it would change the sentence
+	// operators and tests match, while still hiding the CommitError type.
+	if strings.HasPrefix(err.Error(), "repairing ") {
+		return err
+	}
 	return fmt.Errorf(format, append(args, err)...)
 }
 
@@ -138,6 +143,7 @@ func (l *Ledger) ListSiteIDs(ctx context.Context, tailnet string) ([]SiteIDEntry
 		if readErr != nil {
 			return readErr
 		}
+		l.logLoaded(snap, true)
 		entries = make([]SiteIDEntry, 0, len(sites))
 		for id, entry := range sites {
 			entries = append(entries, SiteIDEntry{
@@ -308,7 +314,11 @@ func (l *Ledger) ListSubnetPools(ctx context.Context, tailnet string) ([]SubnetP
 	err := l.store.View(ctx, tailnet, TxOptions{Require: []MapKind{MapSubnetPools}}, func(snap Snapshot) error {
 		var readErr error
 		pools, readErr = snap.SubnetPools()
-		return readErr
+		if readErr != nil {
+			return readErr
+		}
+		l.logLoaded(snap, false)
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -403,6 +413,7 @@ func (l *Ledger) ListServiceAddresses(ctx context.Context, tailnet string) ([]Se
 		if readErr != nil {
 			return readErr
 		}
+		l.logLoaded(snap, false)
 		entries = make([]ServiceAddressEntry, 0, len(addresses))
 		for address, entry := range addresses {
 			entries = append(entries, ServiceAddressEntry{
@@ -510,6 +521,7 @@ func (l *Ledger) ListUDPPorts(ctx context.Context, tailnet, site string) ([]UDPP
 		if readErr != nil {
 			return readErr
 		}
+		l.logLoaded(snap, true)
 		entries = make([]UDPPortEntry, 0, snap.Counts().UDPPorts)
 		for entrySite, sitePorts := range ports {
 			if site != "" && entrySite != site {
@@ -587,12 +599,25 @@ func (l *Ledger) release(
 		return nil
 	})
 	if err != nil {
-		if _, ok := errors.AsType[*CommitError](err); ok {
-			return false, fmt.Errorf("%s: %w", prefix, err)
-		}
-		return false, err
+		return false, wrapCommit(err, "%s: %w", prefix)
 	}
 	return changed, nil
+}
+
+// logLoaded emits the historical registry-loaded event. Subnet-pool and
+// service-address lists omit udp_port_count; the other lists include it.
+// Planning loads stay quiet and do not call this.
+func (l *Ledger) logLoaded(snap Snapshot, includeUDP bool) {
+	counts := snap.Counts()
+	args := []any{
+		"site_id_count", counts.SiteIDs,
+		"subnet_pool_count", counts.SubnetPools,
+		"service_address_count", counts.ServiceAddresses,
+	}
+	if includeUDP {
+		args = append(args, "udp_port_count", counts.UDPPorts)
+	}
+	diagnostics.Debug(l.logger, "registry loaded", args...)
 }
 
 // prefixMutation adds the operation prefix to a patch failure. Fail-closed

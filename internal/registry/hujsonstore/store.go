@@ -72,7 +72,6 @@ func (s *Store) View(
 	if err = requireMaps(doc, opts.Require); err != nil {
 		return err
 	}
-	logRegistry(s.logger, registryLoadedMessage, doc)
 	return fn(snapshot{doc: doc})
 }
 
@@ -81,17 +80,22 @@ func (s *Store) Update(
 	ctx context.Context, tailnet string, opts registry.TxOptions, fn func(registry.Tx) error,
 ) error {
 	path := Path(s.dir, tailnet)
-	if _, statErr := os.Stat(s.dir); errors.Is(statErr, os.ErrNotExist) {
-		return s.notFound(tailnet, statErr)
-	}
-	if !opts.CreateIfMissing {
-		if _, statErr := os.Stat(path); statErr != nil {
-			return s.readError(tailnet, statErr)
-		}
-	}
-	return withRegistryLock(path, s.logger, func() error {
+	err := withRegistryLock(path, s.logger, func() error {
 		return s.updateLocked(ctx, path, tailnet, opts, fn)
 	})
+	return s.lockLookupError(tailnet, err)
+}
+
+// lockLookupError adds the directory-versus-file lookup sentence to a lock
+// failure. An error that already matches ErrNotFound keeps its text.
+func (s *Store) lockLookupError(tailnet string, err error) error {
+	if err == nil || errors.Is(err, registry.ErrNotFound) {
+		return err
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return s.notFound(tailnet, err)
+	}
+	return err
 }
 
 func (s *Store) updateLocked(
@@ -132,10 +136,11 @@ func (s *Store) updateLocked(
 		return nil
 	}
 	if writeErr := hujsonedit.WriteRaw(path, tx.pending); writeErr != nil {
+		commitErr := writeErr
 		if tx.repair != nil {
-			return tx.repair.writeError(writeErr)
+			commitErr = tx.repair.writeError(writeErr)
 		}
-		return &registry.CommitError{Err: writeErr}
+		return &registry.CommitError{Err: commitErr}
 	}
 	registry.RunAfterSuccess(ctx)
 	return nil

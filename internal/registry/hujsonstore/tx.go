@@ -89,6 +89,9 @@ func (t *bufferTx) PutServiceAddress(address string, entry registry.ServiceEntry
 }
 
 func (t *bufferTx) PutUDPPort(site, port, device string) error {
+	if t.doc.udpPortsErr != nil {
+		return t.doc.udpPortsErr
+	}
 	return t.apply(reserveUDPPortPatchOp(t.doc, site, port, device))
 }
 
@@ -118,6 +121,9 @@ func (t *bufferTx) putFlat(topLevel, key string, value any) error {
 	view, err := t.doc.view(topLevel)
 	if err != nil {
 		return err
+	}
+	if view.err != nil {
+		return view.err
 	}
 	op := flatAdd(view, topLevel, key, value)
 	return t.apply(op)

@@ -573,6 +573,33 @@ func TestReserveSiteIDIntoNullBlock(t *testing.T) {
 	}
 }
 
+func TestRawEntriesReadsCaseInsensitiveSubject(t *testing.T) {
+	t.Parallel()
+	path := regPath(t)
+	content := `{"siteIDs":{"1":{"Site":"private-site","Owner":"ops"}},` +
+		`"serviceAddresses":{"100.64.0.1":{"Service":"svc:search"}}}`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	siteIDs, _, serviceAddresses, owners := hujsonstore.RawEntries(path)
+	if siteIDs["1"] != "private-site" {
+		t.Fatalf("RawEntries siteIDs = %+v, want subject private-site", siteIDs)
+	}
+	if serviceAddresses["100.64.0.1"] != "svc:search" {
+		t.Fatalf("RawEntries serviceAddresses = %+v, want subject svc:search", serviceAddresses)
+	}
+	if len(owners) != 1 || owners[0] != "ops" {
+		t.Fatalf("RawEntries owners = %q, want [ops]", owners)
+	}
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Site != "private-site" {
+		t.Fatalf("ListSiteIDs = %+v, want the same subject RawEntries collected", entries)
+	}
+}
+
 // TestRawEntriesExtractsUnvalidatedValuesFromFile tests that RawEntries
 // can extract raw key/value pairs even from files that would fail Load
 // validation, so a caller can pre-register them with a sanitizer.

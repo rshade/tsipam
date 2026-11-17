@@ -88,17 +88,38 @@ func rawSubject(packed []byte, subjectField string) (string, string) {
 	if err := json.Unmarshal(packed, &subject); err == nil {
 		return subject, ""
 	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(packed, &fields); err == nil {
-		if rawField, present := fields[subjectField]; present {
-			_ = json.Unmarshal(rawField, &subject)
-		}
-	}
+	// Match Entry and ServiceEntry: encoding/json prefers an exact field name
+	// and otherwise accepts one case-insensitive match. A map lookup misses
+	// "Site" or "Service", so a sanitizer would print the private name.
+	subject = foldedStringField(packed, subjectField)
 	var metadata struct {
 		Owner string `json:"owner"`
 	}
 	_ = json.Unmarshal(packed, &metadata)
 	return subject, metadata.Owner
+}
+
+func foldedStringField(packed []byte, field string) string {
+	switch field {
+	case "site":
+		var decoded struct {
+			Value string `json:"site"`
+		}
+		if err := json.Unmarshal(packed, &decoded); err != nil {
+			return ""
+		}
+		return decoded.Value
+	case "service":
+		var decoded struct {
+			Value string `json:"service"`
+		}
+		if err := json.Unmarshal(packed, &decoded); err != nil {
+			return ""
+		}
+		return decoded.Value
+	default:
+		return ""
+	}
 }
 
 func lastFoldedMember(object *hujson.Object, key string) int {
