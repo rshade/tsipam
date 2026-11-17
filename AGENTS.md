@@ -82,6 +82,11 @@ output goes through OpenSpec (`openspec/`) before implementation. A contained
 fix does not. Specs describe behavior that exists; archive a change once its PR
 merges.
 
+The pinned `npm:@fission-ai/openspec` CLI generates files under `.agents/`,
+`.claude/` and `.github/`. When Renovate bumps it, the `OpenSpec refresh`
+workflow runs `openspec update` on the PR and pushes the result; its
+`OPENSPEC_REFRESH_TOKEN` secret lets the push retrigger CI.
+
 ## Commit & Pull Request Guidelines
 
 Use Conventional Commits; commitlint checks every PR commit. release-please

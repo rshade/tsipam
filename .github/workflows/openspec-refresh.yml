@@ -1,0 +1,46 @@
+name: OpenSpec refresh
+
+on:
+  pull_request:
+    paths:
+      - mise.toml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: openspec-refresh-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: Regenerate OpenSpec files
+    if: >-
+      github.actor == 'renovate[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out the Renovate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.OPENSPEC_REFRESH_TOKEN || github.token }}
+
+      - name: Install pinned tools
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+
+      - name: Refresh generated OpenSpec files
+        run: mise exec npm:@fission-ai/openspec -- openspec update
+
+      - name: Commit any regenerated files
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "OpenSpec files are current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "chore(deps): refresh generated OpenSpec files"
+          git push
