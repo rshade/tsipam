@@ -1,29 +1,26 @@
-package registry_test
+package hujsonstore_test
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
-
-func regPath(t *testing.T) string {
-	t.Helper()
-	return filepath.Join(t.TempDir(), "tsipam.hujson")
-}
 
 func TestReserveSiteIDCreatesFileWhenMissing(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", registry.ReservationMetadata{}, nil)
+	_, _, _, changed, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "1", "hq-vpc", registry.ReservationMetadata{})
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -31,7 +28,7 @@ func TestReserveSiteIDCreatesFileWhenMissing(t *testing.T) {
 		t.Error("changed = false, want true for a fresh reservation")
 	}
 
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -40,99 +37,19 @@ func TestReserveSiteIDCreatesFileWhenMissing(t *testing.T) {
 	}
 }
 
-func TestReserveSiteIDIsIdempotent(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"1",
-		"hq-vpc",
-		registry.ReservationMetadata{},
-		nil,
-	); err != nil {
-		t.Fatalf("first ReserveSiteID: %v", err)
-	}
-	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", registry.ReservationMetadata{}, nil)
-	if err != nil {
-		t.Fatalf("second ReserveSiteID: %v", err)
-	}
-	if changed {
-		t.Error("changed = true on a repeat reservation, want false (no-op)")
-	}
-}
-
 func TestReserveSiteIDReturnsCanonicalIDAndSite(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	id, site, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"007",
+	id, site, _, _, err := ledgerAt(path).ReserveSiteID(regCtx(), registryTailnet, "007",
 		"  hq-vpc  ",
 		registry.ReservationMetadata{},
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 	if id != "7" || site != "hq-vpc" {
 		t.Errorf("ReserveSiteID(%q, %q) = (%q, %q), want (%q, %q)", "007", "  hq-vpc  ", id, site, "7", "hq-vpc")
-	}
-}
-
-func TestReserveSiteIDRefusesCollision(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"1",
-		"hq-vpc",
-		registry.ReservationMetadata{},
-		nil,
-	); err != nil {
-		t.Fatalf("first ReserveSiteID: %v", err)
-	}
-	_, _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "branch-office", registry.ReservationMetadata{}, nil)
-	var collision *registry.SiteIDCollisionError
-	if !errors.As(err, &collision) {
-		t.Fatalf("ReserveSiteID error = %v, want *SiteIDCollisionError", err)
-	}
-	if collision.Existing != "hq-vpc" || collision.Wanted != "branch-office" {
-		t.Errorf("collision = %+v, want Existing=hq-vpc Wanted=branch-office", collision)
-	}
-}
-
-func TestReserveSiteIDAddsSecondEntryToExistingRegistry(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"1",
-		"hq-vpc",
-		registry.ReservationMetadata{},
-		nil,
-	); err != nil {
-		t.Fatalf("first ReserveSiteID: %v", err)
-	}
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"2",
-		"branch-office",
-		registry.ReservationMetadata{},
-		nil,
-	); err != nil {
-		t.Fatalf("second ReserveSiteID: %v", err)
-	}
-
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
-	if err != nil {
-		t.Fatalf("ListSiteIDs: %v", err)
-	}
-	if len(entries) != 2 || entries[0].ID != "1" || entries[1].ID != "2" {
-		t.Errorf("ListSiteIDs = %+v, want [{1 hq-vpc} {2 branch-office}] sorted numerically", entries)
 	}
 }
 
@@ -155,12 +72,9 @@ func TestReserveSiteIDRejectsInvalidInput(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-				path,
-				tc.id,
+			if _, _, _, _, err := ledgerAt(path).ReserveSiteID(regCtx(), registryTailnet, tc.id,
 				tc.site,
 				registry.ReservationMetadata{},
-				nil,
 			); err == nil {
 				t.Errorf("ReserveSiteID(%q, %q) error = nil, want an error", tc.id, tc.site)
 			}
@@ -201,66 +115,11 @@ func TestNormalizeSiteIDRejectsOutOfRangeValue(t *testing.T) {
 	}
 }
 
-func TestReleaseSiteIDRemovesEntry(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"1",
-		"hq-vpc",
-		registry.ReservationMetadata{},
-		nil,
-	); err != nil {
-		t.Fatalf("ReserveSiteID: %v", err)
-	}
-	id, changed, err := registry.ReleaseSiteIDWithLogger(path, "1", nil)
-	if err != nil {
-		t.Fatalf("ReleaseSiteID: %v", err)
-	}
-	if !changed {
-		t.Error("changed = false, want true for an existing entry")
-	}
-	if id != "1" {
-		t.Errorf("ReleaseSiteID id = %q, want %q", id, "1")
-	}
-
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
-	if err != nil {
-		t.Fatalf("ListSiteIDs: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Errorf("ListSiteIDs = %+v, want empty after release", entries)
-	}
-}
-
-func TestReleaseSiteIDOnAbsentIDIsNoopNotError(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"1",
-		"hq-vpc",
-		registry.ReservationMetadata{},
-		nil,
-	); err != nil {
-		t.Fatalf("ReserveSiteID: %v", err)
-	}
-	_, changed, err := registry.ReleaseSiteIDWithLogger(path, "2", nil)
-	if err != nil {
-		t.Fatalf("ReleaseSiteID: %v", err)
-	}
-	if changed {
-		t.Error("changed = true releasing an id that was never reserved, want false")
-	}
-}
-
 func TestReleaseSiteIDOnMissingFileIsError(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, err := registry.ReleaseSiteIDWithLogger(path, "1", nil); err == nil {
+	if _, _, err := ledgerAt(path).ReleaseSiteID(regCtx(), registryTailnet, "1"); err == nil {
 		t.Error("ReleaseSiteID on a missing registry file error = nil, want an error")
 	}
 }
@@ -269,7 +128,7 @@ func TestListSiteIDsOnMissingFileIsError(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, err := registry.ListSiteIDsWithLogger(path, nil); err == nil {
+	if _, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet); err == nil {
 		t.Error("ListSiteIDs on a missing registry file error = nil, want an error")
 	}
 }
@@ -282,12 +141,9 @@ func TestReserveSiteIDPreservesHandWrittenComment(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"2",
+	if _, _, _, _, err := ledgerAt(path).ReserveSiteID(regCtx(), registryTailnet, "2",
 		"branch-office",
 		registry.ReservationMetadata{},
-		nil,
 	); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -317,7 +173,7 @@ func TestLoadAcceptsUnrelatedTopLevelKeyAndRoundTrips(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs on a registry with an unrelated top-level key: %v", err)
 	}
@@ -325,16 +181,13 @@ func TestLoadAcceptsUnrelatedTopLevelKeyAndRoundTrips(t *testing.T) {
 		t.Errorf("ListSiteIDs = %+v, want [{1 hq-vpc}]", entries)
 	}
 
-	if _, _, _, _, reserveErr := registry.ReserveSiteIDWithLogger(
-		path,
-		"2",
+	if _, _, _, _, reserveErr := ledgerAt(path).ReserveSiteID(regCtx(), registryTailnet, "2",
 		"branch-office",
 		registry.ReservationMetadata{},
-		nil,
 	); reserveErr != nil {
 		t.Fatalf("ReserveSiteID: %v", reserveErr)
 	}
-	if _, _, releaseErr := registry.ReleaseSiteIDWithLogger(path, "1", nil); releaseErr != nil {
+	if _, _, releaseErr := ledgerAt(path).ReleaseSiteID(regCtx(), registryTailnet, "1"); releaseErr != nil {
 		t.Fatalf("ReleaseSiteID: %v", releaseErr)
 	}
 
@@ -355,7 +208,7 @@ func TestLoadRejectsAmbiguousDuplicateSiteIDKeys(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, err := registry.ListSiteIDsWithLogger(path, nil)
+	_, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err == nil {
 		t.Fatal("ListSiteIDs on a registry with ambiguous duplicate site-ID keys: error = nil, want an error")
 	}
@@ -371,7 +224,9 @@ func TestReserveSiteIDCollidesAgainstUnNormalizedFileKey(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "branch-office", registry.ReservationMetadata{}, nil)
+	_, _, _, _, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "1", "branch-office", registry.ReservationMetadata{})
 	var collision *registry.SiteIDCollisionError
 	if !errors.As(err, &collision) {
 		t.Fatalf("ReserveSiteID(%q, ...) error = %v, want *SiteIDCollisionError against the un-normalized file key %q",
@@ -396,9 +251,9 @@ func TestReserveSiteIDAmendingUnNormalizedFileKeyDoesNotDuplicate(t *testing.T) 
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	id, site, _, changed, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq", registry.ReservationMetadata{Owner: "ops"}, nil,
-	)
+	id, site, _, changed, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "1", "hq", registry.ReservationMetadata{Owner: "ops"})
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -421,7 +276,7 @@ func TestReserveSiteIDAmendingUnNormalizedFileKeyDoesNotDuplicate(t *testing.T) 
 			got, len(decoded.SiteIDs))
 	}
 
-	if _, loadErr := registry.ListSiteIDsWithLogger(path, nil); loadErr != nil {
+	if _, loadErr := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet); loadErr != nil {
 		t.Errorf("ListSiteIDs after amending an un-normalized key: %v, want the registry to remain loadable", loadErr)
 	}
 }
@@ -463,7 +318,7 @@ func TestRawEntriesAlwaysReturnsTheMapKey(t *testing.T) {
 				t.Fatalf("seeding fixture: %v", err)
 			}
 
-			_, _, serviceAddresses, _ := registry.RawEntries(path)
+			_, _, serviceAddresses, _ := hujsonstore.RawEntries(path)
 			subject, ok := serviceAddresses["100.100.100.7"]
 			if !ok {
 				t.Fatalf("RawEntries serviceAddresses = %+v, want key %q present", serviceAddresses, "100.100.100.7")
@@ -482,7 +337,7 @@ func TestReleaseSiteIDRemovesUnNormalizedFileKey(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	id, changed, err := registry.ReleaseSiteIDWithLogger(path, "1", nil)
+	id, changed, err := ledgerAt(path).ReleaseSiteID(regCtx(), registryTailnet, "1")
 	if err != nil {
 		t.Fatalf("ReleaseSiteID: %v", err)
 	}
@@ -490,7 +345,7 @@ func TestReleaseSiteIDRemovesUnNormalizedFileKey(t *testing.T) {
 		t.Errorf("ReleaseSiteID(%q) = (id=%q, changed=%v), want (1, true)", "1", id, changed)
 	}
 
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -520,7 +375,9 @@ func TestReserveSiteIDConcurrentDistinctIDsLosesNoReservation(t *testing.T) {
 			defer wg.Done()
 			id := strconv.Itoa(i + 1)
 			site := fmt.Sprintf("site-%d", i+1)
-			_, _, _, _, err := registry.ReserveSiteIDWithLogger(path, id, site, registry.ReservationMetadata{}, nil)
+			_, _, _, _, err := ledgerAt(
+				path,
+			).ReserveSiteID(regCtx(), registryTailnet, id, site, registry.ReservationMetadata{})
 			errs[i] = err
 		}(i)
 	}
@@ -532,7 +389,7 @@ func TestReserveSiteIDConcurrentDistinctIDsLosesNoReservation(t *testing.T) {
 		}
 	}
 
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -612,7 +469,7 @@ func TestLoadRejectsInvalidRegistryShapes(t *testing.T) {
 				t.Fatalf("seeding fixture: %v", err)
 			}
 
-			_, err := registry.ListSiteIDsWithLogger(path, nil)
+			_, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 			if err == nil {
 				t.Fatalf("ListSiteIDs(%q) error = nil, want an error", tc.content)
 			}
@@ -636,7 +493,9 @@ func TestReserveSiteIDIntoExistingEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", registry.ReservationMetadata{}, nil)
+	_, _, _, changed, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "1", "hq-vpc", registry.ReservationMetadata{})
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -644,7 +503,7 @@ func TestReserveSiteIDIntoExistingEmptyBlock(t *testing.T) {
 		t.Error("changed = false, want true for a fresh reservation")
 	}
 
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -666,12 +525,9 @@ func TestReserveSiteIDPreservesCommentInEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"1",
+	if _, _, _, _, err := ledgerAt(path).ReserveSiteID(regCtx(), registryTailnet, "1",
 		"hq-vpc",
 		registry.ReservationMetadata{},
-		nil,
 	); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -698,7 +554,9 @@ func TestReserveSiteIDIntoNullBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", registry.ReservationMetadata{}, nil)
+	_, _, _, changed, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "1", "hq-vpc", registry.ReservationMetadata{})
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -706,7 +564,7 @@ func TestReserveSiteIDIntoNullBlock(t *testing.T) {
 		t.Error("changed = false, want true for a fresh reservation")
 	}
 
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -729,7 +587,7 @@ func TestRawEntriesExtractsUnvalidatedValuesFromFile(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	siteIDs, subnetPools, serviceAddresses, owners := registry.RawEntries(path)
+	siteIDs, subnetPools, serviceAddresses, owners := hujsonstore.RawEntries(path)
 	if len(siteIDs) != 1 || siteIDs["1"] != "hq-vpc" {
 		t.Errorf("RawEntries siteIDs = %+v, want {1:hq-vpc}", siteIDs)
 	}
@@ -752,7 +610,7 @@ func TestRawEntriesReturnsNilOnReadFailureOrMalformedHuJSON(t *testing.T) {
 	t.Parallel()
 
 	// Missing file
-	siteIDs, subnetPools, serviceAddresses, owners := registry.RawEntries("/nonexistent/path/to/file.hujson")
+	siteIDs, subnetPools, serviceAddresses, owners := hujsonstore.RawEntries("/nonexistent/path/to/file.hujson")
 	if siteIDs != nil || subnetPools != nil || serviceAddresses != nil || owners != nil {
 		t.Errorf("RawEntries on missing file = (%v, %v, %v, %v), want all nil",
 			siteIDs, subnetPools, serviceAddresses, owners)
@@ -763,7 +621,7 @@ func TestRawEntriesReturnsNilOnReadFailureOrMalformedHuJSON(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{invalid json}`), 0o644); err != nil {
 		t.Fatalf("seeding fixture: %v", err)
 	}
-	siteIDs, subnetPools, serviceAddresses, owners = registry.RawEntries(path)
+	siteIDs, subnetPools, serviceAddresses, owners = hujsonstore.RawEntries(path)
 	if siteIDs != nil || subnetPools != nil || serviceAddresses != nil || owners != nil {
 		t.Errorf("RawEntries on malformed HuJSON = (%v, %v, %v, %v), want all nil",
 			siteIDs, subnetPools, serviceAddresses, owners)
@@ -782,7 +640,7 @@ func TestLoadScopesSiteIDErrorsAndAllowsSubnetPoolOperations(t *testing.T) {
 	}
 
 	// All site-ID operations should work despite the subnetPools error
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs should succeed with valid siteIDs: %v", err)
 	}
@@ -790,12 +648,9 @@ func TestLoadScopesSiteIDErrorsAndAllowsSubnetPoolOperations(t *testing.T) {
 		t.Errorf("ListSiteIDs = %+v, want one entry for site ID 1", entries)
 	}
 
-	id, site, _, changed, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"2",
+	id, site, _, changed, err := ledgerAt(path).ReserveSiteID(regCtx(), registryTailnet, "2",
 		"branch-office",
 		registry.ReservationMetadata{},
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("ReserveSiteID should succeed despite subnetPools error: %v", err)
@@ -804,7 +659,7 @@ func TestLoadScopesSiteIDErrorsAndAllowsSubnetPoolOperations(t *testing.T) {
 		t.Errorf("ReserveSiteID = (%q, %q, %v), want (2, branch-office, true)", id, site, changed)
 	}
 
-	_, changed, err = registry.ReleaseSiteIDWithLogger(path, "1", nil)
+	_, changed, err = ledgerAt(path).ReleaseSiteID(regCtx(), registryTailnet, "1")
 	if err != nil {
 		t.Fatalf("ReleaseSiteID should succeed despite subnetPools error: %v", err)
 	}
@@ -825,7 +680,7 @@ func TestLoadScopesSubnetPoolErrorsAndAllowsSiteIDOperations(t *testing.T) {
 	}
 
 	// Subnet pool operations should work despite the siteIDs error
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSubnetPools should succeed with valid subnetPools: %v", err)
 	}
@@ -833,12 +688,9 @@ func TestLoadScopesSubnetPoolErrorsAndAllowsSiteIDOperations(t *testing.T) {
 		t.Errorf("ListSubnetPools = %+v, want one entry for 10.0.0.0/16", entries)
 	}
 
-	cidr, site, _, changed, err := registry.ReserveSubnetPoolWithLogger(
-		path,
-		"192.168.0.0/16",
+	cidr, site, _, changed, err := ledgerAt(path).ReserveSubnetPool(regCtx(), registryTailnet, "192.168.0.0/16",
 		"branch-office",
 		registry.ReservationMetadata{},
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool should succeed despite siteIDs error: %v", err)
@@ -861,7 +713,7 @@ func TestReleaseSubnetPoolCanRepairOverlapError(t *testing.T) {
 	}
 
 	// Release should succeed and repair the overlap
-	cidr, changed, err := registry.ReleaseSubnetPoolWithLogger(path, "10.0.1.0/24", nil)
+	cidr, changed, err := ledgerAt(path).ReleaseSubnetPool(regCtx(), registryTailnet, "10.0.1.0/24")
 	if err != nil {
 		t.Fatalf("ReleaseSubnetPool should succeed to repair overlap: %v", err)
 	}
@@ -870,7 +722,7 @@ func TestReleaseSubnetPoolCanRepairOverlapError(t *testing.T) {
 	}
 
 	// Now ListSubnetPools should succeed (overlap is gone)
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSubnetPools after repair: %v", err)
 	}

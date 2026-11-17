@@ -1,17 +1,16 @@
-package registry_test
+package hujsonstore_test
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/netip"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 func TestNormalizeSubnetCIDR(t *testing.T) {
@@ -59,194 +58,6 @@ func TestNormalizeSubnetCIDRRejectsInvalidOrNonCanonicalInput(t *testing.T) {
 	}
 }
 
-func TestReserveSubnetPoolCreatesListsAndIsIdempotent(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	cidr, site, _, changed, err := registry.ReserveSubnetPoolWithLogger(
-		path,
-		"10.0.0.0/24",
-		"  hq-vpc  ",
-		registry.ReservationMetadata{},
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("ReserveSubnetPool: %v", err)
-	}
-	if cidr != "10.0.0.0/24" || site != "hq-vpc" || !changed {
-		t.Errorf("ReserveSubnetPool = (%q, %q, %t), want (%q, %q, true)",
-			cidr, site, changed, "10.0.0.0/24", "hq-vpc")
-	}
-
-	_, _, _, changed, err = registry.ReserveSubnetPoolWithLogger(path, cidr, site, registry.ReservationMetadata{}, nil)
-	if err != nil {
-		t.Fatalf("repeat ReserveSubnetPool: %v", err)
-	}
-	if changed {
-		t.Error("changed = true on an exact repeat, want false")
-	}
-
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
-	if err != nil {
-		t.Fatalf("ListSubnetPools: %v", err)
-	}
-	if len(entries) != 1 || entries[0].CIDR != cidr || entries[0].Site != site {
-		t.Errorf("ListSubnetPools = %+v, want [{10.0.0.0/24 hq-vpc}]", entries)
-	}
-}
-
-type subnetPoolOverlapCase struct {
-	name          string
-	existingCIDR  string
-	candidateCIDR string
-	candidateSite string
-	wantMessage   string
-	wantCollision bool
-}
-
-func TestReserveSubnetPoolOverlapRules(t *testing.T) {
-	t.Parallel()
-
-	cases := []subnetPoolOverlapCase{
-		{
-			name: "adjacent prefixes do not overlap", existingCIDR: "10.0.0.0/24",
-			candidateCIDR: "10.0.1.0/24", candidateSite: "branch-office",
-		},
-		{
-			name: "exact duplicate for another site", existingCIDR: "10.0.0.0/24",
-			candidateCIDR: "10.0.0.0/24", candidateSite: "branch-office",
-			wantMessage:   `subnet CIDR 10.0.0.0/24 is already reserved for "hq-vpc", not "branch-office"`,
-			wantCollision: true,
-		},
-		{
-			name: "candidate contained within existing", existingCIDR: "10.0.0.0/16",
-			candidateCIDR: "10.0.1.0/24", candidateSite: "branch-office",
-			wantMessage:   `subnet CIDR 10.0.1.0/24 overlaps 10.0.0.0/16 reserved for "hq-vpc", not "branch-office"`,
-			wantCollision: true,
-		},
-		{
-			name: "existing contained within candidate", existingCIDR: "10.0.1.0/24",
-			candidateCIDR: "10.0.0.0/16", candidateSite: "branch-office",
-			wantMessage:   `subnet CIDR 10.0.0.0/16 overlaps 10.0.1.0/24 reserved for "hq-vpc", not "branch-office"`,
-			wantCollision: true,
-		},
-		{
-			name: "overlap within one site is allowed", existingCIDR: "10.0.0.0/16",
-			candidateCIDR: "10.0.1.0/24", candidateSite: "hq-vpc",
-		},
-		{
-			name:         "IPv4 and IPv4-mapped IPv6 spelling overlap",
-			existingCIDR: "10.0.0.0/8", candidateCIDR: "::ffff:10.0.0.0/104",
-			candidateSite: "branch-office",
-			wantMessage: "subnet CIDR ::ffff:10.0.0.0/104 overlaps 10.0.0.0/8 reserved for " +
-				`"hq-vpc", not "branch-office"`,
-			wantCollision: true,
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			assertSubnetPoolOverlapRule(t, tc)
-		})
-	}
-}
-
-func assertSubnetPoolOverlapRule(t *testing.T, tc subnetPoolOverlapCase) {
-	t.Helper()
-	path := regPath(t)
-	if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
-		path, tc.existingCIDR, "hq-vpc", registry.ReservationMetadata{}, nil,
-	); err != nil {
-		t.Fatalf("seeding reservation: %v", err)
-	}
-
-	_, _, _, changed, err := registry.ReserveSubnetPoolWithLogger(
-		path, tc.candidateCIDR, tc.candidateSite, registry.ReservationMetadata{}, nil,
-	)
-	var collision *registry.SubnetPoolCollisionError
-	if tc.wantCollision {
-		if !errors.As(err, &collision) {
-			t.Fatalf("ReserveSubnetPool error = %v, want *SubnetPoolCollisionError", err)
-		}
-		if collision.ExistingCIDR != tc.existingCIDR || collision.ExistingSite != "hq-vpc" ||
-			collision.WantedSite != tc.candidateSite {
-			t.Errorf("collision = %+v, want existing CIDR/site and wanted site", collision)
-		}
-		if err.Error() != tc.wantMessage {
-			t.Errorf("collision error = %q, want %q", err, tc.wantMessage)
-		}
-		if changed {
-			t.Error("changed = true on a refused overlap, want false")
-		}
-		return
-	}
-	if err != nil {
-		t.Fatalf("ReserveSubnetPool: %v", err)
-	}
-	if !changed {
-		t.Error("changed = false for an allowed distinct reservation, want true")
-	}
-}
-
-func TestListSubnetPoolsSortsByNetworkAddress(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	for _, cidr := range []string{"192.168.0.0/16", "10.0.2.0/24", "10.0.1.0/24", "2001:db8::/48"} {
-		if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
-			path,
-			cidr,
-			"hq-vpc",
-			registry.ReservationMetadata{},
-			nil,
-		); err != nil {
-			t.Fatalf("ReserveSubnetPool(%q): %v", cidr, err)
-		}
-	}
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
-	if err != nil {
-		t.Fatalf("ListSubnetPools: %v", err)
-	}
-	want := []string{"10.0.1.0/24", "10.0.2.0/24", "192.168.0.0/16", "2001:db8::/48"}
-	if len(entries) != len(want) {
-		t.Fatalf("ListSubnetPools = %+v, want %d entries", entries, len(want))
-	}
-	for i := range want {
-		if entries[i].CIDR != want[i] {
-			t.Errorf("ListSubnetPools[%d].CIDR = %q, want %q", i, entries[i].CIDR, want[i])
-		}
-	}
-}
-
-func TestReleaseSubnetPoolRemovesEntryAndAbsentIsNoop(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
-		path,
-		"10.0.0.0/24",
-		"hq-vpc",
-		registry.ReservationMetadata{},
-		nil,
-	); err != nil {
-		t.Fatalf("ReserveSubnetPool: %v", err)
-	}
-	cidr, changed, err := registry.ReleaseSubnetPoolWithLogger(path, "10.0.0.0/24", nil)
-	if err != nil {
-		t.Fatalf("ReleaseSubnetPool: %v", err)
-	}
-	if cidr != "10.0.0.0/24" || !changed {
-		t.Errorf("ReleaseSubnetPool = (%q, %t), want (%q, true)", cidr, changed, "10.0.0.0/24")
-	}
-	_, changed, err = registry.ReleaseSubnetPoolWithLogger(path, "10.0.0.0/24", nil)
-	if err != nil {
-		t.Fatalf("repeat ReleaseSubnetPool: %v", err)
-	}
-	if changed {
-		t.Error("changed = true releasing an absent CIDR, want false")
-	}
-}
-
 // TestReserveSubnetPoolAmendingWhitespacePaddedFileKeyDoesNotDuplicate is the
 // regression test mirroring
 // TestReserveSiteIDAmendingUnNormalizedFileKeyDoesNotDuplicate
@@ -265,9 +76,9 @@ func TestReserveSubnetPoolAmendingWhitespacePaddedFileKeyDoesNotDuplicate(t *tes
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	cidr, site, _, changed, err := registry.ReserveSubnetPoolWithLogger(
-		path, "10.0.0.0/24", "hq", registry.ReservationMetadata{Owner: "ops"}, nil,
-	)
+	cidr, site, _, changed, err := ledgerAt(
+		path,
+	).ReserveSubnetPool(regCtx(), registryTailnet, "10.0.0.0/24", "hq", registry.ReservationMetadata{Owner: "ops"})
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
@@ -290,7 +101,7 @@ func TestReserveSubnetPoolAmendingWhitespacePaddedFileKeyDoesNotDuplicate(t *tes
 			got, len(decoded.SubnetPools))
 	}
 
-	if _, loadErr := registry.ListSubnetPoolsWithLogger(path, nil); loadErr != nil {
+	if _, loadErr := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet); loadErr != nil {
 		t.Errorf("ListSubnetPools after amending a whitespace-padded key: %v, want the registry to remain loadable",
 			loadErr)
 	}
@@ -306,12 +117,9 @@ func TestReserveSubnetPoolPreservesHandWrittenCommentOnAnotherEntry(t *testing.T
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
-		path,
-		"10.0.1.0/24",
+	if _, _, _, _, err := ledgerAt(path).ReserveSubnetPool(regCtx(), registryTailnet, "10.0.1.0/24",
 		"hq-vpc",
 		registry.ReservationMetadata{},
-		nil,
 	); err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
@@ -367,7 +175,7 @@ func TestLoadValidatesSubnetPoolShapeAndOverlaps(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
 				t.Fatalf("seeding fixture: %v", err)
 			}
-			_, err := registry.ListSubnetPoolsWithLogger(path, nil)
+			_, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 			if err == nil {
 				t.Fatalf("ListSubnetPools error = nil, want an error for %s", tc.name)
 			}
@@ -385,7 +193,7 @@ func TestLoadAllowsOverlappingPoolsForOneSite(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("seeding fixture: %v", err)
 	}
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSubnetPools: %v", err)
 	}
@@ -404,12 +212,9 @@ func TestReserveSubnetPoolIntoExistingEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, _, changed, err := registry.ReserveSubnetPoolWithLogger(
-		path,
-		"10.0.0.0/24",
+	_, _, _, changed, err := ledgerAt(path).ReserveSubnetPool(regCtx(), registryTailnet, "10.0.0.0/24",
 		"hq-vpc",
 		registry.ReservationMetadata{},
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
@@ -418,7 +223,7 @@ func TestReserveSubnetPoolIntoExistingEmptyBlock(t *testing.T) {
 		t.Error("changed = false, want true for a fresh reservation")
 	}
 
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSubnetPools: %v", err)
 	}
@@ -438,12 +243,9 @@ func TestReserveSubnetPoolPreservesCommentInEmptyBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
-		path,
-		"10.0.0.0/24",
+	if _, _, _, _, err := ledgerAt(path).ReserveSubnetPool(regCtx(), registryTailnet, "10.0.0.0/24",
 		"hq-vpc",
 		registry.ReservationMetadata{},
-		nil,
 	); err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
 	}
@@ -469,12 +271,9 @@ func TestReserveSubnetPoolIntoNullBlock(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, _, changed, err := registry.ReserveSubnetPoolWithLogger(
-		path,
-		"10.0.0.0/24",
+	_, _, _, changed, err := ledgerAt(path).ReserveSubnetPool(regCtx(), registryTailnet, "10.0.0.0/24",
 		"hq-vpc",
 		registry.ReservationMetadata{},
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
@@ -483,7 +282,7 @@ func TestReserveSubnetPoolIntoNullBlock(t *testing.T) {
 		t.Error("changed = false, want true for a fresh reservation")
 	}
 
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSubnetPools: %v", err)
 	}
@@ -508,12 +307,9 @@ func TestReserveSubnetPoolConcurrentDistinctCIDRsLosesNoReservation(t *testing.T
 			// Reserve non-overlapping /24 subnets (10.0.i.0/24)
 			cidr := fmt.Sprintf("10.0.%d.0/24", i)
 			site := fmt.Sprintf("site-%d", i+1)
-			_, _, _, _, err := registry.ReserveSubnetPoolWithLogger(
-				path,
-				cidr,
+			_, _, _, _, err := ledgerAt(path).ReserveSubnetPool(regCtx(), registryTailnet, cidr,
 				site,
 				registry.ReservationMetadata{},
-				nil,
 			)
 			errs[i] = err
 		}(i)
@@ -526,7 +322,7 @@ func TestReserveSubnetPoolConcurrentDistinctCIDRsLosesNoReservation(t *testing.T
 		}
 	}
 
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSubnetPools: %v", err)
 	}
@@ -551,7 +347,7 @@ func BenchmarkListSubnetPoolsWithLogger(b *testing.B) {
 			b.ResetTimer()
 
 			for b.Loop() {
-				entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+				entries, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 				if err != nil {
 					b.Fatalf("ListSubnetPoolsWithLogger: %v", err)
 				}
@@ -579,7 +375,7 @@ func benchmarkSubnetPoolRegistry(b *testing.B, count int) string {
 	if err != nil {
 		b.Fatalf("marshaling benchmark registry: %v", err)
 	}
-	path := filepath.Join(b.TempDir(), "tsipam.hujson")
+	path := hujsonstore.Path(b.TempDir(), "example.ts.net")
 	if writeErr := os.WriteFile(path, content, 0o600); writeErr != nil {
 		b.Fatalf("writing benchmark registry: %v", writeErr)
 	}

@@ -173,15 +173,16 @@ func normalizeReservedAt(value string) (string, error) {
 	return t.UTC().Format(time.RFC3339), nil
 }
 
-// validateStoredReservationMetadata validates metadata decoded from the
-// registry. It is the load-path counterpart to normalizeMetadata: caller input
-// is normalized before a reserve, but a hand-edited value reaches
-// Entry/ServiceEntry through UnmarshalJSON unchanged. Stored values are not
-// trimmed or rewritten here; validation rejects control characters before they
-// can reach human output and rejects a malformed ReservedAt before it can make
-// the generated HTTP client reject an otherwise successful list or reserve
-// response.
-func validateStoredReservationMetadata(m ReservationMetadata) error {
+// ValidateStoredReservationMetadata checks metadata decoded from a registry.
+// It is the load-path counterpart to normalizeMetadata: caller input is
+// normalized before a reserve, but a hand-edited value reaches Entry and
+// ServiceEntry through UnmarshalJSON unchanged. Stored values are not trimmed
+// or rewritten. Validation rejects control characters before they can reach
+// human output and rejects a malformed ReservedAt before it can make the
+// generated HTTP client reject an otherwise successful list or reserve
+// response. Callers pass the result through StoredStateError when the failure
+// must not be classified as caller input.
+func ValidateStoredReservationMetadata(m ReservationMetadata) error {
 	if err := rejectControlChars("owner", m.Owner); err != nil {
 		return err
 	}

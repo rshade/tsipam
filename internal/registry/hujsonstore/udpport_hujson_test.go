@@ -1,4 +1,4 @@
-package registry_test
+package hujsonstore_test
 
 import (
 	"errors"
@@ -111,9 +111,9 @@ func TestReserveUDPPortPreservesNestedHuJSONAcrossStateMatrix(t *testing.T) {
 			if err := os.WriteFile(path, []byte(test.content), 0o600); err != nil {
 				t.Fatalf("writing fixture: %v", err)
 			}
-			_, _, _, changed, err := registry.ReserveUDPPortWithLogger(
-				path, test.site, test.port, test.device, nil,
-			)
+			_, _, _, changed, err := ledgerAt(
+				path,
+			).ReserveUDPPort(regCtx(), registryTailnet, test.site, test.port, test.device)
 			if err != nil {
 				t.Fatalf("ReserveUDPPort: %v", err)
 			}
@@ -129,7 +129,7 @@ func TestReserveUDPPortPreservesNestedHuJSONAcrossStateMatrix(t *testing.T) {
 					t.Errorf("registry after reserve = %s, want it to contain %q", got, want)
 				}
 			}
-			entries, err := registry.ListUDPPortsWithLogger(path, test.site, nil)
+			entries, err := ledgerAt(path).ListUDPPorts(regCtx(), registryTailnet, test.site)
 			if err != nil {
 				t.Fatalf("ListUDPPorts after reserve: %v", err)
 			}
@@ -162,7 +162,7 @@ func TestUDPPortOperationsTargetNoncanonicalRawKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading fixture: %v", err)
 	}
-	_, _, _, changed, err := registry.ReserveUDPPortWithLogger(path, "branch", "41642", "branch-fw01", nil)
+	_, _, _, changed, err := ledgerAt(path).ReserveUDPPort(regCtx(), registryTailnet, "branch", "41642", "branch-fw01")
 	if err != nil {
 		t.Fatalf("idempotent ReserveUDPPort: %v", err)
 	}
@@ -177,12 +177,12 @@ func TestUDPPortOperationsTargetNoncanonicalRawKeys(t *testing.T) {
 		t.Errorf("raw-key idempotent reserve rewrote file:\nbefore: %s\nafter: %s", before, after)
 	}
 
-	_, _, _, _, err = registry.ReserveUDPPortWithLogger(path, "branch", "41642", "other", nil)
+	_, _, _, _, err = ledgerAt(path).ReserveUDPPort(regCtx(), registryTailnet, "branch", "41642", "other")
 	if _, ok := errors.AsType[*registry.UDPPortCollisionError](err); !ok {
 		t.Fatalf("collision against raw key error = %v, want *UDPPortCollisionError", err)
 	}
 
-	_, _, changed, err = registry.ReleaseUDPPortWithLogger(path, "branch", "41642", nil)
+	_, _, changed, err = ledgerAt(path).ReleaseUDPPort(regCtx(), registryTailnet, "branch", "41642")
 	if err != nil {
 		t.Fatalf("ReleaseUDPPort: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestReleaseLastUDPPortLeavesCommentedSiteObject(t *testing.T) {
 		t.Fatalf("writing fixture: %v", err)
 	}
 
-	_, _, changed, err := registry.ReleaseUDPPortWithLogger(path, "branch", "41642", nil)
+	_, _, changed, err := ledgerAt(path).ReleaseUDPPort(regCtx(), registryTailnet, "branch", "41642")
 	if err != nil {
 		t.Fatalf("ReleaseUDPPort: %v", err)
 	}

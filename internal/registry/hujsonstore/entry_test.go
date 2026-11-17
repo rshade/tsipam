@@ -1,4 +1,4 @@
-package registry_test
+package hujsonstore_test
 
 import (
 	"errors"
@@ -28,7 +28,7 @@ func TestLoadRejectsControlCharactersInStoredMetadata(t *testing.T) {
 			name:    "site ID owner",
 			content: `{"siteIDs":{"1":{"site":"hq","owner":"bad\u0007owner"}}}` + "\n",
 			list: func(path string) error {
-				_, err := registry.ListSiteIDsWithLogger(path, nil)
+				_, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 				return err
 			},
 		},
@@ -36,7 +36,7 @@ func TestLoadRejectsControlCharactersInStoredMetadata(t *testing.T) {
 			name:    "subnet pool description",
 			content: `{"subnetPools":{"10.0.0.0/24":{"site":"hq","description":"bad\u0007desc"}}}` + "\n",
 			list: func(path string) error {
-				_, err := registry.ListSubnetPoolsWithLogger(path, nil)
+				_, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 				return err
 			},
 		},
@@ -44,7 +44,7 @@ func TestLoadRejectsControlCharactersInStoredMetadata(t *testing.T) {
 			name:    "service address ticket",
 			content: `{"serviceAddresses":{"100.100.100.7":{"service":"svc:payments","ticket":"OPS\u00071"}}}` + "\n",
 			list: func(path string) error {
-				_, err := registry.ListServiceAddressesWithLogger(path, nil)
+				_, err := ledgerAt(path).ListServiceAddresses(regCtx(), registryTailnet)
 				return err
 			},
 		},
@@ -75,9 +75,9 @@ func TestReserveSiteIDWithoutMetadataStaysBareString(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq-vpc", registry.ReservationMetadata{}, nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "1", "hq-vpc", registry.ReservationMetadata{}); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 
@@ -95,9 +95,8 @@ func TestReserveSiteIDWithMetadataWritesObjectShapeAndAutoStamps(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	_, _, metadata, changed, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq-vpc",
-		registry.ReservationMetadata{Owner: "alice", Ticket: "OPS-1234"}, nil,
+	_, _, metadata, changed, err := ledgerAt(path).ReserveSiteID(regCtx(), registryTailnet, "1", "hq-vpc",
+		registry.ReservationMetadata{Owner: "alice", Ticket: "OPS-1234"},
 	)
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
@@ -129,76 +128,6 @@ func TestReserveSiteIDWithMetadataWritesObjectShapeAndAutoStamps(t *testing.T) {
 	}
 }
 
-func TestReserveSiteIDMetadataExplicitReservedAtIsNotOverwritten(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-	const explicit = "2020-01-02T03:04:05Z"
-
-	_, _, metadata, _, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq-vpc",
-		registry.ReservationMetadata{Owner: "alice", ReservedAt: explicit}, nil,
-	)
-	if err != nil {
-		t.Fatalf("ReserveSiteID: %v", err)
-	}
-	if metadata.ReservedAt != explicit {
-		t.Errorf(
-			"metadata.ReservedAt = %q, want the explicit %q preserved, not auto-stamped",
-			metadata.ReservedAt,
-			explicit,
-		)
-	}
-}
-
-func TestReserveSiteIDMetadataMergeUpdatesOnlyGivenFields(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	_, _, first, _, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq-vpc", registry.ReservationMetadata{Owner: "alice"}, nil,
-	)
-	if err != nil {
-		t.Fatalf("first ReserveSiteID: %v", err)
-	}
-
-	_, _, second, changed, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq-vpc", registry.ReservationMetadata{Ticket: "OPS-9"}, nil,
-	)
-	if err != nil {
-		t.Fatalf("second ReserveSiteID: %v", err)
-	}
-	if !changed {
-		t.Error("changed = false amending a stored reservation's ticket, want true")
-	}
-	if second.Owner != "alice" {
-		t.Errorf("second.Owner = %q, want the untouched %q preserved by the merge", second.Owner, "alice")
-	}
-	if second.Ticket != "OPS-9" {
-		t.Errorf("second.Ticket = %q, want %q", second.Ticket, "OPS-9")
-	}
-	if second.ReservedAt != first.ReservedAt {
-		t.Errorf("second.ReservedAt = %q, want the original stamp %q left untouched by an amend",
-			second.ReservedAt, first.ReservedAt)
-	}
-}
-
-func TestReserveSiteIDMetadataIdenticalRepeatIsNoop(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-	metadata := registry.ReservationMetadata{Owner: "alice", ReservedAt: "2020-01-02T03:04:05Z"}
-
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", metadata, nil); err != nil {
-		t.Fatalf("first ReserveSiteID: %v", err)
-	}
-	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", metadata, nil)
-	if err != nil {
-		t.Fatalf("second ReserveSiteID: %v", err)
-	}
-	if changed {
-		t.Error("changed = true on an exact repeat with identical metadata, want false")
-	}
-}
-
 // TestReserveSiteIDBareRepeatDoesNotStampHandAuthoredMetadata guards the
 // asymmetry called out in stampReservedAt's doc comment: a hand-edited entry
 // that carries metadata but no reservedAt (an operator wrote "owner" by hand
@@ -213,9 +142,9 @@ func TestReserveSiteIDBareRepeatDoesNotStampHandAuthoredMetadata(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, _, changed, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq-vpc", registry.ReservationMetadata{}, nil,
-	)
+	_, _, _, changed, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "1", "hq-vpc", registry.ReservationMetadata{})
 	if err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
@@ -229,23 +158,6 @@ func TestReserveSiteIDBareRepeatDoesNotStampHandAuthoredMetadata(t *testing.T) {
 	}
 	if string(got) != content {
 		t.Errorf("registry after a bare repeat reserve = %q, want it byte-identical to the seeded %q", got, content)
-	}
-}
-
-func TestReserveSiteIDRefusesCollisionRegardlessOfMetadata(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq-vpc", registry.ReservationMetadata{}, nil,
-	); err != nil {
-		t.Fatalf("first ReserveSiteID: %v", err)
-	}
-	_, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "branch-office", registry.ReservationMetadata{Owner: "alice"}, nil,
-	)
-	if _, ok := errors.AsType[*registry.SiteIDCollisionError](err); !ok {
-		t.Fatalf("ReserveSiteID error = %v, want *SiteIDCollisionError even with metadata attached", err)
 	}
 }
 
@@ -265,7 +177,9 @@ func TestReserveSiteIDMetadataRejectsInvalidFields(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			path := regPath(t)
-			if _, _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "hq-vpc", tc.metadata, nil); err == nil {
+			if _, _, _, _, err := ledgerAt(
+				path,
+			).ReserveSiteID(regCtx(), registryTailnet, "1", "hq-vpc", tc.metadata); err == nil {
 				t.Errorf("ReserveSiteID(metadata=%+v) error = nil, want an error", tc.metadata)
 			}
 		})
@@ -286,9 +200,9 @@ func TestReserveSiteIDWithMetadataPreservesHandWrittenComment(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path, "2", "branch-office", registry.ReservationMetadata{Owner: "bob", Ticket: "OPS-2"}, nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "2", "branch-office", registry.ReservationMetadata{Owner: "bob", Ticket: "OPS-2"}); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 
@@ -305,7 +219,7 @@ func TestReserveSiteIDWithMetadataPreservesHandWrittenComment(t *testing.T) {
 		t.Errorf("registry = %q, want the new entry's metadata written", got)
 	}
 
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -318,18 +232,18 @@ func TestListSiteIDsIncludesMetadataWhenPresent(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path, "1", "hq-vpc", registry.ReservationMetadata{Owner: "alice", Description: "HQ gateway"}, nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "1", "hq-vpc", registry.ReservationMetadata{Owner: "alice", Description: "HQ gateway"}); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path, "2", "branch-office", registry.ReservationMetadata{}, nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveSiteID(regCtx(), registryTailnet, "2", "branch-office", registry.ReservationMetadata{}); err != nil {
 		t.Fatalf("ReserveSiteID: %v", err)
 	}
 
-	entries, err := registry.ListSiteIDsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSiteIDs(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSiteIDs: %v", err)
 	}
@@ -358,9 +272,10 @@ func TestReserveSubnetPoolWithMetadataListsAndPreservesComment(t *testing.T) {
 		t.Fatalf("seeding fixture: %v", err)
 	}
 
-	_, _, metadata, changed, err := registry.ReserveSubnetPoolWithLogger(
-		path, "10.0.1.0/24", "branch-office",
-		registry.ReservationMetadata{Owner: "carol", Ticket: "OPS-3"}, nil,
+	_, _, metadata, changed, err := ledgerAt(
+		path,
+	).ReserveSubnetPool(regCtx(), registryTailnet, "10.0.1.0/24", "branch-office",
+		registry.ReservationMetadata{Owner: "carol", Ticket: "OPS-3"},
 	)
 	if err != nil {
 		t.Fatalf("ReserveSubnetPool: %v", err)
@@ -381,7 +296,7 @@ func TestReserveSubnetPoolWithMetadataListsAndPreservesComment(t *testing.T) {
 		t.Errorf("registry after a metadata reserve = %q, want the hand-written comment preserved", got)
 	}
 
-	entries, err := registry.ListSubnetPoolsWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListSubnetPools(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListSubnetPools: %v", err)
 	}

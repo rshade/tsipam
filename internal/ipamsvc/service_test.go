@@ -16,7 +16,7 @@ import (
 
 func TestServiceReserveListRelease(t *testing.T) {
 	t.Parallel()
-	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	svc := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 
 	reserved, err := svc.ReserveSiteID(ctx, &ipam.ReserveSiteIDPayload{Tailnet: "acme", ID: "1", Site: "hq-vpc"})
@@ -54,7 +54,7 @@ func TestServiceReserveListRelease(t *testing.T) {
 
 func TestServiceReserveSiteIDPassesMetadataThrough(t *testing.T) {
 	t.Parallel()
-	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	svc := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 	owner, ticket := "alice", "OPS-1234"
 
@@ -88,7 +88,7 @@ func TestServiceReserveSiteIDPassesMetadataThrough(t *testing.T) {
 
 func TestServiceReserveCollisionReturnsGoaServiceError(t *testing.T) {
 	t.Parallel()
-	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	svc := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 
 	if _, err := svc.ReserveSiteID(
@@ -107,7 +107,7 @@ func TestServiceReserveCollisionReturnsGoaServiceError(t *testing.T) {
 
 func TestServiceIsolatesRegistriesByTailnet(t *testing.T) {
 	t.Parallel()
-	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	svc := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 
 	if _, err := svc.ReserveSiteID(
@@ -141,7 +141,7 @@ func TestServiceIsolatesRegistriesByTailnet(t *testing.T) {
 
 func TestServiceAddressReserveListRelease(t *testing.T) {
 	t.Parallel()
-	service := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	service := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 	owner, description, ticket, reservedAt := "network-team", "internal dashboard", "NET-237", "2026-08-31T12:00:00Z"
 
@@ -186,7 +186,7 @@ func TestServiceAddressReserveListRelease(t *testing.T) {
 
 func TestServiceAddressCollisionReturnsNamedError(t *testing.T) {
 	t.Parallel()
-	service := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	service := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 
 	if _, err := service.ReserveServiceAddress(ctx, &ipam.ReserveServiceAddressPayload{
@@ -238,7 +238,7 @@ func TestServiceAddressValidationReturnsNamedError(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			assertServiceErrorName(t, test.run(&ipamsvc.Service{RegistryDir: t.TempDir()}), "invalid_input")
+			assertServiceErrorName(t, test.run(&ipamsvc.Service{Ledger: testLedger(t.TempDir())}), "invalid_input")
 		})
 	}
 }
@@ -249,7 +249,7 @@ func TestServiceAddressRegistryFailureIsNotMisclassified(t *testing.T) {
 	if err := os.WriteFile(registryDir, []byte("not a directory"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	service := &ipamsvc.Service{RegistryDir: registryDir}
+	service := &ipamsvc.Service{Ledger: testLedger(registryDir)}
 
 	_, err := service.ListServiceAddresses(
 		context.Background(),
@@ -275,7 +275,7 @@ func TestServiceAddressMalformedStoredStateIsNotInvalidInput(t *testing.T) {
 	}`+"\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	service := &ipamsvc.Service{RegistryDir: registryDir}
+	service := &ipamsvc.Service{Ledger: testLedger(registryDir)}
 	ctx := context.Background()
 
 	// ReserveServiceAddress routes through translateServiceAddressError, which pre-fix
@@ -316,7 +316,7 @@ func TestServiceAddressReserveAgainstMalformedStoredStatePreservesContext(t *tes
 	}`+"\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	service := &ipamsvc.Service{RegistryDir: registryDir}
+	service := &ipamsvc.Service{Ledger: testLedger(registryDir)}
 
 	_, err := service.ReserveServiceAddress(context.Background(), &ipam.ReserveServiceAddressPayload{
 		Tailnet: "acme", Address: "100.100.100.8", Service: "svc:new",
@@ -376,7 +376,7 @@ func TestSiteIDValidationReturnsNamedError(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			assertServiceErrorName(t, test.run(&ipamsvc.Service{RegistryDir: t.TempDir()}), "invalid_input")
+			assertServiceErrorName(t, test.run(&ipamsvc.Service{Ledger: testLedger(t.TempDir())}), "invalid_input")
 		})
 	}
 }
@@ -427,7 +427,7 @@ func TestSubnetPoolValidationReturnsNamedError(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			assertServiceErrorName(t, test.run(&ipamsvc.Service{RegistryDir: t.TempDir()}), "invalid_input")
+			assertServiceErrorName(t, test.run(&ipamsvc.Service{Ledger: testLedger(t.TempDir())}), "invalid_input")
 		})
 	}
 }
@@ -444,7 +444,7 @@ func TestSiteIDMalformedStoredStateIsNotInvalidInput(t *testing.T) {
 	}`+"\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	service := &ipamsvc.Service{RegistryDir: registryDir}
+	service := &ipamsvc.Service{Ledger: testLedger(registryDir)}
 	ctx := context.Background()
 
 	_, err := service.ReserveSiteID(ctx, &ipam.ReserveSiteIDPayload{
@@ -481,7 +481,7 @@ func TestSubnetPoolMalformedStoredStateIsNotInvalidInput(t *testing.T) {
 	}`+"\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	service := &ipamsvc.Service{RegistryDir: registryDir}
+	service := &ipamsvc.Service{Ledger: testLedger(registryDir)}
 	ctx := context.Background()
 
 	_, err := service.ReserveSubnetPool(ctx, &ipam.ReserveSubnetPoolPayload{
@@ -508,7 +508,7 @@ func TestSubnetPoolMalformedStoredStateIsNotInvalidInput(t *testing.T) {
 
 func TestSiteIDInvalidMetadataReturnsNamedError(t *testing.T) {
 	t.Parallel()
-	service := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	service := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 	badReservedAt := "not-a-timestamp"
 
@@ -520,7 +520,7 @@ func TestSiteIDInvalidMetadataReturnsNamedError(t *testing.T) {
 
 func TestSubnetPoolInvalidMetadataReturnsNamedError(t *testing.T) {
 	t.Parallel()
-	service := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	service := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 	badReservedAt := "not-a-timestamp"
 

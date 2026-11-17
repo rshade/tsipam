@@ -4,7 +4,6 @@ package planner
 
 import (
 	"cmp"
-	"errors"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -41,12 +40,10 @@ type Report struct {
 	Excluded   []string
 }
 
-// Compare requires a registry loaded by registry.LoadForPlanning. Malformed
-// live data is an error, never an absent allocation or partial clean result.
-func Compare(reg *registry.Registry, live devices.Snapshot) (Report, error) {
-	if reg == nil {
-		return Report{}, errors.New("comparison requires a registry snapshot")
-	}
+// Compare requires allocations loaded by registry.Ledger.LoadForPlanning.
+// Malformed live data is an error, never an absent allocation or a partial
+// clean result.
+func Compare(reg registry.Allocations, live devices.Snapshot) (Report, error) {
 	routes, sites, err := routeInventory(live.Devices)
 	if err != nil {
 		return Report{}, err

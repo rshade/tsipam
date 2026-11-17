@@ -1,10 +1,12 @@
-package registry //nolint:testpackage // scoped UDP-port Load state is intentionally unexported
+package hujsonstore //nolint:testpackage // UDP load tests read unexported document state
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 //nolint:gocognit // the table checks every loader state and its related raw/canonical bookkeeping together
@@ -44,19 +46,19 @@ func TestLoadUDPPortsAbsentNullEmptyAndPopulated(t *testing.T) {
 			t.Parallel()
 			path := serviceRegistryPath(t)
 			writeRegistryFixture(t, path, test.content)
-			reg, err := Load(path)
+			reg, err := loadPath(path)
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if mapErr := reg.mapError(udpPortsKey); mapErr != nil {
+			if mapErr := reg.topLevelError(udpPortsKey); mapErr != nil {
 				t.Fatalf("udpPorts map error = %v, want nil", mapErr)
 			}
 			if reg.udpPortsPresent != test.wantTopPresent {
 				t.Errorf("udpPortsPresent = %t, want %t", reg.udpPortsPresent, test.wantTopPresent)
 			}
 			if test.wantCanonicalSite == "" {
-				if len(reg.UDPPorts) != 0 {
-					t.Errorf("UDPPorts = %+v, want empty", reg.UDPPorts)
+				if len(reg.udpPorts) != 0 {
+					t.Errorf("UDPPorts = %+v, want empty", reg.udpPorts)
 				}
 				return
 			}
@@ -71,16 +73,16 @@ func TestLoadUDPPortsAbsentNullEmptyAndPopulated(t *testing.T) {
 				)
 			}
 			if test.wantCanonicalPort == "" {
-				if len(reg.UDPPorts[test.wantCanonicalSite]) != 0 {
+				if len(reg.udpPorts[test.wantCanonicalSite]) != 0 {
 					t.Errorf(
 						"UDPPorts[%q] = %+v, want empty",
 						test.wantCanonicalSite,
-						reg.UDPPorts[test.wantCanonicalSite],
+						reg.udpPorts[test.wantCanonicalSite],
 					)
 				}
 				return
 			}
-			if got := reg.UDPPorts[test.wantCanonicalSite][test.wantCanonicalPort]; got != test.wantDevice {
+			if got := reg.udpPorts[test.wantCanonicalSite][test.wantCanonicalPort]; got != test.wantDevice {
 				t.Errorf("UDPPorts[%q][%q] = %q, want %q",
 					test.wantCanonicalSite, test.wantCanonicalPort, got, test.wantDevice)
 			}
@@ -109,13 +111,13 @@ func TestRawUDPPortsBestEffortExtractsMalformedIdentityInventory(t *testing.T) {
 	if len(entries) != 3 {
 		t.Fatalf("RawUDPPorts = %+v, want three best-effort entries", entries)
 	}
-	if entries[0] != (UDPPortEntry{Site: " branch ", Port: "041642", Device: " branch-fw01 "}) {
+	if entries[0] != (registry.UDPPortEntry{Site: " branch ", Port: "041642", Device: " branch-fw01 "}) {
 		t.Errorf("RawUDPPorts[0] = %+v, want raw branch reservation", entries[0])
 	}
-	if entries[1] != (UDPPortEntry{Site: " branch ", Port: "bad-port"}) {
+	if entries[1] != (registry.UDPPortEntry{Site: " branch ", Port: "bad-port"}) {
 		t.Errorf("RawUDPPorts[1] = %+v, want malformed branch leaf inventory", entries[1])
 	}
-	if entries[2] != (UDPPortEntry{Site: "hq"}) {
+	if entries[2] != (registry.UDPPortEntry{Site: "hq"}) {
 		t.Errorf("RawUDPPorts[2] = %+v, want null-site identity inventory", entries[2])
 	}
 
@@ -189,11 +191,11 @@ func TestLoadRejectsInvalidUDPPortRegistryShapes(t *testing.T) {
 			t.Parallel()
 			path := serviceRegistryPath(t)
 			writeRegistryFixture(t, path, test.content+"\n")
-			reg, err := Load(path)
+			reg, err := loadPath(path)
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			mapErr := reg.mapError(udpPortsKey)
+			mapErr := reg.topLevelError(udpPortsKey)
 			if mapErr == nil {
 				t.Fatal("udpPorts map error = nil, want malformed map rejection")
 			}
@@ -214,14 +216,14 @@ func TestUDPPortValidationErrorsAreScopedByMap(t *testing.T) {
 			"subnetPools":{"10.0.0.1/24":"hq"},
 			"udpPorts":{"branch":{"41642":"branch-fw01"}}
 		}`+"\n")
-		reg, err := Load(path)
+		reg, err := loadPath(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if mapErr := reg.mapError(udpPortsKey); mapErr != nil {
+		if mapErr := reg.topLevelError(udpPortsKey); mapErr != nil {
 			t.Fatalf("udpPorts map error = %v, want nil", mapErr)
 		}
-		if mapErr := reg.mapError(subnetPoolsKey); mapErr == nil {
+		if mapErr := reg.topLevelError(subnetPoolsKey); mapErr == nil {
 			t.Fatal("subnetPools map error = nil, want malformed map rejection")
 		}
 	})
@@ -235,15 +237,15 @@ func TestUDPPortValidationErrorsAreScopedByMap(t *testing.T) {
 			"serviceAddresses":{"100.100.100.7":"svc:payments"},
 			"udpPorts":{"branch":{"1023":"branch-fw01"}}
 		}`+"\n")
-		reg, err := Load(path)
+		reg, err := loadPath(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if mapErr := reg.mapError(udpPortsKey); mapErr == nil {
+		if mapErr := reg.topLevelError(udpPortsKey); mapErr == nil {
 			t.Fatal("udpPorts map error = nil, want malformed map rejection")
 		}
 		for _, key := range []string{siteIDsKey, subnetPoolsKey, serviceAddressesKey} {
-			if mapErr := reg.mapError(key); mapErr != nil {
+			if mapErr := reg.topLevelError(key); mapErr != nil {
 				t.Errorf("%s map error = %v, want nil", key, mapErr)
 			}
 		}

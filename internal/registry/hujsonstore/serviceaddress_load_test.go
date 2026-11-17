@@ -1,6 +1,7 @@
-package registry //nolint:testpackage // scoped Load validation state is intentionally unexported
+package hujsonstore //nolint:testpackage // load and repair tests read unexported document state
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,7 +10,31 @@ import (
 	"time"
 
 	"github.com/rshade/tsacl/pkg/policycore/hujsonedit"
+
+	"github.com/rshade/tsipam/internal/registry"
 )
+
+const registryTailnet = "example.ts.net"
+
+func loadPath(path string) (*document, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return loadBytes(raw)
+}
+
+func ledgerFor(path string) *registry.Ledger {
+	return registry.NewLedger(New(filepath.Dir(path), nil), nil)
+}
+
+func reservePatchOp(doc *document, topLevel, key string, value any) (hujsonedit.PatchOperation, error) {
+	view, err := doc.view(topLevel)
+	if err != nil {
+		return hujsonedit.PatchOperation{}, err
+	}
+	return flatAdd(view, topLevel, key, value), nil
+}
 
 func TestLoadServiceAddressesAbsentEmptyAndValid(t *testing.T) {
 	t.Parallel()
@@ -17,7 +42,7 @@ func TestLoadServiceAddressesAbsentEmptyAndValid(t *testing.T) {
 	cases := []struct {
 		name    string
 		content string
-		want    map[string]ServiceEntry
+		want    map[string]registry.ServiceEntry
 	}{
 		{name: "absent", content: `{}` + "\n"},
 		{name: "empty", content: `{"serviceAddresses": {}}` + "\n"},
@@ -29,11 +54,11 @@ func TestLoadServiceAddressesAbsentEmptyAndValid(t *testing.T) {
 					"100.100.100.8/32": {"service":"svc:search","owner":"platform"}
 				}
 			}` + "\n",
-			want: map[string]ServiceEntry{
+			want: map[string]registry.ServiceEntry{
 				"100.100.100.7": {Service: "svc:payments"},
 				"100.100.100.8": {
 					Service:             "svc:search",
-					ReservationMetadata: ReservationMetadata{Owner: "platform"},
+					ReservationMetadata: registry.ReservationMetadata{Owner: "platform"},
 				},
 			},
 		},
@@ -44,16 +69,16 @@ func TestLoadServiceAddressesAbsentEmptyAndValid(t *testing.T) {
 			t.Parallel()
 			path := serviceRegistryPath(t)
 			writeRegistryFixture(t, path, tc.content)
-			got, err := Load(path)
+			got, err := loadPath(path)
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			if len(got.ServiceAddresses) != len(tc.want) {
-				t.Fatalf("ServiceAddresses = %+v, want %+v", got.ServiceAddresses, tc.want)
+			if len(got.serviceAddresses) != len(tc.want) {
+				t.Fatalf("ServiceAddresses = %+v, want %+v", got.serviceAddresses, tc.want)
 			}
 			for address, wantEntry := range tc.want {
-				if got.ServiceAddresses[address] != wantEntry {
-					t.Errorf("ServiceAddresses[%q] = %+v, want %+v", address, got.ServiceAddresses[address], wantEntry)
+				if got.serviceAddresses[address] != wantEntry {
+					t.Errorf("ServiceAddresses[%q] = %+v, want %+v", address, got.serviceAddresses[address], wantEntry)
 				}
 			}
 		})
@@ -125,11 +150,11 @@ func TestLoadRejectsInvalidServiceAddressRegistryShapes(t *testing.T) {
 			t.Parallel()
 			path := serviceRegistryPath(t)
 			writeRegistryFixture(t, path, tc.content+"\n")
-			reg, loadErr := Load(path)
+			reg, loadErr := loadPath(path)
 			if loadErr != nil {
 				t.Fatalf("Load: %v", loadErr)
 			}
-			err := reg.mapError(serviceAddressesKey)
+			err := reg.topLevelError(serviceAddressesKey)
 			if err == nil {
 				t.Fatal("ListServiceAddresses error = nil, want malformed map rejection")
 			}
@@ -155,13 +180,9 @@ func TestReserveServiceAddressRejectsStoredInvalidReservedAtWithoutWriting(t *te
 	}`+"\n")
 	before := snapshotRegistry(t, path)
 
-	_, _, _, changed, err := ReserveServiceAddressWithLogger(
+	_, _, _, changed, err := ledgerFor(
 		path,
-		"100.100.100.7",
-		"svc:payments",
-		ReservationMetadata{Description: "payments VIP"},
-		nil,
-	)
+	).ReserveServiceAddress(context.Background(), registryTailnet, "100.100.100.7", "svc:payments", registry.ReservationMetadata{Description: "payments VIP"})
 	if err == nil {
 		t.Fatal("ReserveServiceAddress error = nil, want malformed stored reservedAt rejection")
 	}
@@ -184,18 +205,18 @@ func TestServiceAddressValidationErrorsAreScopedByMap(t *testing.T) {
 			"subnetPools":{"10.0.0.1/24":"hq"},
 			"serviceAddresses":{"100.100.100.7":"svc:payments"}
 		}`+"\n")
-		reg, err := Load(path)
+		reg, err := loadPath(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if mapErr := reg.mapError(serviceAddressesKey); mapErr != nil {
+		if mapErr := reg.topLevelError(serviceAddressesKey); mapErr != nil {
 			t.Fatalf("serviceAddresses map error = %v, want nil", mapErr)
 		}
-		if mapErr := reg.mapError(subnetPoolsKey); mapErr == nil {
+		if mapErr := reg.topLevelError(subnetPoolsKey); mapErr == nil {
 			t.Fatal("subnetPools map error = nil, want malformed subnet rejection")
 		}
-		if len(reg.ServiceAddresses) != 1 || reg.ServiceAddresses["100.100.100.7"].Service != "svc:payments" {
-			t.Errorf("ServiceAddresses = %+v, want payments entry", reg.ServiceAddresses)
+		if len(reg.serviceAddresses) != 1 || reg.serviceAddresses["100.100.100.7"].Service != "svc:payments" {
+			t.Errorf("ServiceAddresses = %+v, want payments entry", reg.serviceAddresses)
 		}
 	})
 
@@ -207,21 +228,21 @@ func TestServiceAddressValidationErrorsAreScopedByMap(t *testing.T) {
 			"subnetPools":{"10.0.0.0/24":"hq"},
 			"serviceAddresses":{"100.100.100.7/24":"svc:payments"}
 		}`+"\n")
-		reg, err := Load(path)
+		reg, err := loadPath(path)
 		if err != nil {
 			t.Fatalf("Load: %v", err)
 		}
-		if mapErr := reg.mapError(serviceAddressesKey); mapErr == nil {
+		if mapErr := reg.topLevelError(serviceAddressesKey); mapErr == nil {
 			t.Fatal("serviceAddresses map error = nil, want malformed address rejection")
 		}
-		if mapErr := reg.mapError(siteIDsKey); mapErr != nil {
+		if mapErr := reg.topLevelError(siteIDsKey); mapErr != nil {
 			t.Errorf("siteIDs map error = %v, want nil", mapErr)
 		}
-		if mapErr := reg.mapError(subnetPoolsKey); mapErr != nil {
+		if mapErr := reg.topLevelError(subnetPoolsKey); mapErr != nil {
 			t.Errorf("subnetPools map error = %v, want nil", mapErr)
 		}
-		if len(reg.SiteIDs) != 1 || len(reg.SubnetPools) != 1 {
-			t.Errorf("site/subnet entries = %+v/%+v, want one valid entry each", reg.SiteIDs, reg.SubnetPools)
+		if len(reg.siteIDs) != 1 || len(reg.subnetPools) != 1 {
+			t.Errorf("site/subnet entries = %+v/%+v, want one valid entry each", reg.siteIDs, reg.subnetPools)
 		}
 	})
 }
@@ -249,15 +270,17 @@ func TestReleaseServiceAddressAgainstMalformedMapFailsWhenNoView(t *testing.T) {
 
 	before := snapshotRegistry(t, path)
 
-	reg, err := Load(path)
+	reg, err := loadPath(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if mapErr := reg.mapError(serviceAddressesKey); mapErr == nil {
+	if mapErr := reg.topLevelError(serviceAddressesKey); mapErr == nil {
 		t.Fatal("mapError = nil, want malformed address rejection")
 	}
 
-	address, changed, releaseErr := ReleaseServiceAddressWithLogger(path, "10.0.0.5", nil)
+	address, changed, releaseErr := ledgerFor(
+		path,
+	).ReleaseServiceAddress(context.Background(), registryTailnet, "10.0.0.5")
 	if releaseErr == nil {
 		t.Fatal("ReleaseServiceAddress error = nil, want failure: removing the healthy sibling does not repair the map")
 	}
@@ -296,15 +319,17 @@ func TestReleaseServiceAddressRepairsRawKeyMatchInMalformedMap(t *testing.T) {
 		}
 	}`+"\n")
 
-	reg, err := Load(path)
+	reg, err := loadPath(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if mapErr := reg.mapError(serviceAddressesKey); mapErr == nil {
+	if mapErr := reg.topLevelError(serviceAddressesKey); mapErr == nil {
 		t.Fatal("mapError = nil, want malformed address rejection")
 	}
 
-	address, changed, releaseErr := ReleaseServiceAddressWithLogger(path, "100.100.100.7", nil)
+	address, changed, releaseErr := ledgerFor(
+		path,
+	).ReleaseServiceAddress(context.Background(), registryTailnet, "100.100.100.7")
 	if releaseErr != nil {
 		t.Fatalf("ReleaseServiceAddress: %v, want the raw-key repair to succeed", releaseErr)
 	}
@@ -323,15 +348,15 @@ func TestReleaseServiceAddressRepairsRawKeyMatchInMalformedMap(t *testing.T) {
 		t.Errorf("registry after repair-mode release = %s, want the untouched healthy sibling preserved", got)
 	}
 
-	repaired, loadErr := Load(path)
+	repaired, loadErr := loadPath(path)
 	if loadErr != nil {
 		t.Fatalf("Load after repair: %v, want the registry to be loadable again", loadErr)
 	}
-	if mapErr := repaired.mapError(serviceAddressesKey); mapErr != nil {
+	if mapErr := repaired.topLevelError(serviceAddressesKey); mapErr != nil {
 		t.Errorf("mapError after repair = %v, want nil", mapErr)
 	}
-	if len(repaired.ServiceAddresses) != 1 || repaired.ServiceAddresses["10.0.0.5"].Service != "svc:b" {
-		t.Errorf("ServiceAddresses after repair = %+v, want only the healthy sibling", repaired.ServiceAddresses)
+	if len(repaired.serviceAddresses) != 1 || repaired.serviceAddresses["10.0.0.5"].Service != "svc:b" {
+		t.Errorf("ServiceAddresses after repair = %+v, want only the healthy sibling", repaired.serviceAddresses)
 	}
 }
 
@@ -348,15 +373,17 @@ func TestReleaseRepairsMapBrickedByOneBadEntry(t *testing.T) {
 	writeRegistryFixture(t, path,
 		`{"serviceAddresses":{"100.100.100.7":{"service":"svc:payments","owner":"bad\u0007owner"}}}`+"\n")
 
-	reg, err := Load(path)
+	reg, err := loadPath(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if mapErr := reg.mapError(serviceAddressesKey); mapErr == nil {
+	if mapErr := reg.topLevelError(serviceAddressesKey); mapErr == nil {
 		t.Fatal("mapError = nil, want the control-character metadata to brick this map")
 	}
 
-	address, changed, releaseErr := ReleaseServiceAddressWithLogger(path, "100.100.100.7", nil)
+	address, changed, releaseErr := ledgerFor(
+		path,
+	).ReleaseServiceAddress(context.Background(), registryTailnet, "100.100.100.7")
 	if releaseErr != nil {
 		t.Fatalf("ReleaseServiceAddress: %v, want the repair to succeed", releaseErr)
 	}
@@ -364,15 +391,15 @@ func TestReleaseRepairsMapBrickedByOneBadEntry(t *testing.T) {
 		t.Errorf("ReleaseServiceAddress = (%q, %t), want (100.100.100.7, true)", address, changed)
 	}
 
-	repaired, loadErr := Load(path)
+	repaired, loadErr := loadPath(path)
 	if loadErr != nil {
 		t.Fatalf("Load after repair: %v, want the registry to be loadable again", loadErr)
 	}
-	if mapErr := repaired.mapError(serviceAddressesKey); mapErr != nil {
+	if mapErr := repaired.topLevelError(serviceAddressesKey); mapErr != nil {
 		t.Errorf("mapError after repair = %v, want nil", mapErr)
 	}
-	if len(repaired.ServiceAddresses) != 0 {
-		t.Errorf("ServiceAddresses after repair = %+v, want empty", repaired.ServiceAddresses)
+	if len(repaired.serviceAddresses) != 0 {
+		t.Errorf("ServiceAddresses after repair = %+v, want empty", repaired.serviceAddresses)
 	}
 }
 
@@ -392,21 +419,21 @@ type repairDecisionTableCase struct {
 
 func releaseServiceAddressChanged(address string) func(path string) (bool, error) {
 	return func(path string) (bool, error) {
-		_, changed, err := ReleaseServiceAddressWithLogger(path, address, nil)
+		_, changed, err := ledgerFor(path).ReleaseServiceAddress(context.Background(), registryTailnet, address)
 		return changed, err
 	}
 }
 
 func releaseSiteIDChanged(id string) func(path string) (bool, error) {
 	return func(path string) (bool, error) {
-		_, changed, err := ReleaseSiteIDWithLogger(path, id, nil)
+		_, changed, err := ledgerFor(path).ReleaseSiteID(context.Background(), registryTailnet, id)
 		return changed, err
 	}
 }
 
 func releaseSubnetPoolChanged(cidr string) func(path string) (bool, error) {
 	return func(path string) (bool, error) {
-		_, changed, err := ReleaseSubnetPoolWithLogger(path, cidr, nil)
+		_, changed, err := ledgerFor(path).ReleaseSubnetPool(context.Background(), registryTailnet, cidr)
 		return changed, err
 	}
 }
@@ -414,11 +441,11 @@ func releaseSubnetPoolChanged(cidr string) func(path string) (bool, error) {
 func verifyReleasedCanonicalKey(topLevel, key string) func(t *testing.T, path string) {
 	return func(t *testing.T, path string) {
 		t.Helper()
-		reg, err := Load(path)
+		reg, err := loadPath(path)
 		if err != nil {
 			t.Fatalf("Load after repair: %v", err)
 		}
-		acc, err := reg.mapAccessorFor(topLevel)
+		acc, err := reg.view(topLevel)
 		if err != nil {
 			t.Fatalf("mapAccessorFor(%q): %v", topLevel, err)
 		}
@@ -458,18 +485,18 @@ func TestRepairMalformedMapHonorsKeyMembershipAfterReload(t *testing.T) {
 			wantChanged: true,
 			verify: func(t *testing.T, path string) {
 				t.Helper()
-				reg, err := Load(path)
+				reg, err := loadPath(path)
 				if err != nil {
 					t.Fatalf("Load after release: %v", err)
 				}
-				if mapErr := reg.mapError(serviceAddressesKey); mapErr != nil {
+				if mapErr := reg.topLevelError(serviceAddressesKey); mapErr != nil {
 					t.Fatalf("mapError after release = %v, want nil", mapErr)
 				}
-				if _, stillThere := reg.ServiceAddresses["10.0.0.5"]; stillThere {
+				if _, stillThere := reg.serviceAddresses["10.0.0.5"]; stillThere {
 					t.Error("ServiceAddresses still contains the released key 10.0.0.5")
 				}
-				if len(reg.ServiceAddresses) != 1 || reg.ServiceAddresses["10.0.0.6"].Service != "svc:b" {
-					t.Errorf("ServiceAddresses after release = %+v, want only {10.0.0.6: svc:b}", reg.ServiceAddresses)
+				if len(reg.serviceAddresses) != 1 || reg.serviceAddresses["10.0.0.6"].Service != "svc:b" {
+					t.Errorf("ServiceAddresses after release = %+v, want only {10.0.0.6: svc:b}", reg.serviceAddresses)
 				}
 			},
 		},
@@ -487,17 +514,17 @@ func TestRepairMalformedMapHonorsKeyMembershipAfterReload(t *testing.T) {
 			wantChanged: true,
 			verify: func(t *testing.T, path string) {
 				t.Helper()
-				reg, err := Load(path)
+				reg, err := loadPath(path)
 				if err != nil {
 					t.Fatalf("Load after repair: %v", err)
 				}
-				if mapErr := reg.mapError(serviceAddressesKey); mapErr != nil {
+				if mapErr := reg.topLevelError(serviceAddressesKey); mapErr != nil {
 					t.Errorf("mapError after repair = %v, want nil", mapErr)
 				}
-				if len(reg.ServiceAddresses) != 1 || reg.ServiceAddresses["10.0.0.5"].Service != "svc:b" {
+				if len(reg.serviceAddresses) != 1 || reg.serviceAddresses["10.0.0.5"].Service != "svc:b" {
 					t.Errorf(
 						"ServiceAddresses after repair = %+v, want only the healthy sibling {10.0.0.5: svc:b}",
-						reg.ServiceAddresses,
+						reg.serviceAddresses,
 					)
 				}
 			},
@@ -702,11 +729,11 @@ func TestServiceAddressLoadValidationErrorsHaveProperContext(t *testing.T) {
 			t.Parallel()
 			path := serviceRegistryPath(t)
 			writeRegistryFixture(t, path, tc.content+"\n")
-			reg, loadErr := Load(path)
+			reg, loadErr := loadPath(path)
 			if loadErr != nil {
 				t.Fatalf("Load: %v", loadErr)
 			}
-			err := reg.mapError(serviceAddressesKey)
+			err := reg.topLevelError(serviceAddressesKey)
 			if err == nil {
 				t.Fatal("mapError = nil, want validation error")
 			}
@@ -716,8 +743,8 @@ func TestServiceAddressLoadValidationErrorsHaveProperContext(t *testing.T) {
 			if !strings.Contains(err.Error(), "decoding registry") {
 				t.Errorf("error = %q, want 'decoding registry' context frame", err)
 			}
-			if _, ok := errors.AsType[*InvalidInputError](err); ok {
-				t.Error("error chain contains *InvalidInputError, but stored-state should strip the marker")
+			if _, ok := errors.AsType[*registry.InvalidInputError](err); ok {
+				t.Error("error chain contains *registry.InvalidInputError, but stored-state should strip the marker")
 			}
 		})
 	}
@@ -725,7 +752,7 @@ func TestServiceAddressLoadValidationErrorsHaveProperContext(t *testing.T) {
 
 func serviceRegistryPath(t *testing.T) string {
 	t.Helper()
-	return filepath.Join(t.TempDir(), "tsipam.hujson")
+	return Path(t.TempDir(), registryTailnet)
 }
 
 func writeRegistryFixture(t *testing.T, path, content string) {
@@ -758,34 +785,34 @@ func TestReservePatchOpReadsEveryInputOffTheRegistry(t *testing.T) {
 		t.Fatalf("loadBytes: %v", err)
 	}
 
-	presentOp, err := reservePatchOp(reg, serviceAddressesKey, "10.0.0.5", ServiceEntry{Service: "svc:b"})
+	presentOp, err := reservePatchOp(reg, serviceAddressesKey, "10.0.0.5", registry.ServiceEntry{Service: "svc:b"})
 	if err != nil {
 		t.Fatalf("reservePatchOp(serviceAddresses): %v", err)
 	}
 	amended := applyReservePatchOp(t, document, presentOp)
-	if got := amended.ServiceAddresses["10.0.0.5"].Service; got != "svc:b" {
+	if got := amended.serviceAddresses["10.0.0.5"].Service; got != "svc:b" {
 		t.Errorf("service address 10.0.0.5 = %q after the amend, want %q", got, "svc:b")
 	}
-	if len(amended.ServiceAddresses) != 1 {
+	if len(amended.serviceAddresses) != 1 {
 		t.Errorf(
 			"serviceAddresses = %+v after the amend, want the single on-file entry replaced, not duplicated",
-			amended.ServiceAddresses,
+			amended.serviceAddresses,
 		)
 	}
 
-	absentOp, err := reservePatchOp(reg, siteIDsKey, "1", Entry{Site: "hq"})
+	absentOp, err := reservePatchOp(reg, siteIDsKey, "1", registry.Entry{Site: "hq"})
 	if err != nil {
 		t.Fatalf("reservePatchOp(siteIDs): %v", err)
 	}
 	created := applyReservePatchOp(t, document, absentOp)
-	if got := created.SiteIDs["1"].Site; got != "hq" {
+	if got := created.siteIDs["1"].Site; got != "hq" {
 		t.Errorf("site ID 1 = %q after the create, want %q", got, "hq")
 	}
-	if len(created.ServiceAddresses) != 1 {
-		t.Errorf("serviceAddresses = %+v after the siteIDs create, want it untouched", created.ServiceAddresses)
+	if len(created.serviceAddresses) != 1 {
+		t.Errorf("serviceAddresses = %+v after the siteIDs create, want it untouched", created.serviceAddresses)
 	}
 
-	if _, err = reservePatchOp(reg, "nextFreePools", "1", Entry{Site: "hq"}); err == nil {
+	if _, err = reservePatchOp(reg, "nextFreePools", "1", registry.Entry{Site: "hq"}); err == nil {
 		t.Error("reservePatchOp for an unknown map = nil error, want it to refuse rather than patch blind")
 	}
 }
@@ -793,7 +820,7 @@ func TestReservePatchOpReadsEveryInputOffTheRegistry(t *testing.T) {
 // applyReservePatchOp applies op to document in memory and returns the
 // registry the result decodes to, failing the test if either step does not
 // succeed.
-func applyReservePatchOp(t *testing.T, document string, op hujsonedit.PatchOperation) *Registry {
+func applyReservePatchOp(t *testing.T, document string, op hujsonedit.PatchOperation) *document {
 	t.Helper()
 	patched, err := hujsonedit.PatchBytes([]byte(document), nil, op)
 	if err != nil {

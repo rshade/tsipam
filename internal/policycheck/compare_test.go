@@ -2,6 +2,7 @@ package policycheck_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/rshade/tsipam/internal/policycheck"
 	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 //nolint:gochecknoglobals // Golden update flags must be registered at package scope.
@@ -32,7 +34,14 @@ func TestCompareFixtures(t *testing.T) {
 func checkCompareFixture(t *testing.T, name string) {
 	t.Helper()
 	policy := readFixture(t, name+".policy.hujson")
-	pools, err := registry.ListSubnetPoolsWithLogger(filepath.Join("testdata", name+".registry.hujson"), nil)
+	raw := readFixture(t, name+".registry.hujson")
+	dir := t.TempDir()
+	if err := os.WriteFile(hujsonstore.Path(dir, "example.ts.net"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pools, err := registry.NewLedger(hujsonstore.New(dir, nil), nil).ListSubnetPools(
+		context.Background(), "example.ts.net",
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

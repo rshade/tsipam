@@ -16,6 +16,7 @@ import (
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
 
 	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 // testSanitizeKey is a fixed TAILSCALE_SANITIZE_KEY so a placeholder computed
@@ -102,13 +103,8 @@ func assertNoQuotedLeak(t *testing.T, haystack, value string) {
 // ("local") tailnet resolves to.
 func seedCollision(t *testing.T, dir, existing string) {
 	t.Helper()
-	path := filepath.Join(dir, localTailnet+".ipam.hujson")
-	if _, _, _, _, err := registry.ReserveSiteIDWithLogger(
-		path,
-		"1",
-		existing,
-		registry.ReservationMetadata{},
-		nil,
+	if _, _, _, _, err := registry.NewLedger(hujsonstore.New(dir, nil), nil).ReserveSiteID(
+		context.Background(), localTailnet, "1", existing, registry.ReservationMetadata{},
 	); err != nil {
 		t.Fatalf("seeding reservation: %v", err)
 	}
@@ -457,7 +453,10 @@ func TestHelperTriggerRegistryWriteFailure(t *testing.T) {
 	}
 
 	path := os.Getenv("TSIPAM_WRITE_FAILURE_PATH")
-	_, _, _, _, err := registry.ReserveSiteIDWithLogger(path, "1", "site", registry.ReservationMetadata{}, nil)
+	_, _, _, _, err := registry.NewLedger(hujsonstore.New(filepath.Dir(path), nil), nil).ReserveSiteID(
+		context.Background(), strings.TrimSuffix(filepath.Base(path), ".ipam.hujson"),
+		"1", "site", registry.ReservationMetadata{},
+	)
 	if err == nil {
 		fmt.Fprintln(os.Stdout, helperMarkerUnexpectedSuccess)
 		os.Exit(1)

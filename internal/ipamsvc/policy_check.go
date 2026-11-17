@@ -5,7 +5,6 @@ import (
 
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	"github.com/rshade/tsipam/internal/policycheck"
-	"github.com/rshade/tsipam/internal/registry"
 )
 
 // CheckPolicy compares local authored address space with one subnet-pool snapshot.
@@ -13,9 +12,9 @@ func (s *Service) CheckPolicy(ctx context.Context, payload *ipam.CheckPolicyPayl
 	if err := ctx.Err(); err != nil {
 		return nil, ipam.MakePolicyCheckFailed(err)
 	}
-	pools, err := registry.ListSubnetPoolsWithLogger(s.registryPath(payload.Tailnet), s.Logger)
+	pools, err := s.Ledger.ListSubnetPools(ctx, payload.Tailnet)
 	if err != nil {
-		return nil, ipam.MakePolicyCheckFailed(s.registryError(payload.Tailnet, err))
+		return nil, ipam.MakePolicyCheckFailed(err)
 	}
 	report, err := policycheck.Compare([]byte(payload.Policy), pools)
 	if err != nil {

@@ -14,7 +14,7 @@ import (
 
 func TestServiceSubnetPoolReserveListRelease(t *testing.T) {
 	t.Parallel()
-	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	svc := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 
 	reserved, err := svc.ReserveSubnetPool(ctx, &ipam.ReserveSubnetPoolPayload{
@@ -48,7 +48,7 @@ func TestServiceSubnetPoolReserveListRelease(t *testing.T) {
 
 func TestServiceSubnetPoolCollisionReturnsGoaServiceError(t *testing.T) {
 	t.Parallel()
-	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	svc := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 
 	if _, err := svc.ReserveSubnetPool(ctx, &ipam.ReserveSubnetPoolPayload{
@@ -67,7 +67,7 @@ func TestServiceSubnetPoolCollisionReturnsGoaServiceError(t *testing.T) {
 
 func TestServiceAllocateSubnetPoolReservesAndReplaysByTicket(t *testing.T) {
 	t.Parallel()
-	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	svc := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 	ticket, owner := "OPS-1", "alice"
 
@@ -100,7 +100,7 @@ func TestServiceAllocateSubnetPoolReservesAndReplaysByTicket(t *testing.T) {
 
 func TestServiceAllocateSubnetPoolTranslatesErrors(t *testing.T) {
 	t.Parallel()
-	svc := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	svc := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 
 	if _, err := svc.ReserveSubnetPool(ctx, &ipam.ReserveSubnetPoolPayload{
