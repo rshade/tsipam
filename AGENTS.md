@@ -6,11 +6,12 @@
 `cmd/tsipam`. Treat its commands, flags, exit codes, JSON envelope, and the
 `<tailnet>.ipam.hujson` registry format as compatibility contracts.
 
-- `internal/` holds the private packages: `registry` (the HuJSON allocation
-  ledger), `ipamsvc` and `loopback` (the goa service every command runs
-  through over a private Unix socket), `planner` and `policycheck` (pure
-  comparisons against live state), `devices` (tailnet inventory), and
-  `diagnostics`.
+- `internal/` holds the private packages: `registry` (allocation rules and the
+  `Store` contract), `registry/hujsonstore` (the HuJSON file backend),
+  `registry/storetest` (the in-memory reference store and conformance suite),
+  `ipamsvc` and `loopback` (the goa service every command runs through over a
+  private Unix socket), `planner` and `policycheck` (pure comparisons against
+  live state), `devices` (tailnet inventory), and `diagnostics`.
 - `design/` is the goa DSL; `gen/` is its generated code. Never edit `gen/` by
   hand: change `design/`, run `mise run gen`, and commit both.
 - `smoke/` is the release smoke suite behind the `smoke` build tag.

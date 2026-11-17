@@ -1,4 +1,4 @@
-package registry_test
+package hujsonstore_test
 
 import (
 	"errors"
@@ -54,7 +54,7 @@ func TestReserveUDPPortConcurrentDistinctPortsLosesNoReservation(t *testing.T) {
 			<-start
 			port := strconv.Itoa(41642 + index)
 			device := fmt.Sprintf("branch-fw%02d", index)
-			_, _, _, _, err := registry.ReserveUDPPortWithLogger(path, "branch", port, device, nil)
+			_, _, _, _, err := ledgerAt(path).ReserveUDPPort(regCtx(), registryTailnet, "branch", port, device)
 			errs <- err
 		}(i)
 	}
@@ -67,7 +67,7 @@ func TestReserveUDPPortConcurrentDistinctPortsLosesNoReservation(t *testing.T) {
 		}
 	}
 
-	entries, err := registry.ListUDPPortsWithLogger(path, "branch", nil)
+	entries, err := ledgerAt(path).ListUDPPorts(regCtx(), registryTailnet, "branch")
 	if err != nil {
 		t.Fatalf("ListUDPPorts: %v", err)
 	}
@@ -94,9 +94,7 @@ func TestReserveUDPPortConcurrentCollisionHasOneWinner(t *testing.T) {
 			defer group.Done()
 			<-start
 			device := fmt.Sprintf("branch-fw%02d", index)
-			_, _, _, changed, err := registry.ReserveUDPPortWithLogger(
-				path, "branch", "41642", device, nil,
-			)
+			_, _, _, changed, err := ledgerAt(path).ReserveUDPPort(regCtx(), registryTailnet, "branch", "41642", device)
 			results <- result{changed: changed, err: err}
 		}(i)
 	}
@@ -127,9 +125,9 @@ func TestReserveUDPPortCreatesFileAndReturnsCanonicalValues(t *testing.T) {
 	t.Parallel()
 
 	path := regPath(t)
-	site, port, device, changed, err := registry.ReserveUDPPortWithLogger(
-		path, " branch-office ", "041642", " branch-fw01 ", nil,
-	)
+	site, port, device, changed, err := ledgerAt(
+		path,
+	).ReserveUDPPort(regCtx(), registryTailnet, " branch-office ", "041642", " branch-fw01 ")
 	if err != nil {
 		t.Fatalf("ReserveUDPPort: %v", err)
 	}
@@ -138,7 +136,7 @@ func TestReserveUDPPortCreatesFileAndReturnsCanonicalValues(t *testing.T) {
 			site, port, device, changed)
 	}
 
-	entries, err := registry.ListUDPPortsWithLogger(path, "", nil)
+	entries, err := ledgerAt(path).ListUDPPorts(regCtx(), registryTailnet, "")
 	if err != nil {
 		t.Fatalf("ListUDPPorts: %v", err)
 	}
@@ -151,9 +149,9 @@ func TestReserveUDPPortExactRepeatIsByteIdempotent(t *testing.T) {
 	t.Parallel()
 
 	path := regPath(t)
-	if _, _, _, _, err := registry.ReserveUDPPortWithLogger(
-		path, "branch-office", "41642", "branch-fw01", nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveUDPPort(regCtx(), registryTailnet, "branch-office", "41642", "branch-fw01"); err != nil {
 		t.Fatalf("first ReserveUDPPort: %v", err)
 	}
 	before, err := os.ReadFile(path)
@@ -161,9 +159,9 @@ func TestReserveUDPPortExactRepeatIsByteIdempotent(t *testing.T) {
 		t.Fatalf("reading registry: %v", err)
 	}
 
-	_, _, _, changed, err := registry.ReserveUDPPortWithLogger(
-		path, " branch-office ", "041642", " branch-fw01 ", nil,
-	)
+	_, _, _, changed, err := ledgerAt(
+		path,
+	).ReserveUDPPort(regCtx(), registryTailnet, " branch-office ", "041642", " branch-fw01 ")
 	if err != nil {
 		t.Fatalf("repeat ReserveUDPPort: %v", err)
 	}
@@ -183,9 +181,9 @@ func TestReserveUDPPortCollisionIsScopedToSite(t *testing.T) {
 	t.Parallel()
 
 	path := regPath(t)
-	if _, _, _, _, err := registry.ReserveUDPPortWithLogger(
-		path, "branch-office", "41642", "branch-fw01", nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveUDPPort(regCtx(), registryTailnet, "branch-office", "41642", "branch-fw01"); err != nil {
 		t.Fatalf("seeding reservation: %v", err)
 	}
 	before, err := os.ReadFile(path)
@@ -193,9 +191,9 @@ func TestReserveUDPPortCollisionIsScopedToSite(t *testing.T) {
 		t.Fatalf("reading registry: %v", err)
 	}
 
-	_, _, _, changed, err := registry.ReserveUDPPortWithLogger(
-		path, "branch-office", "41642", "branch-fw02", nil,
-	)
+	_, _, _, changed, err := ledgerAt(
+		path,
+	).ReserveUDPPort(regCtx(), registryTailnet, "branch-office", "41642", "branch-fw02")
 	var collision *registry.UDPPortCollisionError
 	if !errors.As(err, &collision) {
 		t.Fatalf("ReserveUDPPort error = %v, want *UDPPortCollisionError", err)
@@ -219,9 +217,7 @@ func TestReserveUDPPortCollisionIsScopedToSite(t *testing.T) {
 		t.Errorf("collision changed registry:\nbefore: %s\nafter: %s", before, after)
 	}
 
-	_, _, _, changed, err = registry.ReserveUDPPortWithLogger(
-		path, "hq-vpc", "41642", "core-router-2", nil,
-	)
+	_, _, _, changed, err = ledgerAt(path).ReserveUDPPort(regCtx(), registryTailnet, "hq-vpc", "41642", "core-router-2")
 	if err != nil {
 		t.Fatalf("cross-site ReserveUDPPort: %v", err)
 	}
@@ -247,9 +243,9 @@ func TestReserveUDPPortRejectsInvalidInputWithoutCreatingFile(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			path := regPath(t)
-			if _, _, _, _, err := registry.ReserveUDPPortWithLogger(
-				path, test.site, test.port, test.device, nil,
-			); err == nil {
+			if _, _, _, _, err := ledgerAt(
+				path,
+			).ReserveUDPPort(regCtx(), registryTailnet, test.site, test.port, test.device); err == nil {
 				t.Fatal("ReserveUDPPort error = nil, want invalid input")
 			}
 			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
@@ -259,43 +255,13 @@ func TestReserveUDPPortRejectsInvalidInputWithoutCreatingFile(t *testing.T) {
 	}
 }
 
-func TestReleaseUDPPortRemovesOnlySelectedReservation(t *testing.T) {
-	t.Parallel()
-
-	path := regPath(t)
-	for _, reservation := range []struct{ site, port, device string }{
-		{site: "branch", port: "41642", device: "branch-fw01"},
-		{site: "branch", port: "41643", device: "branch-fw02"},
-		{site: "hq", port: "41642", device: "hq-fw01"},
-	} {
-		if _, _, _, _, err := registry.ReserveUDPPortWithLogger(
-			path, reservation.site, reservation.port, reservation.device, nil,
-		); err != nil {
-			t.Fatalf("seeding %+v: %v", reservation, err)
-		}
-	}
-
-	site, port, changed, err := registry.ReleaseUDPPortWithLogger(path, " branch ", "041642", nil)
-	if err != nil {
-		t.Fatalf("ReleaseUDPPort: %v", err)
-	}
-	if site != "branch" || port != "41642" || !changed {
-		t.Errorf("ReleaseUDPPort = (%q, %q, %t), want (branch, 41642, true)", site, port, changed)
-	}
-	entries, err := registry.ListUDPPortsWithLogger(path, "", nil)
-	if err != nil {
-		t.Fatalf("ListUDPPorts: %v", err)
-	}
-	if len(entries) != 2 || entries[0].Port != "41643" || entries[1].Site != "hq" {
-		t.Errorf("entries after release = %+v, want branch/41643 and hq/41642", entries)
-	}
-}
-
 func TestReleaseUDPPortAbsentPairIsByteIdempotent(t *testing.T) {
 	t.Parallel()
 
 	path := regPath(t)
-	if _, _, _, _, err := registry.ReserveUDPPortWithLogger(path, "branch", "41642", "fw", nil); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveUDPPort(regCtx(), registryTailnet, "branch", "41642", "fw"); err != nil {
 		t.Fatalf("seeding reservation: %v", err)
 	}
 	before, err := os.ReadFile(path)
@@ -306,7 +272,7 @@ func TestReleaseUDPPortAbsentPairIsByteIdempotent(t *testing.T) {
 		{site: "branch", port: "41643"},
 		{site: "unknown", port: "41642"},
 	} {
-		_, _, changed, releaseErr := registry.ReleaseUDPPortWithLogger(path, pair.site, pair.port, nil)
+		_, _, changed, releaseErr := ledgerAt(path).ReleaseUDPPort(regCtx(), registryTailnet, pair.site, pair.port)
 		if releaseErr != nil {
 			t.Fatalf("ReleaseUDPPort(%+v): %v", pair, releaseErr)
 		}
@@ -327,64 +293,12 @@ func TestReleaseAndListUDPPortsMissingFileAreErrors(t *testing.T) {
 	t.Parallel()
 
 	path := regPath(t)
-	_, _, _, err := registry.ReleaseUDPPortWithLogger(path, "branch", "41642", nil)
+	_, _, _, err := ledgerAt(path).ReleaseUDPPort(regCtx(), registryTailnet, "branch", "41642")
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("ReleaseUDPPort error = %v, want os.ErrNotExist", err)
 	}
-	if _, listErr := registry.ListUDPPortsWithLogger(path, "", nil); !errors.Is(listErr, os.ErrNotExist) {
+	if _, listErr := ledgerAt(path).ListUDPPorts(regCtx(), registryTailnet, ""); !errors.Is(listErr, os.ErrNotExist) {
 		t.Errorf("ListUDPPorts error = %v, want os.ErrNotExist", listErr)
-	}
-}
-
-func TestListUDPPortsSortsBySiteThenNumericPortAndFilters(t *testing.T) {
-	t.Parallel()
-
-	path := regPath(t)
-	for _, reservation := range []struct{ site, port, device string }{
-		{site: "hq", port: "41650", device: "hq-c"},
-		{site: "branch", port: "41642", device: "branch-b"},
-		{site: "hq", port: "1024", device: "hq-a"},
-		{site: "branch", port: "10240", device: "branch-a"},
-	} {
-		if _, _, _, _, err := registry.ReserveUDPPortWithLogger(
-			path, reservation.site, reservation.port, reservation.device, nil,
-		); err != nil {
-			t.Fatalf("seeding %+v: %v", reservation, err)
-		}
-	}
-
-	entries, err := registry.ListUDPPortsWithLogger(path, "", nil)
-	if err != nil {
-		t.Fatalf("ListUDPPorts: %v", err)
-	}
-	want := []struct{ site, port string }{
-		{site: "branch", port: "10240"},
-		{site: "branch", port: "41642"},
-		{site: "hq", port: "1024"},
-		{site: "hq", port: "41650"},
-	}
-	if len(entries) != len(want) {
-		t.Fatalf("ListUDPPorts returned %d entries, want %d: %+v", len(entries), len(want), entries)
-	}
-	for i := range want {
-		if entries[i].Site != want[i].site || entries[i].Port != want[i].port {
-			t.Errorf("entry %d = %+v, want site=%q port=%q", i, entries[i], want[i].site, want[i].port)
-		}
-	}
-
-	filtered, err := registry.ListUDPPortsWithLogger(path, " hq ", nil)
-	if err != nil {
-		t.Fatalf("filtered ListUDPPorts: %v", err)
-	}
-	if len(filtered) != 2 || filtered[0].Port != "1024" || filtered[1].Port != "41650" {
-		t.Errorf("filtered entries = %+v, want hq ports 1024, 41650", filtered)
-	}
-	empty, err := registry.ListUDPPortsWithLogger(path, "unknown", nil)
-	if err != nil {
-		t.Fatalf("unknown-site ListUDPPorts: %v", err)
-	}
-	if len(empty) != 0 {
-		t.Errorf("unknown-site entries = %+v, want empty", empty)
 	}
 }
 
@@ -604,7 +518,9 @@ func TestReleaseUDPPortRepairsMalformedEntry(t *testing.T) {
 				}
 			}
 
-			site, port, changed, err := registry.ReleaseUDPPortWithLogger(path, test.releaseSite, test.releasePort, nil)
+			site, port, changed, err := ledgerAt(
+				path,
+			).ReleaseUDPPort(regCtx(), registryTailnet, test.releaseSite, test.releasePort)
 			if (err != nil) != test.wantErr {
 				t.Errorf("ReleaseUDPPort error = %v, wantErr %v", err, test.wantErr)
 			}
@@ -625,7 +541,7 @@ func TestReleaseUDPPortRepairsMalformedEntry(t *testing.T) {
 			}
 
 			if test.wantRepair && changed {
-				entries, listErr := registry.ListUDPPortsWithLogger(path, "", nil)
+				entries, listErr := ledgerAt(path).ListUDPPorts(regCtx(), registryTailnet, "")
 				if listErr != nil {
 					t.Fatalf("ListUDPPorts after repair: %v", listErr)
 				}
@@ -644,9 +560,7 @@ func TestReserveAndReleaseRejectInvalidUTF8SiteName(t *testing.T) {
 
 	path := regPath(t)
 	// Reserve should reject invalid UTF-8 in site name
-	_, _, _, _, err := registry.ReserveUDPPortWithLogger(
-		path, "branch\xff", "41641", "fw01", nil,
-	)
+	_, _, _, _, err := ledgerAt(path).ReserveUDPPort(regCtx(), registryTailnet, "branch\xff", "41641", "fw01")
 	if err == nil {
 		t.Error("ReserveUDPPort with invalid UTF-8 site name error = nil, want error")
 	}
@@ -655,9 +569,7 @@ func TestReserveAndReleaseRejectInvalidUTF8SiteName(t *testing.T) {
 	}
 
 	// Release should also reject invalid UTF-8 in site name
-	_, _, _, releaseErr := registry.ReleaseUDPPortWithLogger(
-		path, "branch\xff", "41641", nil,
-	)
+	_, _, _, releaseErr := ledgerAt(path).ReleaseUDPPort(regCtx(), registryTailnet, "branch\xff", "41641")
 	if releaseErr == nil {
 		t.Error("ReleaseUDPPort with invalid UTF-8 site name error = nil, want error")
 	}

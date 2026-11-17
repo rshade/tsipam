@@ -21,7 +21,7 @@ func TestCheckPolicyService(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	svc := &ipamsvc.Service{RegistryDir: dir}
+	svc := &ipamsvc.Service{Ledger: testLedger(dir)}
 	payload := &ipam.CheckPolicyPayload{Tailnet: "alias", Policy: `{"ipsets":{"ipset:a":["192.0.2.0/25"]}}`}
 	report, err := svc.CheckPolicy(t.Context(), payload)
 	if err != nil {

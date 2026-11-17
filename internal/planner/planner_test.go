@@ -2,6 +2,7 @@ package planner_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/rshade/tsipam/internal/devices"
 	"github.com/rshade/tsipam/internal/planner"
 	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 //nolint:gochecknoglobals // test flags must be registered at package scope
@@ -19,7 +21,17 @@ var updateGolden = flag.Bool("update", false, "update planner golden reports")
 
 func TestCompareAllocations(t *testing.T) {
 	t.Parallel()
-	reg, err := registry.LoadForPlanning(filepath.Join("testdata", "allocations.registry.hujson"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "allocations.registry.hujson"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err = os.WriteFile(hujsonstore.Path(dir, "example.ts.net"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := registry.NewLedger(hujsonstore.New(dir, nil), nil).LoadForPlanning(
+		context.Background(), "example.ts.net",
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +100,7 @@ func TestComparePoolContainment(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			reg := &registry.Registry{SubnetPools: map[string]registry.Entry{tc.pool: {Site: "site"}}}
+			reg := registry.Allocations{SubnetPools: map[string]registry.Entry{tc.pool: {Site: "site"}}}
 			live := devices.Snapshot{Devices: []devices.Device{{Name: "router", AdvertisedRoutes: []string{tc.route}}}}
 			got, err := planner.Compare(reg, live)
 			if err != nil {
@@ -107,7 +119,7 @@ func TestComparePoolContainment(t *testing.T) {
 
 func TestCompareLiveSiteIDAndServiceConflict(t *testing.T) {
 	t.Parallel()
-	reg := &registry.Registry{ServiceAddresses: map[string]registry.ServiceEntry{
+	reg := registry.Allocations{ServiceAddresses: map[string]registry.ServiceEntry{
 		"100.100.100.1": {Service: "svc:one"},
 	}}
 	live := devices.Snapshot{
@@ -150,7 +162,7 @@ func TestCompareRejectsMalformedLiveData(t *testing.T) {
 	for name, live := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got, err := planner.Compare(&registry.Registry{}, live)
+			got, err := planner.Compare(registry.Allocations{}, live)
 			if err == nil || len(got.Entries) != 0 {
 				t.Fatalf("malformed inventory produced report %#v, error %v", got, err)
 			}
@@ -160,11 +172,8 @@ func TestCompareRejectsMalformedLiveData(t *testing.T) {
 
 func TestCompareEmpty(t *testing.T) {
 	t.Parallel()
-	got, err := planner.Compare(&registry.Registry{}, devices.Snapshot{})
+	got, err := planner.Compare(registry.Allocations{}, devices.Snapshot{})
 	if err != nil || got.DriftCount != 0 || got.Entries == nil || len(got.Entries) != 0 {
 		t.Fatalf("empty comparison = %#v, %v; want non-nil empty entries", got, err)
-	}
-	if _, nilErr := planner.Compare(nil, devices.Snapshot{}); nilErr == nil {
-		t.Fatal("nil registry should be rejected")
 	}
 }

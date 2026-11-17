@@ -13,6 +13,7 @@ import (
 	goa "goa.design/goa/v3/pkg"
 
 	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 // runUDPPort traverses Cobra, the generated Goa client, and the ephemeral
@@ -435,9 +436,8 @@ func TestUDPPortCollisionSanitization(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
-			path := filepath.Join(dir, localTailnet+".ipam.hujson")
-			if _, _, _, _, err := registry.ReserveUDPPortWithLogger(
-				path, test.site, "41642", test.existing, nil,
+			if _, _, _, _, err := registry.NewLedger(hujsonstore.New(dir, nil), nil).ReserveUDPPort(
+				context.Background(), localTailnet, test.site, "41642", test.existing,
 			); err != nil {
 				t.Fatalf("seed UDP collision: %v", err)
 			}

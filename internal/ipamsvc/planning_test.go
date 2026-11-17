@@ -20,7 +20,7 @@ func TestPlanUsesOneRegistrySnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	svc := &ipamsvc.Service{RegistryDir: dir, CollectLive: func(
+	svc := &ipamsvc.Service{Ledger: testLedger(dir), CollectLive: func(
 		_ context.Context, tailnet string, _ diagnostics.Logger,
 	) (devices.Snapshot, error) {
 		calls++

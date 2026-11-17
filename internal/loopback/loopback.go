@@ -28,6 +28,8 @@ import (
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	"github.com/rshade/tsipam/internal/diagnostics"
 	"github.com/rshade/tsipam/internal/ipamsvc"
+	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 // socketFileName is fixed because each Run gets its own freshly created
@@ -57,7 +59,10 @@ func RunWithLogger(
 	logger diagnostics.Logger,
 	fn func(context.Context, *ipamclient.Client) error,
 ) error {
-	return RunWithService(ctx, &ipamsvc.Service{RegistryDir: registryDir, Logger: logger}, fn)
+	return RunWithService(ctx, &ipamsvc.Service{
+		Ledger: registry.NewLedger(hujsonstore.New(registryDir, logger), logger),
+		Logger: logger,
+	}, fn)
 }
 
 // RunWithService uses a configured service, including its optional live

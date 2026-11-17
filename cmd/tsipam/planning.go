@@ -13,6 +13,8 @@ import (
 	"github.com/rshade/tsipam/internal/diagnostics"
 	"github.com/rshade/tsipam/internal/ipamsvc"
 	"github.com/rshade/tsipam/internal/loopback"
+	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 const (
@@ -74,7 +76,11 @@ func executePlanning(
 			return devices.CollectSnapshot(ctx, getenv, logger)
 		}
 	}
-	svc := &ipamsvc.Service{RegistryDir: registryDir, Logger: state.logger, CollectLive: collect}
+	svc := &ipamsvc.Service{
+		Ledger:      registry.NewLedger(hujsonstore.New(registryDir, state.logger), state.logger),
+		Logger:      state.logger,
+		CollectLive: collect,
+	}
 	var report *ipam.ComparisonReport
 	err = loopback.RunWithService(cmd.Context(), svc, func(ctx context.Context, client *ipamclient.Client) error {
 		result, callErr := client.Plan()(ctx, &ipam.PlanPayload{Tailnet: tailnet, LiveTailnet: liveTailnet})

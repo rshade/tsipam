@@ -1,4 +1,4 @@
-package registry_test
+package hujsonstore_test
 
 import (
 	"errors"
@@ -12,60 +12,12 @@ import (
 	"github.com/rshade/tsipam/internal/registry"
 )
 
-func TestReserveServiceAddressCreatesListsAndIsIdempotent(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-
-	address, service, metadata, changed, err := registry.ReserveServiceAddressWithLogger(
-		path,
-		"100.100.100.7/32",
-		"payments",
-		registry.ReservationMetadata{},
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("ReserveServiceAddress: %v", err)
-	}
-	if address != "100.100.100.7" || service != "svc:payments" || !changed {
-		t.Errorf("ReserveServiceAddress = (%q, %q, %+v, %t), want canonical address/service and changed",
-			address, service, metadata, changed)
-	}
-
-	_, _, _, changed, err = registry.ReserveServiceAddressWithLogger(
-		path, address, "svc:payments", registry.ReservationMetadata{}, nil,
-	)
-	if err != nil {
-		t.Fatalf("repeat ReserveServiceAddress: %v", err)
-	}
-	if changed {
-		t.Error("changed = true on equivalent bare-address/service repeat, want false")
-	}
-
-	if _, _, _, _, reserveErr := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.8", "payments", registry.ReservationMetadata{}, nil,
-	); reserveErr != nil {
-		t.Fatalf("reserving second address for same service: %v", reserveErr)
-	}
-	entries, err := registry.ListServiceAddressesWithLogger(path, nil)
-	if err != nil {
-		t.Fatalf("ListServiceAddresses: %v", err)
-	}
-	if len(entries) != 2 || entries[0].Address != "100.100.100.7" || entries[1].Address != "100.100.100.8" {
-		t.Errorf("ListServiceAddresses = %+v, want two addresses for svc:payments", entries)
-	}
-	for _, entry := range entries {
-		if entry.Service != "svc:payments" {
-			t.Errorf("entry.Service = %q, want svc:payments", entry.Service)
-		}
-	}
-}
-
 func TestReserveServiceAddressRefusesCollisionWithoutMutation(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
-	if _, _, _, _, err := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.7", "payments", registry.ReservationMetadata{}, nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveServiceAddress(regCtx(), registryTailnet, "100.100.100.7", "payments", registry.ReservationMetadata{}); err != nil {
 		t.Fatalf("seeding reservation: %v", err)
 	}
 	before, err := os.ReadFile(path)
@@ -73,9 +25,9 @@ func TestReserveServiceAddressRefusesCollisionWithoutMutation(t *testing.T) {
 		t.Fatalf("reading seeded registry: %v", err)
 	}
 
-	_, _, _, changed, err := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.7/32", "search", registry.ReservationMetadata{Owner: "platform"}, nil,
-	)
+	_, _, _, changed, err := ledgerAt(
+		path,
+	).ReserveServiceAddress(regCtx(), registryTailnet, "100.100.100.7/32", "search", registry.ReservationMetadata{Owner: "platform"})
 	var collision *registry.ServiceAddressCollisionError
 	if !errors.As(err, &collision) {
 		t.Fatalf("ReserveServiceAddress error = %v, want *ServiceAddressCollisionError", err)
@@ -104,9 +56,10 @@ func TestReserveServiceAddressMetadataMergesAndAutoStamps(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	_, _, first, changed, err := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.7", "payments",
-		registry.ReservationMetadata{Owner: "platform", Ticket: "NET-237"}, nil,
+	_, _, first, changed, err := ledgerAt(
+		path,
+	).ReserveServiceAddress(regCtx(), registryTailnet, "100.100.100.7", "payments",
+		registry.ReservationMetadata{Owner: "platform", Ticket: "NET-237"},
 	)
 	if err != nil {
 		t.Fatalf("first ReserveServiceAddress: %v", err)
@@ -118,9 +71,10 @@ func TestReserveServiceAddressMetadataMergesAndAutoStamps(t *testing.T) {
 		t.Errorf("ReservedAt = %q, want RFC3339: %v", first.ReservedAt, parseErr)
 	}
 
-	_, _, second, changed, err := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.7/32", "svc:payments",
-		registry.ReservationMetadata{Description: "payments VIP"}, nil,
+	_, _, second, changed, err := ledgerAt(
+		path,
+	).ReserveServiceAddress(regCtx(), registryTailnet, "100.100.100.7/32", "svc:payments",
+		registry.ReservationMetadata{Description: "payments VIP"},
 	)
 	if err != nil {
 		t.Fatalf("second ReserveServiceAddress: %v", err)
@@ -149,42 +103,11 @@ func TestReserveServiceAddressNeedsNoParentPool(t *testing.T) {
 	path := regPath(t)
 	writeServiceRegistryFixture(t, path, `{"subnetPools":{"10.0.0.0/24":"hq"}}`+"\n")
 
-	if _, _, _, changed, err := registry.ReserveServiceAddressWithLogger(
-		path, "203.0.113.7", "payments", registry.ReservationMetadata{}, nil,
-	); err != nil || !changed {
+	if _, _, _, changed, err := ledgerAt(
+		path,
+	).ReserveServiceAddress(regCtx(), registryTailnet, "203.0.113.7", "payments", registry.ReservationMetadata{}); err != nil ||
+		!changed {
 		t.Fatalf("ReserveServiceAddress outside subnet pools = changed %t, error %v; want success", changed, err)
-	}
-}
-
-func TestReleaseServiceAddressRemovesEntryAndAbsentIsNoop(t *testing.T) {
-	t.Parallel()
-	path := regPath(t)
-	if _, _, _, _, err := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.7", "payments", registry.ReservationMetadata{}, nil,
-	); err != nil {
-		t.Fatalf("seeding reservation: %v", err)
-	}
-
-	address, changed, err := registry.ReleaseServiceAddressWithLogger(path, "100.100.100.7/32", nil)
-	if err != nil {
-		t.Fatalf("ReleaseServiceAddress: %v", err)
-	}
-	if address != "100.100.100.7" || !changed {
-		t.Errorf("ReleaseServiceAddress = (%q, %t), want canonical address and changed", address, changed)
-	}
-	_, changed, err = registry.ReleaseServiceAddressWithLogger(path, "100.100.100.7", nil)
-	if err != nil {
-		t.Fatalf("absent ReleaseServiceAddress: %v", err)
-	}
-	if changed {
-		t.Error("changed = true releasing absent address, want false")
-	}
-	entries, err := registry.ListServiceAddressesWithLogger(path, nil)
-	if err != nil {
-		t.Fatalf("ListServiceAddresses: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Errorf("ListServiceAddresses = %+v, want empty after release", entries)
 	}
 }
 
@@ -192,11 +115,11 @@ func TestReleaseAndListServiceAddressMissingFileAreErrors(t *testing.T) {
 	t.Parallel()
 	path := regPath(t)
 
-	_, _, releaseErr := registry.ReleaseServiceAddressWithLogger(path, "100.100.100.7", nil)
+	_, _, releaseErr := ledgerAt(path).ReleaseServiceAddress(regCtx(), registryTailnet, "100.100.100.7")
 	if !errors.Is(releaseErr, os.ErrNotExist) {
 		t.Errorf("ReleaseServiceAddress missing-file error = %v, want os.ErrNotExist", releaseErr)
 	}
-	if _, err := registry.ListServiceAddressesWithLogger(path, nil); !errors.Is(err, os.ErrNotExist) {
+	if _, err := ledgerAt(path).ListServiceAddresses(regCtx(), registryTailnet); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("ListServiceAddresses missing-file error = %v, want os.ErrNotExist", err)
 	}
 }
@@ -212,7 +135,7 @@ func TestListServiceAddressesSortsNumerically(t *testing.T) {
 		}
 	}`+"\n")
 
-	entries, err := registry.ListServiceAddressesWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListServiceAddresses(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListServiceAddresses: %v", err)
 	}
@@ -239,9 +162,10 @@ func TestServiceAddressOperationsUseExactSlash32RawKey(t *testing.T) {
 		}
 	}`+"\n")
 
-	if _, _, _, changed, updateErr := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.7", "payments", registry.ReservationMetadata{Owner: "platform"}, nil,
-	); updateErr != nil || !changed {
+	if _, _, _, changed, updateErr := ledgerAt(
+		path,
+	).ReserveServiceAddress(regCtx(), registryTailnet, "100.100.100.7", "payments", registry.ReservationMetadata{Owner: "platform"}); updateErr != nil ||
+		!changed {
 		t.Fatalf("metadata update through canonical key = changed %t, error %v", changed, updateErr)
 	}
 	raw, err := os.ReadFile(path)
@@ -252,9 +176,10 @@ func TestServiceAddressOperationsUseExactSlash32RawKey(t *testing.T) {
 		t.Errorf("registry = %s, want only the original /32 raw key", raw)
 	}
 
-	if _, changed, releaseErr := registry.ReleaseServiceAddressWithLogger(
-		path, "100.100.100.7", nil,
-	); releaseErr != nil || !changed {
+	if _, changed, releaseErr := ledgerAt(
+		path,
+	).ReleaseServiceAddress(regCtx(), registryTailnet, "100.100.100.7"); releaseErr != nil ||
+		!changed {
 		t.Fatalf("release through canonical key = changed %t, error %v", changed, releaseErr)
 	}
 }
@@ -278,7 +203,9 @@ func TestReserveServiceAddressRejectsInvalidInputWithoutCreatingFile(t *testing.
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			path := regPath(t)
-			_, _, _, _, err := registry.ReserveServiceAddressWithLogger(path, tc.address, tc.service, tc.meta, nil)
+			_, _, _, _, err := ledgerAt(
+				path,
+			).ReserveServiceAddress(regCtx(), registryTailnet, tc.address, tc.service, tc.meta)
 			if _, ok := errors.AsType[*registry.InvalidInputError](err); !ok {
 				t.Fatalf("ReserveServiceAddress error = %v, want *InvalidInputError", err)
 			}
@@ -296,21 +223,24 @@ func TestServiceAddressEditsPreserveCommentedSiblingBytes(t *testing.T) {
 		"\t\t\"100.100.100.7\": \"svc:payments\",\n"
 	writeServiceRegistryFixture(t, path, "{\n\t\"serviceAddresses\": {\n"+protected+"\t},\n}\n")
 
-	if _, _, _, _, err := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.8", "search", registry.ReservationMetadata{}, nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveServiceAddress(regCtx(), registryTailnet, "100.100.100.8", "search", registry.ReservationMetadata{}); err != nil {
 		t.Fatalf("reserve sibling: %v", err)
 	}
 	assertRegistryContainsBytes(t, path, protected)
 
-	if _, _, _, _, err := registry.ReserveServiceAddressWithLogger(
-		path, "100.100.100.8/32", "svc:search", registry.ReservationMetadata{Owner: "platform"}, nil,
-	); err != nil {
+	if _, _, _, _, err := ledgerAt(
+		path,
+	).ReserveServiceAddress(regCtx(), registryTailnet, "100.100.100.8/32", "svc:search", registry.ReservationMetadata{Owner: "platform"}); err != nil {
 		t.Fatalf("update sibling metadata: %v", err)
 	}
 	assertRegistryContainsBytes(t, path, protected)
 
-	if _, changed, err := registry.ReleaseServiceAddressWithLogger(path, "100.100.100.8", nil); err != nil || !changed {
+	if _, changed, err := ledgerAt(
+		path,
+	).ReleaseServiceAddress(regCtx(), registryTailnet, "100.100.100.8"); err != nil ||
+		!changed {
 		t.Fatalf("release sibling = changed %t, error %v", changed, err)
 	}
 	assertRegistryContainsBytes(t, path, protected)
@@ -329,9 +259,9 @@ func TestConcurrentServiceAddressReservationsAllLand(t *testing.T) {
 			defer wg.Done()
 			address := fmt.Sprintf("100.100.100.%d", index+1)
 			service := fmt.Sprintf("service-%d", index+1)
-			_, _, _, _, err := registry.ReserveServiceAddressWithLogger(
-				path, address, service, registry.ReservationMetadata{}, nil,
-			)
+			_, _, _, _, err := ledgerAt(
+				path,
+			).ReserveServiceAddress(regCtx(), registryTailnet, address, service, registry.ReservationMetadata{})
 			errCh <- err
 		}(i)
 	}
@@ -343,7 +273,7 @@ func TestConcurrentServiceAddressReservationsAllLand(t *testing.T) {
 		}
 	}
 
-	entries, err := registry.ListServiceAddressesWithLogger(path, nil)
+	entries, err := ledgerAt(path).ListServiceAddresses(regCtx(), registryTailnet)
 	if err != nil {
 		t.Fatalf("ListServiceAddresses: %v", err)
 	}

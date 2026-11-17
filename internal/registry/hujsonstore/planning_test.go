@@ -1,11 +1,10 @@
-package registry_test
+package hujsonstore_test
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 func TestLoadForPlanningValidatesObservableMaps(t *testing.T) {
@@ -25,11 +24,11 @@ func TestLoadForPlanningValidatesObservableMaps(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			path := filepath.Join(t.TempDir(), "registry.hujson")
+			path := hujsonstore.Path(t.TempDir(), "example.ts.net")
 			if err := os.WriteFile(path, []byte(tc.contents), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			_, err := registry.LoadForPlanning(path)
+			_, err := ledgerAt(path).LoadForPlanning(regCtx(), registryTailnet)
 			if (err != nil) != tc.wantError {
 				t.Fatalf("LoadForPlanning error = %v, want error %t", err, tc.wantError)
 			}
@@ -43,8 +42,8 @@ func TestLoadForPlanningValidatesObservableMaps(t *testing.T) {
 
 func TestLoadForPlanningDoesNotCreateMissingRegistry(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "missing.hujson")
-	if _, err := registry.LoadForPlanning(path); err == nil {
+	path := hujsonstore.Path(t.TempDir(), "example.ts.net")
+	if _, err := ledgerAt(path).LoadForPlanning(regCtx(), registryTailnet); err == nil {
 		t.Fatal("missing registry should fail")
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {

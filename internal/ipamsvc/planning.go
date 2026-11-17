@@ -6,7 +6,6 @@ import (
 
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	"github.com/rshade/tsipam/internal/planner"
-	"github.com/rshade/tsipam/internal/registry"
 )
 
 // Plan compares one registry snapshot with complete live allocation inventory.
@@ -14,9 +13,9 @@ func (s *Service) Plan(ctx context.Context, payload *ipam.PlanPayload) (*ipam.Co
 	if s.CollectLive == nil {
 		return nil, ipam.MakeComparisonFailed(errors.New("live allocation collector is not configured"))
 	}
-	reg, err := registry.LoadForPlanning(s.registryPath(payload.Tailnet))
+	reg, err := s.Ledger.LoadForPlanning(ctx, payload.Tailnet)
 	if err != nil {
-		return nil, ipam.MakeComparisonFailed(s.registryError(payload.Tailnet, err))
+		return nil, ipam.MakeComparisonFailed(err)
 	}
 	live, err := s.CollectLive(ctx, payload.LiveTailnet, s.Logger)
 	if err != nil {

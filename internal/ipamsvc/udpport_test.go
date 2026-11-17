@@ -11,7 +11,7 @@ import (
 func TestServiceUDPPortReserveListRelease(t *testing.T) {
 	t.Parallel()
 
-	service := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	service := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 	reserved, err := service.ReserveUDPPort(ctx, &ipam.ReserveUDPPortPayload{
 		Tailnet: "acme", Site: " branch ", Port: "041642", Device: " branch-fw01 ",
@@ -71,7 +71,7 @@ func TestServiceUDPPortReserveListRelease(t *testing.T) {
 func TestServiceUDPPortCollisionReturnsNamedError(t *testing.T) {
 	t.Parallel()
 
-	service := &ipamsvc.Service{RegistryDir: t.TempDir()}
+	service := &ipamsvc.Service{Ledger: testLedger(t.TempDir())}
 	ctx := context.Background()
 	if _, err := service.ReserveUDPPort(ctx, &ipam.ReserveUDPPortPayload{
 		Tailnet: "acme", Site: "branch", Port: "41642", Device: "branch-fw01",
@@ -151,7 +151,7 @@ func TestServiceUDPPortValidationReturnsNamedError(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			assertServiceErrorName(t, test.run(&ipamsvc.Service{RegistryDir: t.TempDir()}), "invalid_input")
+			assertServiceErrorName(t, test.run(&ipamsvc.Service{Ledger: testLedger(t.TempDir())}), "invalid_input")
 		})
 	}
 }

@@ -25,7 +25,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"regexp"
 	"runtime/debug"
 	"sort"
@@ -42,6 +41,7 @@ import (
 
 	"github.com/rshade/tsipam/internal/diagnostics"
 	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 // devVersion is the release string of a build that injects no version.
@@ -243,12 +243,12 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 
 	registerSweepValue(state.sanitizer, kindTailnet, tailnet)
 	registerSweepValue(state.sanitizer, kindPath, registryDir)
-	filename := tailnet + ".ipam.hujson"
-	registryPath := filepath.Join(registryDir, filename)
+	filename := hujsonstore.FileName(tailnet)
+	registryPath := hujsonstore.Path(registryDir, tailnet)
 	registerSweepValue(state.sanitizer, kindPath, registryPath)
 	registerSweepValue(state.sanitizer, kindPath, filename)
 
-	siteIDs, subnetPools, serviceAddresses, owners := registry.RawEntries(registryPath)
+	siteIDs, subnetPools, serviceAddresses, owners := hujsonstore.RawEntries(registryPath)
 	for _, site := range siteIDs {
 		registerSweepValue(state.sanitizer, kindSite, site)
 	}
@@ -267,7 +267,7 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 		registerSweepValueWithCanonical(state.sanitizer, kindIP, address, registry.NormalizeServiceAddress)
 		registerSweepValueWithCanonical(state.sanitizer, kindService, service, registry.NormalizeServiceName)
 	}
-	for _, entry := range registry.RawUDPPorts(registryPath) {
+	for _, entry := range hujsonstore.RawUDPPorts(registryPath) {
 		registerSweepValueWithCanonical(state.sanitizer, kindSite, entry.Site, registry.NormalizeSiteName)
 		registerSweepValueWithCanonical(state.sanitizer, kindHostname, entry.Device, registry.NormalizeDeviceName)
 	}
