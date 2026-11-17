@@ -1,0 +1,111 @@
+# Tasks: Registry export and import
+
+## 1. Rules: export and import planning in `internal/registry`
+
+- [ ] 1.1 Add `RegistryContents` (four sorted reservation slices including
+      UDP ports), `ImportAction`, `ImportReport` (mode, planned, changed,
+      per-kind counts, entries, refusal), and `ImportRefusedError` with reasons
+      `non_empty_target` and `conflict`; verify `go build ./internal/registry/`
+      passes
+- [ ] 1.2 Add `Ledger.Export(ctx, tailnet)`, a `View` with all four maps
+      required, returning entries in list order; verify `storetest` cases for
+      empty, populated, and missing registry (`ErrNotFound`) pass against both
+      stores
+- [ ] 1.3 Implement the pure `planImport(snapshot, source, merge)` with
+      `add`/`unchanged`/`update`/`conflict` classification through the existing
+      collision and `validateSubnetPoolOverlap` checks against the target state
+      plus earlier accepted entries; verify table tests cover each action per
+      kind, cross-site overlap between a source pool and a target pool, and
+      the non-empty target refusal without `--merge`
+- [ ] 1.4 Implement `Ledger.PlanImport` (a `View`, where a missing registry
+      counts as empty) and `Ledger.Import` (an `Update` with `CreateIfMissing`
+      that refuses before any `Put` and applies metadata through
+      `normalizeMetadata` and `mergeMetadataInto` without auto-stamping);
+      verify `storetest` cases for: one conflict among eleven entries writes
+      nothing, merge never deletes, the plan writes nothing, and a missing
+      `reservedAt` stays missing, run against both stores with `-race`
+
+## 2. HuJSON format edge in `internal/registry/hujsonstore`
+
+- [ ] 2.1 Confirm that `hujsonedit.PatchAdd` appends object members in
+      insertion order, then implement `RenderDocument(contents)` by applying
+      ordered adds to `{}\n` (or by building the value tree directly if the
+      order check fails); verify golden tests under `testdata/` for an empty
+      registry (`{}`), bare and metadata entries, IPv4 and IPv6 pools, and
+      nested UDP ports, plus a test that `Load` accepts every rendered golden
+- [ ] 2.2 Implement `ParseSourceDocument(bytes)` with all four maps
+      required, returning `RegistryContents` and `Dropped{Comments, RawKeys,
+      UnknownKeys}`; verify tests for comments anywhere, `"007"` to `"7"`, a
+      `/32` service-address alias, a padded CIDR, an unknown top-level key,
+      and each loader rejection (BOM, near-miss key, duplicate, invalid map)
+- [ ] 2.3 Add `RawEntriesFromBytes` (shared with `RawEntries`, and covering
+      UDP ports) for sanitizer pre-registration; verify `RawEntries` tests still
+      pass unchanged and a new test covers the bytes form
+- [ ] 2.4 Add a round-trip property test: for each fixture registry,
+      `RenderDocument(Export(file))` → `Import` into an empty memory store →
+      render again gives identical bytes; verify it passes
+
+## 3. Service contract
+
+- [ ] 3.1 Add `RegistryContents`, `ImportReport`, `export_registry`, and
+      `import_registry` (with `invalid_input` 400 and `import_refused` 409) to
+      `design/`, run `mise run gen`, and verify `go build ./...` fails only
+      for the two missing `ipamsvc` methods and the `gen/` diff touches only
+      the new methods and types
+- [ ] 3.2 Implement `ExportRegistry` and `ImportRegistry` in `internal/ipamsvc`
+      over the ledger, mapping `ImportRefusedError` to `import_refused` and
+      normalization failures to `invalid_input`; verify `ipamsvc` tests for
+      both methods, both modes, and both errors pass, and `mise run gen-check`
+      is clean
+
+## 4. CLI: `registry export` and `registry import`
+
+- [ ] 4.1 Add the `registry` command group with `export` (`--output`, the
+      registry flags) rendering text, JSON envelope (`document`, `counts`), or
+      a `0600` atomic temp-file-and-rename write; verify tests in
+      `cmd/tsipam` for each output path, an envelope golden, file mode and the
+      absence of a temp file on failure, and exit 2 for a missing registry and
+      for a malformed map
+- [ ] 4.2 Add `import <file|->` with `--merge`, `--plan`, and
+      `--drop-unknown`: read the source, reject invalid UTF-8, pre-register
+      sweep values, parse, apply the unknown-keys refusal, call the service,
+      and render the `import` envelope with `dropped` and `refusal`; verify
+      tests for stdin, each refusal reason in apply mode (exit 1, empty stdout)
+      and plan mode (exit 1, report on stdout), success (exit 0,
+      `status: ok`), and an all-unchanged merge (`status: no_changes`)
+- [ ] 4.3 Map `import_refused` and `errImportRefused` to exit 1 in
+      `exitCodeFor`; verify `contract_test.go` cases assert the exit codes and
+      empty stdout on refusals
+- [ ] 4.4 Wire sanitization: placeholders applied after ordering in the
+      rendered export, the import report's field kinds, and path sweep values;
+      verify `error_sanitize_test.go` cases for a sanitized export, a sanitized
+      import report, and a loader error that echoes a source value
+- [ ] 4.5 Update `schema.go`'s exit-code 1 text and sanitization text, then
+      regenerate `testdata/schema.golden.json` with `-update`; verify the
+      golden diff adds only the `registry` commands and the two text changes,
+      and that the schema delta's scenarios hold
+
+## 5. Documentation and smoke
+
+- [ ] 5.1 Document both commands in `docs/reference/json-envelope.md` (the
+      `document`/`counts` and `import` payloads), `exit-codes.md` (import
+      refusals at 1, source failures at 2), and `registry-format.md` (export
+      is canonical, not a byte copy); verify `mise run lint-md` passes
+- [ ] 5.2 Add `docs/how-to/export-and-import-a-registry.md` (snapshot for CI,
+      copy between tailnets, merge, plan, and the sanitized-backup warning) and
+      link it from `docs/README.md`; verify `mise run lint-md` passes and every
+      command in it runs as written against a temp registry
+- [ ] 5.3 Add README examples for export and a merge import with their
+      `smoke/` cases in the same commit; verify `mise run smoke` passes
+
+## 6. Integration verification
+
+- [ ] 6.1 Run `mise run test lint cross smoke` and verify all pass
+- [ ] 6.2 Verify that no existing golden fixture other than
+      `schema.golden.json` changed (`git diff --stat main -- '*testdata*'`)
+
+## Workflow follow-up
+
+- Commit with `feat:` (new commands; release-please cuts a minor version).
+- Archive the change after the PR merges, syncing `registry-transfer` and the
+  `schema` delta into `openspec/specs/`.
