@@ -1,0 +1,39 @@
+name: OpenSpec files
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openspec-files-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  current:
+    name: Generated files are current
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install the OpenSpec CLI
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5
+        with:
+          install_args: node npm:@fission-ai/openspec
+
+      - name: Regenerate OpenSpec files
+        run: mise exec npm:@fission-ai/openspec -- openspec update
+
+      - name: Fail if the generated files changed
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "::error::OpenSpec generated files are out of date. Run 'mise exec npm:@fission-ai/openspec -- openspec update' and commit the result."
+            exit 1
+          fi
