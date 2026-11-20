@@ -101,17 +101,30 @@ go mod tidy
 description = "Fail if goa gen would change the committed gen/"
 shell = "bash -euo pipefail -c"
 run = '''
-# goa gen can add an indirect require to go.mod; only gen/ is compared.
-backup=$(mktemp -d)
-cp go.mod go.sum "$backup/"
-trap 'cp "$backup/go.mod" "$backup/go.sum" . && rm -rf "$backup"' EXIT
-goa gen github.com/rshade/tsipam/design >/dev/null
-# Compare with the index, not HEAD, so a staged regeneration passes locally.
-untracked=$(git ls-files --others --exclude-standard -- gen)
-if ! git diff --quiet -- gen || [ -n "$untracked" ]; then
+# goa gen writes a temporary goa<N>/ main package and indirect requires into the
+# module it runs in. Generating into a scratch copy keeps this checkout untouched,
+# so the lint tasks running beside this one never see a half-generated module.
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+mkdir "$scratch/module" "$scratch/committed"
+cp go.mod go.sum "$scratch/module/"
+cp -R design "$scratch/module/design"
+(cd "$scratch/module" && goa gen github.com/rshade/tsipam/design >/dev/null)
+# The index must match goa gen's output, so a staged regeneration passes locally.
+# The work tree must match the index by git's rules (modes and symlinks count,
+# ignored files do not), so an unstaged edit under gen/ cannot reach
+# git commit -a.
+git ls-files -z -- gen | git checkout-index -z --stdin --prefix="$scratch/committed/"
+drift=$(
+  {
+    diff -rq "$scratch/committed/gen" "$scratch/module/gen" | sed 's#^#index: #' || true
+    git diff --name-status -- gen | sed 's#^#work tree: #' || true
+    git ls-files --others --exclude-standard -- gen | sed 's#^#work tree: untracked #' || true
+  } 2>&1 | sed "s#$scratch/committed/##g; s#$scratch/module/#generated #g"
+)
+if [ -n "$drift" ]; then
   echo "gen/ differs from goa gen output; run mise run gen and commit the result:" >&2
-  git diff --stat -- gen >&2
-  [ -z "$untracked" ] || echo "$untracked" >&2
+  echo "$drift" >&2
   exit 1
 fi
 '''
