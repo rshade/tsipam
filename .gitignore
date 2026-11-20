@@ -48,3 +48,7 @@ PR_MESSAGE.md
 .claude/workflow/
 .claude/worktrees/
 .playwright-mcp/
+
+# Local research reports and their source notes
+/reports/
+/research_notes/
