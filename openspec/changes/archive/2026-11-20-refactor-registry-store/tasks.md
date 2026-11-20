@@ -117,7 +117,7 @@
 
 ## 7. Integration verification
 
-- [ ] 7.1 Run `mise run test lint cross` and `mise run smoke`, and verify all
+- [x] 7.1 Run `mise run test lint cross` and `mise run smoke`, and verify all
       pass
 - [x] 7.2 Verify `git diff --stat main -- gen/ design/ smoke/ cmd/tsipam/testdata/ internal/planner/testdata/ internal/policycheck/testdata/`
       is empty
