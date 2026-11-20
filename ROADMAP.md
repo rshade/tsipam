@@ -6,21 +6,46 @@
 site IDs, subnet pools, Service VIPs, and listen ports are reserved in a
 registry, and that intent is checked against what the tailnet advertises.
 [`CONTEXT.md`](./CONTEXT.md) sets the boundaries. The short version: it never
-writes to the tailnet, never runs as a daemon, and never lets live state
-rewrite declared intent on its own.
+writes to the tailnet, runs no daemon except the opt-in `tsipam serve`, and
+never lets live state rewrite declared intent on its own.
 
 Planning for this module lived in the `tailscale-utils` monorepo until the
 2026-11-16 extraction. Open work moved here; the history stays there.
 
 ## Immediate Focus
 
-No open issue holds this slot. PR #2, the fixes from the post-release review
-of the extraction, is in review.
+No open issue holds this slot. `refactor-registry-store` is archived, which
+opens the server track below; its first step is #22.
 
 ## Near-Term Vision
 
-Nothing is filed here yet. Two items are known but not yet issues in this
-repo:
+File an issue for an item below before picking it up.
+
+### Shared registry server
+
+Promoted from Parked on 2026-11-20. `CONTEXT.md` now allows `tsipam serve` as
+the one long-running process, under the conditions it lists. Each step is an
+OpenSpec change under `openspec/changes/`, listed in dependency order.
+
+- [ ] #22 `add-registry-export-import`: `registry export` and
+      `registry import` (`--merge`, `--plan`), to move reservations between
+      stores losslessly. Its prerequisite, `refactor-registry-store`, is
+      done. [L]
+
+Not filed yet, in order after #22:
+
+- **`add-sqlite-store`** `[L]` — the `sqlite://` backend, `--registry` and
+  `TSIPAM_REGISTRY`, append-only audit events, and `registry history`. Its
+  migration guide uses `registry import`.
+- **`add-serve-tsnet`** `[L]` — `tsipam serve` runs the full goa `ipam`
+  API as `svc:tsipam` on tsnet, with per-request `WhoIsForService`
+  identity, grant-capability authorization, `whoami`, and `--server`
+  remote mode. Needs the SQLite backend.
+- **`add-server-observability`** `[L]` — scheduled drift, `tsipam drift`,
+  `/metrics`, and the read-only web UI, all on the same `svc:tsipam` mux
+  and behind the `read` capability. Needs `serve`.
+
+### Other near-term work
 
 - **`autogroup:internet` as an ipset member.** Tracked as
   rshade/tailscale-utils#372 (`cross-repo`). The parsing half lands in
@@ -58,15 +83,17 @@ condition is met.
   so it needs a decision issue before any code. *Promote when:* an operator
   adopting `tsipam` on a populated tailnet reports hand-typing as the
   onboarding cost.
-- **Shared or remote registry** `[L]` — a persistent listener over the
-  existing loopback HTTP path, so a team shares one registry. This
-  contradicts the no-daemon hard no, so the bar is high. *Promote when:*
-  real multi-host concurrent-writer demand shows up.
 
 ## Completed Milestones
 
 ### 2026-Q4
 
+- Registry store split from the allocation rules: a `Store` seam, the
+  `hujsonstore` backend, and a conformance suite, with no user-visible
+  change (`refactor-registry-store`, PR #13, merged 2026-11-17; archived
+  2026-11-20). [L]
+- `go install` and release archives print the same version (PR #2, merged
+  2026-11-16; it ships in the pending 0.1.1 release). [S]
 - `tsipam` v0.1.0 released 2026-11-16: the module extracted from
   `tailscale-utils` with its history, renamed from `tail-ipam`, and moved
   onto `tsacl` v0.1.0. [L]
@@ -86,7 +113,10 @@ condition is met.
 From [`CONTEXT.md`](./CONTEXT.md):
 
 - Never writes to the tailnet; only device and Service listings are read.
-- No daemon; nothing outlives the command.
+  `tsipam serve` joins as a node and advertises a Service the operator
+  defined, and edits nothing.
+- No daemon except the opt-in `tsipam serve`; every other command leaves
+  nothing running.
 - Live state never writes declared intent without an explicit decision.
 - `gen/` is generated from `design/`, never edited by hand.
 - Policy and address logic come from `tsacl`, not reimplemented here.

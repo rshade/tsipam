@@ -13,19 +13,37 @@ It is design-first on `goa`. `design/` is the single source of truth for the
 `ipam` service's types, validation, and `/tailnet/{tailnet}/ipam/...` paths,
 and `gen/` is generated from it. Every command, even a fully local one, runs
 the generated HTTP server and client over a private Unix socket for the
-length of one invocation (`internal/loopback`). A local call and a future
-remote call therefore share one transport, encoding, and validation path.
+length of one invocation (`internal/loopback`). A local call and a remote
+call therefore share one transport, encoding, and validation path. The
+planned `tsipam serve` puts that same generated server on the tailnet as a
+Tailscale Service, and remote mode swaps the Unix socket for an HTTPS client.
 
 ## Technical Boundaries ("Hard No's")
 
 Crossing one of these is a bug, not a trade-off.
 
 - **Never writes to the tailnet.** The only Tailscale API calls are device
-  and Service listings. `tsipam` writes nothing but its own registry file and
-  that file's lock. It only reads the policy file `check-policy` compares.
-- **No daemon.** Nothing outlives the command: no listener, no PID file, no
-  supervision. A shared or remote registry would contradict this. It is
-  parked in [`ROADMAP.md`](./ROADMAP.md) with a high bar.
+  and Service listings. `tsipam` writes nothing but its own registry: the
+  HuJSON file and its lock, or the SQLite database. It only reads the policy
+  file `check-policy` compares. `tsipam serve` joins the tailnet as a tagged
+  node and advertises `svc:tsipam`, but the operator defines that Service,
+  its tags, and its grants; `tsipam` never edits policy, Service
+  definitions, routes, or devices.
+- **No daemon, except `tsipam serve`.** Every other command leaves nothing
+  running: no listener, no PID file, no supervision. `tsipam serve` is the
+  one long-running process (decided 2026-11-20, specified in the
+  `add-serve-tsnet` OpenSpec change), and it holds to these conditions:
+  - It starts only when run explicitly. No command spawns it, and a command
+    talks to it only when given `--server` or `TSIPAM_SERVER`. Local mode
+    stays the default.
+  - It serves every goa endpoint of the `ipam` service, plus `/metrics` and
+    the read-only web UI, on one mux reachable only through the Tailscale
+    Service. The opt-in `--health-listen` endpoint is the one host listener,
+    and it serves health and nothing else.
+  - Every request is identified from the tailnet (`WhoIsForService`) and
+    authorized by a grant app capability. No matching grant means deny;
+    nothing is trusted from HTTP headers.
+  - It runs one replica against a SQLite registry and refuses `file://`.
 - **Live state never writes declared intent on its own.** `plan` and `check`
   exist to catch the wire drifting from the registry. Anything that copies
   live state into the registry (adopt-from-live) needs an explicit decision
@@ -54,9 +72,10 @@ Crossing one of these is a bug, not a trade-off.
 
 | Data | Source | Owner |
 | --- | --- | --- |
-| Declared intent | `<registry-dir>/<tailnet>.ipam.hujson`, comment-preserving HuJSON | `tsipam` (`internal/registry`) |
+| Declared intent | `<registry-dir>/<tailnet>.ipam.hujson`, comment-preserving HuJSON (the default), or a SQLite database (`sqlite://<path>`, planned) | `tsipam` (`internal/registry`) |
 | Live use | Tailscale API device and Service listings, read through `tscli` | The tailnet |
 | Policy membership | The tailnet policy file passed to `check-policy` | The operator |
+| Caller identity and permissions (`serve` only) | `WhoIsForService` and grant app capabilities | The tailnet policy |
 
 `{tailnet}` is a routing and storage key, not necessarily the live tailnet
 name. It resolves from `--tailnet`, then `$TAILSCALE_TAILNET`, then the
@@ -66,19 +85,24 @@ literal `local`.
 
 - **Inbound:** the `tsipam` CLI. Flags or environment variables supply
   credentials (`TAILSCALE_API_KEY` or an OAuth client) for the live commands;
-  `calc` and the registry commands need none.
+  `calc` and the registry commands need none. Planned: HTTPS requests from
+  tailnet callers to `tsipam serve` through `svc:tsipam`.
 - **Outbound:** read-only Tailscale API calls; reads and writes of the local
-  registry file; stdout and stderr per the AX conventions in
+  registry; stdout and stderr per the AX conventions in
   [`docs/reference/ax-conventions.md`](docs/reference/ax-conventions.md).
-- **Internal:** CLI, then the goa-generated client, then a Unix socket, then
-  the generated server, then `internal/ipamsvc`, then `internal/registry`.
+  Planned: in remote mode, HTTPS requests to the server instead of the local
+  registry and API.
+- **Internal:** CLI, then the goa-generated client, then a Unix socket (or
+  HTTPS to `tsipam serve` in remote mode), then the generated server, then
+  `internal/ipamsvc`, then `internal/registry`.
 
 ## Verification
 
 Ask these of any proposed feature:
 
 1. Does it write to the tailnet, or keep a process running after the command
-   exits? If so, it violates a hard no.
+   exits? If so, it violates a hard no, unless it is `tsipam serve` acting
+   within the conditions above.
 2. Does it detect collisions in what is already live, or author policy? If
    so, it belongs in `tailnet-audit` or `tsacl`.
 3. Does it change a command, flag, exit code, the JSON envelope, or the
