@@ -45,6 +45,39 @@ Not filed yet, in order after #22:
   `/metrics`, and the read-only web UI, all on the same `svc:tsipam` mux
   and behind the `read` capability. Needs `serve`.
 
+### Allocation and drift parity
+
+Added 2026-11-20 from a survey of enterprise DDI, NetBox, AWS VPC IPAM, and
+the overlay vendors: features they have validated that fit the tailnet niche.
+None needs `tsipam serve`; each runs per invocation against either store.
+Each changes a command, the registry format, or the JSON envelope, so each is
+an OpenSpec change. Not filed yet, highest value first:
+
+- **Device-IP and `ipPool` checks** `[L]` (`cross-repo`) — `check-policy`
+  verifies that every `nodeAttrs` `ipPool` range is reserved and disjoint
+  from other pools, and `plan` and `check` flag device addresses that fall
+  outside them. `devices list` already reads device addresses. `tsacl`
+  parses `ipPool` only in its `internal/aclpolicy` package, so it must be
+  exported from `pkg/policycore` first. Read-only: `tsipam` never sets a
+  device IP.
+- **Pool allocation rules** `[M]` — per-pool minimum, maximum, and default
+  prefix length, plus optional required `owner` or `ticket`, stored in the
+  registry and enforced by `subnet allocate`. Precedent: Infoblox
+  prefix-length policies and AWS IPAM pool netmask rules.
+- **Next-free for site IDs and Service VIPs** `[M]` — allocate commands for
+  `site-id` and `service` with the same lock and `--ticket` idempotency as
+  `subnet allocate`. The Tailscale Terraform provider exposes a Service's
+  `addrs` as read-only, so a chosen VIP fills an IaC gap.
+- **Reviewed ignore list for drift** `[M]` — registry entries that mark live
+  routes or Services as known but unmanaged, reported as an `ignored` row
+  instead of `unreserved_but_live` (AWS IPAM's Managed, Unmanaged, and
+  Ignored states). A populated tailnet can pass `check` without the parked
+  `plan --adopt`, and because the list is declared intent, live state still
+  never writes the registry.
+- **Pool utilization in output** `[S]` — used and free address counts per
+  pool in `subnet list` and its JSON envelope, ahead of the `/metrics`
+  endpoint in `add-server-observability`.
+
 ### Other near-term work
 
 - **`autogroup:internet` as an ipset member.** Tracked as
@@ -61,6 +94,8 @@ Not filed yet, in order after #22:
       Gated on the repo-wide decision in rshade/tailscale-utils#394, because
       `ax-go` is a personal-repo dependency (a `CONTEXT.md` hard no without
       an explicit exception).
+      A read-only MCP server is the first slice worth shipping:
+      Infoblox, BlueCat, and NetBox all ship MCP access in 2026.
 
 Repo-wide, with no work needed here: rshade/tailscale-utils#320 asks every CLI
 to specify its `--schema` output, and `tsipam` already does.
@@ -73,16 +108,19 @@ condition is met.
 - **On-prem CIDR planning** `[L]` — planning address space that has not yet
   been advertised as a live route. *Promote when:* an operator needs to
   reserve on-prem ranges alongside Tailscale routes in one registry.
+  A cheap first slice is an `external` or `migration` reservation that marks
+  space no route may advertise, after GCP's internal-range usage types.
 - **`registry diff`** `[S]`/`[M]` — a structural diff between two registry
   snapshots, mirroring `tailnet-audit`'s diff mode. *Promote when:*
   registries are confirmed to live in git and pull-request review rather than
-  being edited ad hoc on one machine.
+  being edited ad hoc on one machine. A scheduled `registry export` from a
+  `tsipam serve` SQLite store, committed to git, also meets this condition.
 - **Adopt live state into an empty registry** `[M]` — `plan --adopt` writes
   every `unreserved_but_live` entry as a reservation. It lets the wire
   dictate declared intent, the inversion `plan` and `check` exist to catch,
   so it needs a decision issue before any code. *Promote when:* an operator
   adopting `tsipam` on a populated tailnet reports hand-typing as the
-  onboarding cost.
+  onboarding cost. Try the reviewed ignore list under Near-Term first.
 
 ## Completed Milestones
 
