@@ -8,7 +8,7 @@ actionlint = "1.7.12"
 gitleaks = "8.30.1"
 jq = "1.8.2"
 trufflehog = "3.100.1"
-"go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.10.0"
 "go:github.com/google/go-licenses/v2" = "2.0.1"
 # goa generates gen/ from design/. Keep it on the goa.design/goa/v3 version in
 # go.mod: gen-check fails when the committed gen/ differs from this generator's
