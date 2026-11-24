@@ -16,7 +16,7 @@ trufflehog = "3.100.1"
 "go:goa.design/goa/v3/cmd/goa" = "3.35.0"
 # Node only provides the npm backend for the CLIs below.
 node = "26"
-"npm:markdownlint-cli" = "0.50.0"
+"npm:markdownlint-cli" = "0.50.1"
 # @commitlint/config-conventional installs nested inside the CLI, so
 # commitlint.config.js extends it without a second pin.
 "npm:@commitlint/cli" = "21.2.4"
