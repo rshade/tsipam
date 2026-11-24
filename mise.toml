@@ -13,7 +13,7 @@ trufflehog = "3.100.1"
 # goa generates gen/ from design/. Keep it on the goa.design/goa/v3 version in
 # go.mod: gen-check fails when the committed gen/ differs from this generator's
 # output.
-"go:goa.design/goa/v3/cmd/goa" = "3.35.0"
+"go:goa.design/goa/v3/cmd/goa" = "3.36.0"
 # Node only provides the npm backend for the CLIs below.
 node = "26"
 "npm:markdownlint-cli" = "0.50.1"
