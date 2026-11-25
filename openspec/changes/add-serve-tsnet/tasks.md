@@ -52,7 +52,8 @@
 
 ## 4. Authorization
 
-- [ ] 4.1 Add `internal/server/authz`: validate the capability name (a
+- [ ] 4.1 Add `internal/server/authz` with the server role in
+      `cmd/tsipam/boundary_test.go`: validate the capability name (a
       `/cap/` segment, not the `tailscale.com` domain or a subdomain),
       decode each value of the configured capability on its own with
       `tailcfg.UnmarshalCapJSON` and count the ones that fail, then evaluate
@@ -61,19 +62,22 @@
       `specs/authorization/spec.md`, including a malformed value granting
       nothing while a valid value beside it still grants, and name
       validation for `tailscale.com/cap/x`, `sub.tailscale.com/cap/x`,
-      `example.com/x`, and the default
-- [ ] 4.2 Add the goa endpoint middleware that maps each method to its
-      action, checks the alias before any registry read, and installs the
-      `registry.WithGuard` scope check; verify with a test that a caller with
-      no action on the alias gets an identical `forbidden` for a reserved and
-      an unreserved key, and that the store saw no transaction
+      `example.com/x`, and the default; the boundary tests pass
+- [ ] 4.2 Add an endpoint-middleware parameter to `ipamhttp.NewHandler`, and
+      add `internal/server` (server role in the boundary test) with the
+      goa endpoint middleware that maps each method to its action, checks the
+      alias before any registry read, and installs the `registry.WithGuard`
+      scope check; verify with a test that a caller with no action on the alias
+      gets an identical `forbidden` for a reserved and an unreserved key, and
+      that the store saw no transaction; the boundary tests pass
 
 ## 5. Server
 
-- [ ] 5.1 Add `internal/server`: tsnet lifecycle (`Dir`, `Hostname`,
+- [ ] 5.1 Add to `internal/server`: tsnet lifecycle (`Dir`, `Hostname`,
       `AdvertiseTags`, `TS_AUTHKEY`), the Service listener with
       `PROXYProtocolVersion: 2` wrapped in a `REQUIRE` `proxyproto.Listener`,
-      `ConnContext` storing the PROXY source, an identity middleware that
+      `ConnContext` storing the PROXY source, the
+      `ipamhttp.NewHandler` handler behind an identity middleware that
       calls `WhoIsForService` on every request and sets `WithActor` and
       `WithDefaultOwner`, the `whoami` handler, a pending-approval warning,
       the health listener, and graceful shutdown; verify unit tests with a
@@ -85,23 +89,30 @@
 - [ ] 5.2 Add `cmd/tsipam/serve.go` with the flags from design.md: refuse
       `file://` and `--registry-dir`, require `--advertise-tags`, validate
       `--capability`, open the registry before joining, log the capability
-      and Service names, and keep `TS_AUTHKEY` out of every output; verify
-      `cmd` tests for each startup refusal (exit 2, exact stderr), including
+      and Service names, and keep `TS_AUTHKEY` out of every output. Give
+      `serve.go` its own entry in `commandExceptions`, listing exactly the
+      server packages it imports. Verify the boundary tests pass, `cmd`
+      tests for each startup refusal (exit 2, exact stderr), including
       a `tailscale.com` capability, and a test that the auth key never
       appears in stderr at `--verbose`
 
 ## 6. Remote client
 
-- [ ] 6.1 Add `internal/remote.Run` (goa client over HTTPS, system roots,
-      timeouts) and error classification into `server unreachable`,
+- [ ] 6.1 Add `internal/remote` with the client role in the boundary test:
+      `Run` (`ipamconn.NewClient` over HTTPS, system
+      roots, timeouts) and error classification into `server unreachable`,
       `TLS verification failed`, `access denied: ...`, and
       `unexpected server response`; verify with `httptest.NewTLSServer`
-      tests for each class plus pass-through of `collision`
-- [ ] 6.2 Add `cmd/tsipam/target.go` resolving `--server`, `TSIPAM_SERVER`,
-      `--registry`, `--registry-dir`, and `TSIPAM_REGISTRY` with the
-      exclusion and precedence rules, add `--server` to every
-      registry-backed command, and route every `loopback.RunWithLogger` call
-      site through it; verify `cmd` tests for each scenario in
+      tests for each class plus pass-through of `collision`; the boundary
+      tests pass
+- [ ] 6.2 Extend `cmd/tsipam/target.go` to resolve `--server`, `TSIPAM_SERVER`,
+      `--registry`, `--registry-dir`, and `TSIPAM_REGISTRY` with the exclusion
+      and precedence rules, add `--server` to every registry-backed command
+      including `plan` and `check`, and choose `loopback.Run` or `remote.Run`
+      there. Add `internal/remote` to the `target.go` entry in
+      `commandExceptions`; verify the boundary tests pass, with no other
+      command file listing `loopback` or `remote`, and `cmd` tests for each
+      scenario in
       `specs/remote-client/spec.md` on selection and exclusion
 - [ ] 6.3 Make `plan`, `check`, `subnet allocate`, and `calc next-free` skip
       local device reads and credential checks in remote mode, and use
@@ -152,7 +163,8 @@
       `mise run lint-md` passes and every example uses `example.ts.net` or
       `example.com`
 - [ ] 7.4 Update the `AGENTS.md` package list (`internal/server`,
-      `internal/remote`); verify `mise run lint-md` passes
+      `internal/remote`) and its boundary rule, which now also names
+      `serve.go`; verify `mise run lint-md` passes
 
 ## 8. Integration verification
 

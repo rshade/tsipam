@@ -74,9 +74,10 @@ tailnet that knows who is calling.
 
 ## Impact
 
-- **Code:** new `cmd/tsipam/serve.go`; new `internal/server` (tsnet
-  lifecycle, identity, authorization middleware); new `internal/remote`
-  (HTTPS client counterpart of `internal/loopback`); `internal/ipamsvc`
+- **Code:** new `cmd/tsipam/serve.go`; new `internal/server` (tsnet lifecycle,
+  identity, authorization middleware); new `internal/remote` (HTTPS client
+  counterpart of `internal/loopback`); `internal/ipamhttp` (endpoint
+  middleware); `cmd/tsipam/target.go` (server targets); `internal/ipamsvc`
   (authorization guard, server-side live reads, owner default, new methods);
   `cmd/tsipam/main.go` (storage selection, sanitizer seeding, exit codes).
 - **API:** `design/` gains `forbidden`, `list_live_routes`,
@@ -89,6 +90,7 @@ tailnet that knows who is calling.
 - **Precedent:** tail-watch's `ui-authorization` capability, whose lab
   findings on `WhoIsForService` this design relies on.
 - **Depends on:** `refactor-registry-store` (`Ledger`, `Store`),
+  `refactor-client-server-boundary` (`ipamhttp`, `ipamconn`, `target.go`),
   `add-sqlite-store` (`--registry` URLs, the `events` table with `actor`).
 - **Enables:** `add-server-observability` (drift timer, `/metrics`,
   read-only UI).

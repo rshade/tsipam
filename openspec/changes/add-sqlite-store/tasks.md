@@ -18,14 +18,18 @@
       `since`/`limit` filters), run only for stores implementing the
       interface; verify `go test -race ./internal/registry/storetest/` passes
 - [ ] 1.4 Implement `IdentitySource` on `hujsonstore` over `RawEntries` and
-      `RawUDPPorts`, and switch `registerKnownIdentityInventory` to it; verify
+      `RawUDPPorts`, and switch `registerKnownIdentityInventory` to it with
+      the store that `target.go` opens; verify
       `go test ./cmd/...` passes with no edits to existing sanitizer tests
 
 ## 2. `internal/registry/sqlitestore`
 
-- [ ] 2.1 Add `modernc.org/sqlite` to `go.mod`; verify `mise run cross`,
-      `mise run license-check`, and `mise run govulncheck` pass, and record
-      the release binary size before and after in the PR description
+- [ ] 2.1 Add `modernc.org/sqlite` to `go.mod` and
+      `internal/registry/sqlitestore`, which imports it, with the server role
+      in `cmd/tsipam/boundary_test.go`; verify the boundary tests,
+      `mise run cross`, `mise run license-check`, and `mise run govulncheck`
+      pass, and record the release binary size before and after in the PR
+      description
 - [ ] 2.2 Add `migrations/0001_init.sql` (schema, overlap triggers on insert
       and update, append-only triggers on `events`, indexes) embedded with
       `embed.FS`, plus the `PRAGMA user_version` migrator; verify tests for a
@@ -56,20 +60,26 @@
 
 ## 3. Backend selection
 
-- [ ] 3.1 Add `internal/registry/backend` with `Parse` and `Open`; verify
+- [ ] 3.1 Add `internal/registry/backend` with `Parse` and `Open`, and the
+      server role in the boundary test; verify the boundary tests pass and
       table tests for `file://.`, `file://./regs`, `sqlite:///abs/x.db`,
       `sqlite://C:\data\x.db`, unknown scheme, missing `://`, and empty path
-- [ ] 3.2 Add `--registry` to `addRegistryFlags` and the resolver
-      (explicit flag, then `TSIPAM_REGISTRY`, then `file://.`; both explicit
-      flags is a usage error; `--registry-dir` default is not explicit), and
-      pass the opened `Store` through `loopback.RunWithLogger`; verify CLI
-      tests for each precedence scenario in
-      `specs/registry-backends/spec.md` and that every existing `cmd/` test
-      and golden passes unchanged
-- [ ] 3.3 Register the raw URL, parsed path, and base name with the
-      sanitizer, and keep paths out of `sqlitestore` diagnostics; verify the
-      two sanitization scenarios in `specs/registry-backends/spec.md` with
-      CLI tests
+- [ ] 3.2 Add `--registry` to `addRegistryFlags` and the resolver (explicit
+      flag, then `TSIPAM_REGISTRY`, then `file://.`; both explicit flags is a
+      usage error; `--registry-dir` default is not explicit), and hold the
+      opened `Store` in `target.go`'s `registryTarget`, with
+      `internal/registry/backend` replacing `hujsonstore` in that file's entry
+      in the boundary import test; verify CLI tests for each precedence
+      scenario in `specs/registry-backends/spec.md` and that every existing
+      `cmd/` test and golden passes unchanged
+- [ ] 3.3 Register with the sanitizer the raw URL, the parsed path, and, for
+      `sqlite://`, the path's base name or, for `file://`, the registry file's
+      path and name as today; `internal/registry/backend` returns them and
+      `target.go` passes them on. Keep paths out of `sqlitestore` diagnostics;
+      verify `main.go` no longer imports `hujsonstore` or any other server
+      package, its entry is gone from the boundary import
+      test, and the two sanitization scenarios in
+      `specs/registry-backends/spec.md` with CLI tests
 - [ ] 3.4 Add CLI tests running each registry command family (site-id,
       subnet including allocate, service, udp-port, plan, check-policy, calc
       aggregate, calc next-free) against `sqlite://`, comparing JSON envelopes
