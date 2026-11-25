@@ -45,12 +45,16 @@
 
 ## 5. AWS VPC source
 
-- [ ] 5.1 Add `aws-sdk-go-v2` and a Renovate group; verify `mise run cross
-      license-check govulncheck tidy-check` pass, `scripts/notice.sh` succeeds, and
-      the release binary size before and after is in the PR body
+- [ ] 5.1 Record the release binary size, then add `aws-sdk-go-v2` (`config` and
+      `service/ec2`) and a Renovate group; verify
+      `go list -m github.com/aws/aws-sdk-go-v2/config github.com/aws/aws-sdk-go-v2/service/ec2`
+      names both. Nothing imports them yet, so 5.2 and 7.1 hold the checks that see
+      only imported code
 - [ ] 5.2 Add `internal/sources/awsvpc` with the two-method client interface; verify
       table tests for every association state, IPv4 and IPv6, `resource=subnet`, the
-      `vpc` filter, pagination, and a failing later page
+      `vpc` filter, pagination, and a failing later page. This is the first non-test
+      import of the SDK, so also verify
+      `mise run cross ::: license-check ::: govulncheck ::: tidy-check` passes
 - [ ] 5.3 Map failures to `CollectionError`; verify tests over real SDK errors from an
       `httptest` endpoint (401, 403, 503, throttling, timeout, no credentials) that
       the reason is right and no ARN, account ID, or body text appears
@@ -73,8 +77,10 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Run `mise run test lint cross smoke`; verify all pass with unchanged smoke
-      cases for registries without sources
+- [ ] 7.1 Run `mise run test ::: lint ::: cross ::: smoke`; verify all pass with
+      unchanged smoke cases for registries without sources, `mise run notice`
+      succeeds, and the release binary size, beside the one from 5.1, is in the PR
+      body
 - [ ] 7.2 Revise the `add-serve-tsnet` plan for source collection and the `admin` gate
       with `openspec-update-change`, or file an issue if it is already applied; verify
       `openspec validate --changes` passes

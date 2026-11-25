@@ -82,8 +82,8 @@
 
 ## 6. Integration
 
-- [ ] 6.1 Run `mise run test lint cross smoke`; verify all pass and the unchanged
-      smoke cases confirm a registry without spaces behaves as before
+- [ ] 6.1 Run `mise run test ::: lint ::: cross ::: smoke`; verify all pass and the
+      unchanged smoke cases confirm a registry without spaces behaves as before
 - [ ] 6.2 Revise the plans of `add-registry-export-import`, `add-sqlite-store`,
       `add-serve-tsnet`, and `add-server-observability` for spaces with
       `openspec-update-change`, skipping any already applied and filing an issue for
