@@ -21,7 +21,7 @@ node = "26"
 # commitlint.config.js extends it without a second pin.
 "npm:@commitlint/cli" = "21.2.4"
 # The OpenSpec CLI behind the openspec/ workflow and the Copilot setup steps.
-"npm:@fission-ai/openspec" = "2.1.0"
+"npm:@fission-ai/openspec" = "2.2.0"
 
 [tasks.lint]
 description = "Run every check"
