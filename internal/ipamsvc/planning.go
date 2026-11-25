@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	ipam "github.com/rshade/tsipam/gen/ipam"
+	"github.com/rshade/tsipam/internal/devices"
 	"github.com/rshade/tsipam/internal/planner"
 )
 
@@ -19,7 +20,7 @@ func (s *Service) Plan(ctx context.Context, payload *ipam.PlanPayload) (*ipam.Co
 	}
 	live, err := s.CollectLive(ctx, payload.LiveTailnet, s.Logger)
 	if err != nil {
-		return nil, ipam.MakeComparisonFailed(err)
+		return nil, collectionFailed(err)
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, ipam.MakeComparisonFailed(err)
@@ -39,4 +40,15 @@ func (s *Service) Plan(ctx context.Context, payload *ipam.PlanPayload) (*ipam.Co
 		}
 	}
 	return result, nil
+}
+
+// collectionFailed is a comparison failure that keeps what a caller needs to
+// decide on a retry. The Go type does not cross the transport; these fields do.
+func collectionFailed(err error) error {
+	failure := ipam.MakeComparisonFailed(err)
+	if collection, ok := errors.AsType[*devices.CollectionError](err); ok {
+		failure.Timeout = collection.Timeout
+		failure.Temporary = collection.Temporary
+	}
+	return failure
 }

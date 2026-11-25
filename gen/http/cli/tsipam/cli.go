@@ -82,6 +82,7 @@ func ParseEndpoint(
 		ipamReleaseSiteIDFlags       = flag.NewFlagSet("release-site-id", flag.ExitOnError)
 		ipamReleaseSiteIDTailnetFlag = new(cliStringFlag)
 		ipamReleaseSiteIDIDFlag      = new(cliStringFlag)
+		ipamReleaseSiteIDDryRunFlag  = ipamReleaseSiteIDFlags.String("dry-run", "false", "")
 
 		ipamListSubnetPoolsFlags       = flag.NewFlagSet("list-subnet-pools", flag.ExitOnError)
 		ipamListSubnetPoolsTailnetFlag = new(cliStringFlag)
@@ -97,6 +98,7 @@ func ParseEndpoint(
 		ipamReleaseSubnetPoolFlags       = flag.NewFlagSet("release-subnet-pool", flag.ExitOnError)
 		ipamReleaseSubnetPoolTailnetFlag = new(cliStringFlag)
 		ipamReleaseSubnetPoolCidrFlag    = new(cliStringFlag)
+		ipamReleaseSubnetPoolDryRunFlag  = ipamReleaseSubnetPoolFlags.String("dry-run", "false", "")
 
 		ipamListServiceAddressesFlags       = flag.NewFlagSet("list-service-addresses", flag.ExitOnError)
 		ipamListServiceAddressesTailnetFlag = new(cliStringFlag)
@@ -108,6 +110,7 @@ func ParseEndpoint(
 		ipamReleaseServiceAddressFlags       = flag.NewFlagSet("release-service-address", flag.ExitOnError)
 		ipamReleaseServiceAddressTailnetFlag = new(cliStringFlag)
 		ipamReleaseServiceAddressAddressFlag = new(cliStringFlag)
+		ipamReleaseServiceAddressDryRunFlag  = ipamReleaseServiceAddressFlags.String("dry-run", "false", "")
 
 		ipamListUDPPortsFlags       = flag.NewFlagSet("list-udp-ports", flag.ExitOnError)
 		ipamListUDPPortsTailnetFlag = new(cliStringFlag)
@@ -121,6 +124,7 @@ func ParseEndpoint(
 		ipamReleaseUDPPortTailnetFlag = new(cliStringFlag)
 		ipamReleaseUDPPortSiteFlag    = new(cliStringFlag)
 		ipamReleaseUDPPortPortFlag    = new(cliStringFlag)
+		ipamReleaseUDPPortDryRunFlag  = ipamReleaseUDPPortFlags.String("dry-run", "false", "")
 	)
 	ipamPlanFlags.Var(ipamPlanTailnetFlag, "tailnet", "Routing/storage key for the registry.")
 	ipamPlanFlags.Var(ipamPlanLiveTailnetFlag, "live-tailnet", "")
@@ -286,7 +290,7 @@ func ParseEndpoint(
 				data, err = ipamc.BuildReserveSiteIDPayload(ipamReserveSiteIDBodyFlag.value, ipamReserveSiteIDTailnetFlag.value)
 			case "release-site-id":
 				endpoint = c.ReleaseSiteID()
-				data, err = ipamc.BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnetFlag.value, ipamReleaseSiteIDIDFlag.value)
+				data, err = ipamc.BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnetFlag.value, ipamReleaseSiteIDIDFlag.value, *ipamReleaseSiteIDDryRunFlag)
 			case "list-subnet-pools":
 				endpoint = c.ListSubnetPools()
 				data, err = ipamc.BuildListSubnetPoolsPayload(ipamListSubnetPoolsTailnetFlag.value)
@@ -298,7 +302,7 @@ func ParseEndpoint(
 				data, err = ipamc.BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBodyFlag.value, ipamAllocateSubnetPoolTailnetFlag.value)
 			case "release-subnet-pool":
 				endpoint = c.ReleaseSubnetPool()
-				data, err = ipamc.BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnetFlag.value, ipamReleaseSubnetPoolCidrFlag.value)
+				data, err = ipamc.BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnetFlag.value, ipamReleaseSubnetPoolCidrFlag.value, *ipamReleaseSubnetPoolDryRunFlag)
 			case "list-service-addresses":
 				endpoint = c.ListServiceAddresses()
 				data, err = ipamc.BuildListServiceAddressesPayload(ipamListServiceAddressesTailnetFlag.value)
@@ -307,7 +311,7 @@ func ParseEndpoint(
 				data, err = ipamc.BuildReserveServiceAddressPayload(ipamReserveServiceAddressBodyFlag.value, ipamReserveServiceAddressTailnetFlag.value)
 			case "release-service-address":
 				endpoint = c.ReleaseServiceAddress()
-				data, err = ipamc.BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnetFlag.value, ipamReleaseServiceAddressAddressFlag.value)
+				data, err = ipamc.BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnetFlag.value, ipamReleaseServiceAddressAddressFlag.value, *ipamReleaseServiceAddressDryRunFlag)
 			case "list-udp-ports":
 				endpoint = c.ListUDPPorts()
 				data, err = ipamc.BuildListUDPPortsPayload(ipamListUDPPortsTailnetFlag.value, ipamListUDPPortsSiteFlag.value)
@@ -316,7 +320,7 @@ func ParseEndpoint(
 				data, err = ipamc.BuildReserveUDPPortPayload(ipamReserveUDPPortBodyFlag.value, ipamReserveUDPPortTailnetFlag.value)
 			case "release-udp-port":
 				endpoint = c.ReleaseUDPPort()
-				data, err = ipamc.BuildReleaseUDPPortPayload(ipamReleaseUDPPortTailnetFlag.value, ipamReleaseUDPPortSiteFlag.value, ipamReleaseUDPPortPortFlag.value)
+				data, err = ipamc.BuildReleaseUDPPortPayload(ipamReleaseUDPPortTailnetFlag.value, ipamReleaseUDPPortSiteFlag.value, ipamReleaseUDPPortPortFlag.value, *ipamReleaseUDPPortDryRunFlag)
 			}
 		}
 	}
@@ -426,7 +430,7 @@ func ipamReserveSiteIDUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-site-id --body '{\n      \"description\": \"Dolores quia eveniet odit numquam ex.\",\n      \"id\": \"Necessitatibus aperiam voluptatem quasi distinctio.\",\n      \"owner\": \"Eveniet dolor sunt soluta tenetur et.\",\n      \"reserved_at\": \"2006-10-21T04:41:45Z\",\n      \"site\": \"Similique quia est quos neque rem.\",\n      \"ticket\": \"Est neque velit.\"\n   }' --tailnet \"Facilis nihil.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-site-id --body '{\n      \"description\": \"Dolores quia eveniet odit numquam ex.\",\n      \"dry_run\": true,\n      \"id\": \"Necessitatibus aperiam voluptatem quasi distinctio.\",\n      \"owner\": \"Eveniet dolor sunt soluta tenetur et.\",\n      \"reserved_at\": \"2006-10-21T04:41:45Z\",\n      \"site\": \"Similique quia est quos neque rem.\",\n      \"ticket\": \"Est neque velit.\"\n   }' --tailnet \"Facilis nihil.\"")
 }
 
 func ipamReleaseSiteIDUsage() {
@@ -434,6 +438,7 @@ func ipamReleaseSiteIDUsage() {
 	fmt.Fprintf(os.Stderr, "%s [flags] ipam release-site-id", os.Args[0])
 	fmt.Fprint(os.Stderr, " -tailnet STRING")
 	fmt.Fprint(os.Stderr, " -id STRING")
+	fmt.Fprint(os.Stderr, " -dry-run BOOL")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -443,10 +448,11 @@ func ipamReleaseSiteIDUsage() {
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
 	fmt.Fprintln(os.Stderr, `    -id STRING: 4via6 site ID to release.`)
+	fmt.Fprintln(os.Stderr, `    -dry-run BOOL: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-site-id --tailnet \"Eligendi officia.\" --id \"Veritatis ut aut animi consequatur ea.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-site-id --tailnet \"Eligendi officia.\" --id \"Veritatis ut aut animi consequatur ea.\" --dry-run true")
 }
 
 func ipamListSubnetPoolsUsage() {
@@ -484,7 +490,7 @@ func ipamReserveSubnetPoolUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-subnet-pool --body '{\n      \"cidr\": \"Sint et.\",\n      \"description\": \"Vel quo et aliquam ducimus quia ut.\",\n      \"owner\": \"Animi nisi totam.\",\n      \"reserved_at\": \"2013-06-13T22:28:00Z\",\n      \"site\": \"Ab aut sequi soluta expedita accusantium.\",\n      \"ticket\": \"Minima accusantium qui ratione quis sunt maiores.\"\n   }' --tailnet \"Est doloremque dignissimos quas ea voluptates corporis.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-subnet-pool --body '{\n      \"cidr\": \"Sint et.\",\n      \"description\": \"Vel quo et aliquam ducimus quia ut.\",\n      \"dry_run\": false,\n      \"owner\": \"Animi nisi totam.\",\n      \"reserved_at\": \"2013-06-13T22:28:00Z\",\n      \"site\": \"Ab aut sequi soluta expedita accusantium.\",\n      \"ticket\": \"Minima accusantium qui ratione quis sunt maiores.\"\n   }' --tailnet \"Est doloremque dignissimos quas ea voluptates corporis.\"")
 }
 
 func ipamAllocateSubnetPoolUsage() {
@@ -504,7 +510,7 @@ func ipamAllocateSubnetPoolUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam allocate-subnet-pool --body '{\n      \"description\": \"Consequatur numquam dolores excepturi ratione.\",\n      \"live_taken\": [\n         \"Et minus excepturi consectetur vel officiis atque.\",\n         \"Molestiae voluptatem quaerat magni alias.\",\n         \"Explicabo natus expedita praesentium enim rerum.\",\n         \"Quibusdam consectetur.\"\n      ],\n      \"owner\": \"Qui totam.\",\n      \"pool\": \"Qui quasi molestiae molestiae.\",\n      \"reserved_at\": \"2001-04-05T06:12:25Z\",\n      \"site\": \"Officia doloribus est eius quas sunt optio.\",\n      \"size\": 3038387140018466755,\n      \"ticket\": \"Sunt cumque.\"\n   }' --tailnet \"Debitis iure.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam allocate-subnet-pool --body '{\n      \"description\": \"Consequatur numquam dolores excepturi ratione.\",\n      \"dry_run\": false,\n      \"live_taken\": [\n         \"Et minus excepturi consectetur vel officiis atque.\",\n         \"Molestiae voluptatem quaerat magni alias.\",\n         \"Explicabo natus expedita praesentium enim rerum.\",\n         \"Quibusdam consectetur.\"\n      ],\n      \"owner\": \"Qui totam.\",\n      \"pool\": \"Qui quasi molestiae molestiae.\",\n      \"reserved_at\": \"2001-04-05T06:12:25Z\",\n      \"site\": \"Officia doloribus est eius quas sunt optio.\",\n      \"size\": 3038387140018466755,\n      \"ticket\": \"Sunt cumque.\"\n   }' --tailnet \"Debitis iure.\"")
 }
 
 func ipamReleaseSubnetPoolUsage() {
@@ -512,6 +518,7 @@ func ipamReleaseSubnetPoolUsage() {
 	fmt.Fprintf(os.Stderr, "%s [flags] ipam release-subnet-pool", os.Args[0])
 	fmt.Fprint(os.Stderr, " -tailnet STRING")
 	fmt.Fprint(os.Stderr, " -cidr STRING")
+	fmt.Fprint(os.Stderr, " -dry-run BOOL")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -521,10 +528,11 @@ func ipamReleaseSubnetPoolUsage() {
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
 	fmt.Fprintln(os.Stderr, `    -cidr STRING: `)
+	fmt.Fprintln(os.Stderr, `    -dry-run BOOL: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-subnet-pool --tailnet \"Sint quo.\" --cidr \"Consequuntur est.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-subnet-pool --tailnet \"Sint quo.\" --cidr \"Consequuntur est.\" --dry-run false")
 }
 
 func ipamListServiceAddressesUsage() {
@@ -562,7 +570,7 @@ func ipamReserveServiceAddressUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-service-address --body '{\n      \"address\": \"Distinctio qui sed ipsum ut.\",\n      \"description\": \"Aperiam quo.\",\n      \"owner\": \"Quae facere deserunt sit saepe.\",\n      \"reserved_at\": \"1980-11-01T05:11:18Z\",\n      \"service\": \"Non ut quidem dolores modi.\",\n      \"ticket\": \"Qui pariatur dignissimos.\"\n   }' --tailnet \"Eum et occaecati cupiditate sequi et.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-service-address --body '{\n      \"address\": \"Distinctio qui sed ipsum ut.\",\n      \"description\": \"Aperiam quo.\",\n      \"dry_run\": false,\n      \"owner\": \"Quae facere deserunt sit saepe.\",\n      \"reserved_at\": \"1980-11-01T05:11:18Z\",\n      \"service\": \"Non ut quidem dolores modi.\",\n      \"ticket\": \"Qui pariatur dignissimos.\"\n   }' --tailnet \"Eum et occaecati cupiditate sequi et.\"")
 }
 
 func ipamReleaseServiceAddressUsage() {
@@ -570,6 +578,7 @@ func ipamReleaseServiceAddressUsage() {
 	fmt.Fprintf(os.Stderr, "%s [flags] ipam release-service-address", os.Args[0])
 	fmt.Fprint(os.Stderr, " -tailnet STRING")
 	fmt.Fprint(os.Stderr, " -address STRING")
+	fmt.Fprint(os.Stderr, " -dry-run BOOL")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -579,10 +588,11 @@ func ipamReleaseServiceAddressUsage() {
 	// Flags list
 	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
 	fmt.Fprintln(os.Stderr, `    -address STRING: `)
+	fmt.Fprintln(os.Stderr, `    -dry-run BOOL: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-service-address --tailnet \"Inventore qui voluptatum et.\" --address \"Saepe et rerum omnis.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-service-address --tailnet \"Inventore qui voluptatum et.\" --address \"Saepe et rerum omnis.\" --dry-run false")
 }
 
 func ipamListUDPPortsUsage() {
@@ -622,7 +632,7 @@ func ipamReserveUDPPortUsage() {
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-udp-port --body '{\n      \"device\": \"Voluptates aspernatur tenetur et eaque.\",\n      \"port\": \"Ut rerum.\",\n      \"site\": \"Corrupti maiores occaecati incidunt sit.\"\n   }' --tailnet \"Ea tempora consequatur eaque qui recusandae.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam reserve-udp-port --body '{\n      \"device\": \"Voluptates aspernatur tenetur et eaque.\",\n      \"dry_run\": true,\n      \"port\": \"Ut rerum.\",\n      \"site\": \"Corrupti maiores occaecati incidunt sit.\"\n   }' --tailnet \"Ea tempora consequatur eaque qui recusandae.\"")
 }
 
 func ipamReleaseUDPPortUsage() {
@@ -631,6 +641,7 @@ func ipamReleaseUDPPortUsage() {
 	fmt.Fprint(os.Stderr, " -tailnet STRING")
 	fmt.Fprint(os.Stderr, " -site STRING")
 	fmt.Fprint(os.Stderr, " -port STRING")
+	fmt.Fprint(os.Stderr, " -dry-run BOOL")
 	fmt.Fprintln(os.Stderr)
 
 	// Description
@@ -641,8 +652,9 @@ func ipamReleaseUDPPortUsage() {
 	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
 	fmt.Fprintln(os.Stderr, `    -site STRING: `)
 	fmt.Fprintln(os.Stderr, `    -port STRING: `)
+	fmt.Fprintln(os.Stderr, `    -dry-run BOOL: `)
 
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
-	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-udp-port --tailnet \"Quia dolorem.\" --site \"Quod omnis et.\" --port \"Ipsam cumque corporis animi quidem est.\"")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam release-udp-port --tailnet \"Quia dolorem.\" --site \"Quod omnis et.\" --port \"Ipsam cumque corporis animi quidem est.\" --dry-run true")
 }

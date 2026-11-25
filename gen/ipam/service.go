@@ -91,6 +91,8 @@ type AllocateSubnetPoolPayload struct {
 	Ticket *string
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // AllocateSubnetPoolResult is the result type of the ipam service
@@ -234,6 +236,8 @@ type ReleaseServiceAddressPayload struct {
 	Tailnet string
 	// Bare IPv4 host or exact IPv4 /32 prefix to release.
 	Address string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // ReleaseServiceAddressResult is the result type of the ipam service
@@ -252,6 +256,8 @@ type ReleaseSiteIDPayload struct {
 	Tailnet string
 	// 4via6 site ID to release.
 	ID string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // ReleaseSiteIDResult is the result type of the ipam service release_site_id
@@ -270,6 +276,8 @@ type ReleaseSubnetPoolPayload struct {
 	Tailnet string
 	// Canonical IPv4 or IPv6 CIDR prefix to release.
 	CIDR string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // ReleaseSubnetPoolResult is the result type of the ipam service
@@ -290,6 +298,8 @@ type ReleaseUDPPortPayload struct {
 	Site string
 	// Decimal UDP listen port to release, 1024-65535.
 	Port string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // ReleaseUDPPortResult is the result type of the ipam service release_udp_port
@@ -320,6 +330,8 @@ type ReserveServiceAddressPayload struct {
 	Ticket *string
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // ReserveServiceAddressResult is the result type of the ipam service
@@ -358,6 +370,8 @@ type ReserveSiteIDPayload struct {
 	Ticket *string
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // ReserveSiteIDResult is the result type of the ipam service reserve_site_id
@@ -396,6 +410,8 @@ type ReserveSubnetPoolPayload struct {
 	Ticket *string
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // ReserveSubnetPoolResult is the result type of the ipam service
@@ -428,6 +444,8 @@ type ReserveUDPPortPayload struct {
 	Port string
 	// Device label to reserve the port for.
 	Device string
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool
 }
 
 // ReserveUDPPortResult is the result type of the ipam service reserve_udp_port

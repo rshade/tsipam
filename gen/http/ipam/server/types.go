@@ -34,6 +34,8 @@ type ReserveSiteIDRequestBody struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun *bool `form:"dry_run,omitempty" json:"dry_run,omitempty" xml:"dry_run,omitempty"`
 }
 
 // ReserveSubnetPoolRequestBody is the type of the "ipam" service
@@ -51,6 +53,8 @@ type ReserveSubnetPoolRequestBody struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun *bool `form:"dry_run,omitempty" json:"dry_run,omitempty" xml:"dry_run,omitempty"`
 }
 
 // AllocateSubnetPoolRequestBody is the type of the "ipam" service
@@ -74,6 +78,8 @@ type AllocateSubnetPoolRequestBody struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun *bool `form:"dry_run,omitempty" json:"dry_run,omitempty" xml:"dry_run,omitempty"`
 }
 
 // ReserveServiceAddressRequestBody is the type of the "ipam" service
@@ -91,6 +97,8 @@ type ReserveServiceAddressRequestBody struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun *bool `form:"dry_run,omitempty" json:"dry_run,omitempty" xml:"dry_run,omitempty"`
 }
 
 // ReserveUDPPortRequestBody is the type of the "ipam" service
@@ -102,6 +110,8 @@ type ReserveUDPPortRequestBody struct {
 	Port *string `form:"port,omitempty" json:"port,omitempty" xml:"port,omitempty"`
 	// Device label to reserve the port for.
 	Device *string `form:"device,omitempty" json:"device,omitempty" xml:"device,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun *bool `form:"dry_run,omitempty" json:"dry_run,omitempty" xml:"dry_run,omitempty"`
 }
 
 // PlanResponseBody is the type of the "ipam" service "plan" endpoint HTTP
@@ -1196,6 +1206,12 @@ func NewReserveSiteIDPayload(body *ReserveSiteIDRequestBody, tailnet string) *ip
 		Ticket:      body.Ticket,
 		ReservedAt:  body.ReservedAt,
 	}
+	if body.DryRun != nil {
+		v.DryRun = *body.DryRun
+	}
+	if body.DryRun == nil {
+		v.DryRun = false
+	}
 	v.Tailnet = tailnet
 
 	return v
@@ -1203,10 +1219,11 @@ func NewReserveSiteIDPayload(body *ReserveSiteIDRequestBody, tailnet string) *ip
 
 // NewReleaseSiteIDPayload builds a ipam service release_site_id endpoint
 // payload.
-func NewReleaseSiteIDPayload(tailnet string, id string) *ipam.ReleaseSiteIDPayload {
+func NewReleaseSiteIDPayload(tailnet string, id string, dryRun bool) *ipam.ReleaseSiteIDPayload {
 	v := &ipam.ReleaseSiteIDPayload{}
 	v.Tailnet = tailnet
 	v.ID = id
+	v.DryRun = dryRun
 
 	return v
 }
@@ -1231,6 +1248,12 @@ func NewReserveSubnetPoolPayload(body *ReserveSubnetPoolRequestBody, tailnet str
 		Ticket:      body.Ticket,
 		ReservedAt:  body.ReservedAt,
 	}
+	if body.DryRun != nil {
+		v.DryRun = *body.DryRun
+	}
+	if body.DryRun == nil {
+		v.DryRun = false
+	}
 	v.Tailnet = tailnet
 
 	return v
@@ -1248,11 +1271,17 @@ func NewAllocateSubnetPoolPayload(body *AllocateSubnetPoolRequestBody, tailnet s
 		Ticket:      body.Ticket,
 		ReservedAt:  body.ReservedAt,
 	}
+	if body.DryRun != nil {
+		v.DryRun = *body.DryRun
+	}
 	if body.LiveTaken != nil {
 		v.LiveTaken = make([]string, len(body.LiveTaken))
 		for i, val := range body.LiveTaken {
 			v.LiveTaken[i] = val
 		}
+	}
+	if body.DryRun == nil {
+		v.DryRun = false
 	}
 	v.Tailnet = tailnet
 
@@ -1261,10 +1290,11 @@ func NewAllocateSubnetPoolPayload(body *AllocateSubnetPoolRequestBody, tailnet s
 
 // NewReleaseSubnetPoolPayload builds a ipam service release_subnet_pool
 // endpoint payload.
-func NewReleaseSubnetPoolPayload(tailnet string, cidr string) *ipam.ReleaseSubnetPoolPayload {
+func NewReleaseSubnetPoolPayload(tailnet string, cidr string, dryRun bool) *ipam.ReleaseSubnetPoolPayload {
 	v := &ipam.ReleaseSubnetPoolPayload{}
 	v.Tailnet = tailnet
 	v.CIDR = cidr
+	v.DryRun = dryRun
 
 	return v
 }
@@ -1289,6 +1319,12 @@ func NewReserveServiceAddressPayload(body *ReserveServiceAddressRequestBody, tai
 		Ticket:      body.Ticket,
 		ReservedAt:  body.ReservedAt,
 	}
+	if body.DryRun != nil {
+		v.DryRun = *body.DryRun
+	}
+	if body.DryRun == nil {
+		v.DryRun = false
+	}
 	v.Tailnet = tailnet
 
 	return v
@@ -1296,10 +1332,11 @@ func NewReserveServiceAddressPayload(body *ReserveServiceAddressRequestBody, tai
 
 // NewReleaseServiceAddressPayload builds a ipam service
 // release_service_address endpoint payload.
-func NewReleaseServiceAddressPayload(tailnet string, address string) *ipam.ReleaseServiceAddressPayload {
+func NewReleaseServiceAddressPayload(tailnet string, address string, dryRun bool) *ipam.ReleaseServiceAddressPayload {
 	v := &ipam.ReleaseServiceAddressPayload{}
 	v.Tailnet = tailnet
 	v.Address = address
+	v.DryRun = dryRun
 
 	return v
 }
@@ -1321,6 +1358,12 @@ func NewReserveUDPPortPayload(body *ReserveUDPPortRequestBody, tailnet string) *
 		Port:   *body.Port,
 		Device: *body.Device,
 	}
+	if body.DryRun != nil {
+		v.DryRun = *body.DryRun
+	}
+	if body.DryRun == nil {
+		v.DryRun = false
+	}
 	v.Tailnet = tailnet
 
 	return v
@@ -1328,11 +1371,12 @@ func NewReserveUDPPortPayload(body *ReserveUDPPortRequestBody, tailnet string) *
 
 // NewReleaseUDPPortPayload builds a ipam service release_udp_port endpoint
 // payload.
-func NewReleaseUDPPortPayload(tailnet string, site string, port string) *ipam.ReleaseUDPPortPayload {
+func NewReleaseUDPPortPayload(tailnet string, site string, port string, dryRun bool) *ipam.ReleaseUDPPortPayload {
 	v := &ipam.ReleaseUDPPortPayload{}
 	v.Tailnet = tailnet
 	v.Site = site
 	v.Port = port
+	v.DryRun = dryRun
 
 	return v
 }

@@ -214,10 +214,15 @@ func (c *Client) ReserveSiteID() goa.Endpoint {
 // service release_site_id server.
 func (c *Client) ReleaseSiteID() goa.Endpoint {
 	var (
+		encodeRequest  = EncodeReleaseSiteIDRequest(c.encoder)
 		decodeResponse = DecodeReleaseSiteIDResponse(c.decoder, c.RestoreResponseBody)
 	)
 	return func(ctx context.Context, v any) (any, error) {
 		req, err := c.BuildReleaseSiteIDRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
 		if err != nil {
 			return nil, err
 		}

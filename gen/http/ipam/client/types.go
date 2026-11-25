@@ -34,6 +34,8 @@ type ReserveSiteIDRequestBody struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool `form:"dry_run" json:"dry_run" xml:"dry_run"`
 }
 
 // ReserveSubnetPoolRequestBody is the type of the "ipam" service
@@ -51,6 +53,8 @@ type ReserveSubnetPoolRequestBody struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool `form:"dry_run" json:"dry_run" xml:"dry_run"`
 }
 
 // AllocateSubnetPoolRequestBody is the type of the "ipam" service
@@ -74,6 +78,8 @@ type AllocateSubnetPoolRequestBody struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool `form:"dry_run" json:"dry_run" xml:"dry_run"`
 }
 
 // ReserveServiceAddressRequestBody is the type of the "ipam" service
@@ -91,6 +97,8 @@ type ReserveServiceAddressRequestBody struct {
 	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
 	// RFC 3339 timestamp this reservation's metadata was recorded.
 	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool `form:"dry_run" json:"dry_run" xml:"dry_run"`
 }
 
 // ReserveUDPPortRequestBody is the type of the "ipam" service
@@ -102,6 +110,8 @@ type ReserveUDPPortRequestBody struct {
 	Port string `form:"port" json:"port" xml:"port"`
 	// Device label to reserve the port for.
 	Device string `form:"device" json:"device" xml:"device"`
+	// Report the outcome a real call would have and change nothing.
+	DryRun bool `form:"dry_run" json:"dry_run" xml:"dry_run"`
 }
 
 // PlanResponseBody is the type of the "ipam" service "plan" endpoint HTTP
@@ -688,6 +698,13 @@ func NewReserveSiteIDRequestBody(p *ipam.ReserveSiteIDPayload) *ReserveSiteIDReq
 		Description: p.Description,
 		Ticket:      p.Ticket,
 		ReservedAt:  p.ReservedAt,
+		DryRun:      p.DryRun,
+	}
+	{
+		var zero bool
+		if body.DryRun == zero {
+			body.DryRun = false
+		}
 	}
 	return body
 }
@@ -702,6 +719,13 @@ func NewReserveSubnetPoolRequestBody(p *ipam.ReserveSubnetPoolPayload) *ReserveS
 		Description: p.Description,
 		Ticket:      p.Ticket,
 		ReservedAt:  p.ReservedAt,
+		DryRun:      p.DryRun,
+	}
+	{
+		var zero bool
+		if body.DryRun == zero {
+			body.DryRun = false
+		}
 	}
 	return body
 }
@@ -717,11 +741,18 @@ func NewAllocateSubnetPoolRequestBody(p *ipam.AllocateSubnetPoolPayload) *Alloca
 		Description: p.Description,
 		Ticket:      p.Ticket,
 		ReservedAt:  p.ReservedAt,
+		DryRun:      p.DryRun,
 	}
 	if p.LiveTaken != nil {
 		body.LiveTaken = make([]string, len(p.LiveTaken))
 		for i, val := range p.LiveTaken {
 			body.LiveTaken[i] = val
+		}
+	}
+	{
+		var zero bool
+		if body.DryRun == zero {
+			body.DryRun = false
 		}
 	}
 	return body
@@ -737,6 +768,13 @@ func NewReserveServiceAddressRequestBody(p *ipam.ReserveServiceAddressPayload) *
 		Description: p.Description,
 		Ticket:      p.Ticket,
 		ReservedAt:  p.ReservedAt,
+		DryRun:      p.DryRun,
+	}
+	{
+		var zero bool
+		if body.DryRun == zero {
+			body.DryRun = false
+		}
 	}
 	return body
 }
@@ -748,6 +786,13 @@ func NewReserveUDPPortRequestBody(p *ipam.ReserveUDPPortPayload) *ReserveUDPPort
 		Site:   p.Site,
 		Port:   p.Port,
 		Device: p.Device,
+		DryRun: p.DryRun,
+	}
+	{
+		var zero bool
+		if body.DryRun == zero {
+			body.DryRun = false
+		}
 	}
 	return body
 }

@@ -80,7 +80,7 @@ func (s *Service) ListSiteIds(ctx context.Context, p *ipam.ListSiteIdsPayload) (
 
 // ReserveSiteID implements ipam.Service.
 func (s *Service) ReserveSiteID(ctx context.Context, p *ipam.ReserveSiteIDPayload) (*ipam.ReserveSiteIDResult, error) {
-	id, site, metadata, changed, err := s.Ledger.ReserveSiteID(
+	id, site, metadata, changed, err := s.ledger(p.DryRun).ReserveSiteID(
 		ctx, p.Tailnet, p.ID, p.Site,
 		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt),
 	)
@@ -96,7 +96,7 @@ func (s *Service) ReserveSiteID(ctx context.Context, p *ipam.ReserveSiteIDPayloa
 
 // ReleaseSiteID implements ipam.Service.
 func (s *Service) ReleaseSiteID(ctx context.Context, p *ipam.ReleaseSiteIDPayload) (*ipam.ReleaseSiteIDResult, error) {
-	id, changed, err := s.Ledger.ReleaseSiteID(ctx, p.Tailnet, p.ID)
+	id, changed, err := s.ledger(p.DryRun).ReleaseSiteID(ctx, p.Tailnet, p.ID)
 	if err != nil {
 		return nil, translateSiteIDError(err)
 	}
@@ -128,7 +128,7 @@ func (s *Service) ReserveSubnetPool(
 	ctx context.Context,
 	p *ipam.ReserveSubnetPoolPayload,
 ) (*ipam.ReserveSubnetPoolResult, error) {
-	cidr, site, metadata, changed, err := s.Ledger.ReserveSubnetPool(
+	cidr, site, metadata, changed, err := s.ledger(p.DryRun).ReserveSubnetPool(
 		ctx, p.Tailnet, p.CIDR, p.Site,
 		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt),
 	)
@@ -147,7 +147,7 @@ func (s *Service) AllocateSubnetPool(
 	ctx context.Context,
 	p *ipam.AllocateSubnetPoolPayload,
 ) (*ipam.AllocateSubnetPoolResult, error) {
-	cidr, site, metadata, changed, err := s.Ledger.AllocateSubnetPool(
+	cidr, site, metadata, changed, err := s.ledger(p.DryRun).AllocateSubnetPool(
 		ctx, p.Tailnet, p.Pool, p.Size, p.Site, p.LiveTaken,
 		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt),
 	)
@@ -166,7 +166,7 @@ func (s *Service) ReleaseSubnetPool(
 	ctx context.Context,
 	p *ipam.ReleaseSubnetPoolPayload,
 ) (*ipam.ReleaseSubnetPoolResult, error) {
-	cidr, changed, err := s.Ledger.ReleaseSubnetPool(ctx, p.Tailnet, p.CIDR)
+	cidr, changed, err := s.ledger(p.DryRun).ReleaseSubnetPool(ctx, p.Tailnet, p.CIDR)
 	if err != nil {
 		return nil, translateSubnetPoolError(err)
 	}
@@ -198,7 +198,7 @@ func (s *Service) ReserveServiceAddress(
 	ctx context.Context,
 	p *ipam.ReserveServiceAddressPayload,
 ) (*ipam.ReserveServiceAddressResult, error) {
-	address, service, metadata, changed, err := s.Ledger.ReserveServiceAddress(
+	address, service, metadata, changed, err := s.ledger(p.DryRun).ReserveServiceAddress(
 		ctx, p.Tailnet, p.Address, p.Service,
 		metadataFromPayload(p.Owner, p.Description, p.Ticket, p.ReservedAt),
 	)
@@ -217,7 +217,7 @@ func (s *Service) ReleaseServiceAddress(
 	ctx context.Context,
 	p *ipam.ReleaseServiceAddressPayload,
 ) (*ipam.ReleaseServiceAddressResult, error) {
-	address, changed, err := s.Ledger.ReleaseServiceAddress(ctx, p.Tailnet, p.Address)
+	address, changed, err := s.ledger(p.DryRun).ReleaseServiceAddress(ctx, p.Tailnet, p.Address)
 	if err != nil {
 		return nil, translateServiceAddressError(err)
 	}
@@ -253,7 +253,7 @@ func (s *Service) ReserveUDPPort(
 	ctx context.Context,
 	p *ipam.ReserveUDPPortPayload,
 ) (*ipam.ReserveUDPPortResult, error) {
-	site, port, device, changed, err := s.Ledger.ReserveUDPPort(ctx, p.Tailnet, p.Site, p.Port, p.Device)
+	site, port, device, changed, err := s.ledger(p.DryRun).ReserveUDPPort(ctx, p.Tailnet, p.Site, p.Port, p.Device)
 	if err != nil {
 		return nil, translateUDPPortError(err)
 	}
@@ -267,11 +267,20 @@ func (s *Service) ReleaseUDPPort(
 	ctx context.Context,
 	p *ipam.ReleaseUDPPortPayload,
 ) (*ipam.ReleaseUDPPortResult, error) {
-	site, port, changed, err := s.Ledger.ReleaseUDPPort(ctx, p.Tailnet, p.Site, p.Port)
+	site, port, changed, err := s.ledger(p.DryRun).ReleaseUDPPort(ctx, p.Tailnet, p.Site, p.Port)
 	if err != nil {
 		return nil, translateUDPPortError(err)
 	}
 	return &ipam.ReleaseUDPPortResult{Site: site, Port: port, Changed: changed}, nil
+}
+
+// ledger returns the ledger a mutating method uses: one that commits nothing
+// when dryRun is set.
+func (s *Service) ledger(dryRun bool) *registry.Ledger {
+	if dryRun {
+		return s.Ledger.Rehearsal()
+	}
+	return s.Ledger
 }
 
 func translateUDPPortError(err error) error {

@@ -32,23 +32,25 @@ func CollectSnapshot(
 		return Snapshot{}, err
 	}
 	diagnostics.Debug(logger, "collecting live allocation inventory")
-	deviceCtx, cancelDevices := context.WithTimeout(ctx, APITimeout)
-	list, err := client.Devices().List(deviceCtx, tsapi.WithFields(tsapi.IncludeFieldsAll))
-	cancelDevices()
+	list, err := read(ctx, "list_devices", describeSnapshotError("devices"),
+		func(ctx context.Context) ([]tsapi.Device, error) {
+			return client.Devices().List(ctx, tsapi.WithFields(tsapi.IncludeFieldsAll))
+		})
 	if err != nil {
-		return Snapshot{}, snapshotCollectionError("devices", err)
+		return Snapshot{}, err
 	}
 	if list == nil {
-		return Snapshot{}, errors.New("collecting live devices: response omitted devices list")
+		return Snapshot{}, &CollectionError{Err: errors.New("collecting live devices: response omitted devices list")}
 	}
-	serviceCtx, cancelServices := context.WithTimeout(ctx, APITimeout)
-	services, err := client.Services().List(serviceCtx)
-	cancelServices()
+	services, err := read(ctx, "list_services", describeSnapshotError("services"),
+		func(ctx context.Context) ([]tsapi.Service, error) {
+			return client.Services().List(ctx)
+		})
 	if err != nil {
-		return Snapshot{}, snapshotCollectionError("services", err)
+		return Snapshot{}, err
 	}
 	if services == nil {
-		return Snapshot{}, errors.New("collecting live services: response omitted services list")
+		return Snapshot{}, &CollectionError{Err: errors.New("collecting live services: response omitted services list")}
 	}
 	result := Snapshot{Devices: make([]Device, len(list)), Services: make([]Service, len(services))}
 	for index, device := range list {
@@ -73,15 +75,17 @@ func CollectSnapshot(
 
 // API bodies can contain identities unknown to the registry sanitizer. Keep
 // operation/status diagnostics while never copying those bodies into errors.
-func snapshotCollectionError(source string, err error) error {
-	if apiErr, ok := errors.AsType[tsapi.APIError](err); ok {
-		return fmt.Errorf("collecting live %s: HTTP %d", source, apiErr.Status)
+func describeSnapshotError(source string) func(error) error {
+	return func(err error) error {
+		if apiErr, ok := errors.AsType[tsapi.APIError](err); ok {
+			return fmt.Errorf("collecting live %s: HTTP %d", source, apiErr.Status)
+		}
+		if errors.Is(err, context.Canceled) {
+			return fmt.Errorf("collecting live %s: %w", source, context.Canceled)
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("collecting live %s: %w", source, context.DeadlineExceeded)
+		}
+		return fmt.Errorf("collecting live %s: request or response decoding failed", source)
 	}
-	if errors.Is(err, context.Canceled) {
-		return fmt.Errorf("collecting live %s: %w", source, context.Canceled)
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return fmt.Errorf("collecting live %s: %w", source, context.DeadlineExceeded)
-	}
-	return fmt.Errorf("collecting live %s: request or response decoding failed", source)
 }

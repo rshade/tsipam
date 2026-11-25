@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 
+	"go.opentelemetry.io/otel/trace"
+
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
 	"github.com/rshade/tsipam/internal/devices"
 	"github.com/rshade/tsipam/internal/diagnostics"
@@ -34,7 +36,7 @@ func (t registryTarget) run(ctx context.Context, fn func(context.Context, *ipamc
 		Ledger:      registry.NewLedger(hujsonstore.New(t.registryDir, t.logger), t.logger),
 		Logger:      t.logger,
 		CollectLive: t.collectLive,
-	})
+	}, ipamhttp.WithTracerProvider(trace.SpanFromContext(ctx).TracerProvider()))
 	return loopback.Run(ctx, handler, t.logger, fn)
 }
 

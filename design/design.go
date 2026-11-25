@@ -26,6 +26,15 @@ var reservationMetadataAttributes = func() {
 	})
 }
 
+// dryRunAttribute declares the rehearsal switch every mutating payload takes.
+//
+//nolint:gochecknoglobals // shared attribute declaration, like reservationMetadataAttributes; this is design source, not application state.
+var dryRunAttribute = func() {
+	Attribute("dry_run", Boolean, "Report the outcome a real call would have and change nothing.", func() {
+		Default(false)
+	})
+}
+
 //nolint:gochecknoglobals // goa's DSL requires a package-level var per declared type/service/API; this is design source, not application state.
 var SiteIDReservation = Type("SiteIDReservation", func() {
 	Description("A reserved 4via6 site ID.")
@@ -97,6 +106,7 @@ var _ = Service("ipam", func() {
 			Attribute("id", String, "4via6 site ID to reserve.")
 			Attribute("site", String, "Site name to reserve it for.")
 			reservationMetadataAttributes()
+			dryRunAttribute()
 			Required("tailnet", "id", "site")
 		})
 		Result(func() {
@@ -124,6 +134,7 @@ var _ = Service("ipam", func() {
 		Payload(func() {
 			Attribute("tailnet", String, "Routing/storage key for the registry.")
 			Attribute("id", String, "4via6 site ID to release.")
+			dryRunAttribute()
 			Required("tailnet", "id")
 		})
 		Result(func() {
@@ -136,6 +147,7 @@ var _ = Service("ipam", func() {
 		})
 		HTTP(func() {
 			DELETE("/tailnet/{tailnet}/ipam/site-ids/{id}")
+			Param("dry_run")
 			Response(StatusOK)
 			Response("invalid_input", StatusBadRequest)
 		})
@@ -163,6 +175,7 @@ var _ = Service("ipam", func() {
 			})
 			Attribute("site", String, "Site name to reserve it for.")
 			reservationMetadataAttributes()
+			dryRunAttribute()
 			Required("tailnet", "cidr", "site")
 		})
 		Result(func() {
@@ -201,6 +214,7 @@ var _ = Service("ipam", func() {
 			Attribute("live_taken", ArrayOf(String),
 				"CIDR prefixes advertised by live devices, counted as taken alongside registry reservations.")
 			reservationMetadataAttributes()
+			dryRunAttribute()
 			Required("tailnet", "pool", "size", "site")
 		})
 		Result(func() {
@@ -234,6 +248,7 @@ var _ = Service("ipam", func() {
 			Attribute("cidr", String, "Canonical IPv4 or IPv6 CIDR prefix to release.", func() {
 				Meta("struct:field:name", "CIDR")
 			})
+			dryRunAttribute()
 			Required("tailnet", "cidr")
 		})
 		Result(func() {
@@ -251,6 +266,7 @@ var _ = Service("ipam", func() {
 			// and would split across path segments if it were one.
 			DELETE("/tailnet/{tailnet}/ipam/subnet-pools")
 			Param("cidr")
+			Param("dry_run")
 			Response(StatusOK)
 			Response("invalid_input", StatusBadRequest)
 		})
@@ -276,6 +292,7 @@ var _ = Service("ipam", func() {
 			Attribute("address", String, "Bare IPv4 host or exact IPv4 /32 prefix to reserve.")
 			Attribute("service", String, "Bare service name or canonical svc:<name> identity.")
 			reservationMetadataAttributes()
+			dryRunAttribute()
 			Required("tailnet", "address", "service")
 		})
 		Result(func() {
@@ -304,6 +321,7 @@ var _ = Service("ipam", func() {
 		Payload(func() {
 			Attribute("tailnet", String, "Routing/storage key for the registry.")
 			Attribute("address", String, "Bare IPv4 host or exact IPv4 /32 prefix to release.")
+			dryRunAttribute()
 			Required("tailnet", "address")
 		})
 		Result(func() {
@@ -319,6 +337,7 @@ var _ = Service("ipam", func() {
 			// contains a slash and cannot safely occupy one path segment.
 			DELETE("/tailnet/{tailnet}/ipam/service-addresses")
 			Param("address")
+			Param("dry_run")
 			Response(StatusOK)
 			Response("invalid_input", StatusBadRequest)
 		})
@@ -351,6 +370,7 @@ var _ = Service("ipam", func() {
 			Attribute("site", String, "Site/firewall-boundary label for the reservation.")
 			Attribute("port", String, "Decimal UDP listen port to reserve, 1024-65535.")
 			Attribute("device", String, "Device label to reserve the port for.")
+			dryRunAttribute()
 			Required("tailnet", "site", "port", "device")
 		})
 		Result(func() {
@@ -379,6 +399,7 @@ var _ = Service("ipam", func() {
 			Attribute("tailnet", String, "Routing/storage key for the registry.")
 			Attribute("site", String, "Site/firewall-boundary label containing the reservation.")
 			Attribute("port", String, "Decimal UDP listen port to release, 1024-65535.")
+			dryRunAttribute()
 			Required("tailnet", "site", "port")
 		})
 		Result(func() {
@@ -394,6 +415,7 @@ var _ = Service("ipam", func() {
 			DELETE("/tailnet/{tailnet}/ipam/udp-ports")
 			Param("site")
 			Param("port")
+			Param("dry_run")
 			Response(StatusOK)
 			Response("invalid_input", StatusBadRequest)
 		})

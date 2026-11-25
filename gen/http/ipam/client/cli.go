@@ -10,6 +10,7 @@ package client
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	goa "goa.design/goa/v3/pkg"
@@ -95,7 +96,7 @@ func BuildReserveSiteIDPayload(ipamReserveSiteIDBody *string, ipamReserveSiteIDT
 		}
 		err = json.Unmarshal([]byte(*ipamReserveSiteIDBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Dolores quia eveniet odit numquam ex.\",\n      \"id\": \"Necessitatibus aperiam voluptatem quasi distinctio.\",\n      \"owner\": \"Eveniet dolor sunt soluta tenetur et.\",\n      \"reserved_at\": \"2006-10-21T04:41:45Z\",\n      \"site\": \"Similique quia est quos neque rem.\",\n      \"ticket\": \"Est neque velit.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Dolores quia eveniet odit numquam ex.\",\n      \"dry_run\": true,\n      \"id\": \"Necessitatibus aperiam voluptatem quasi distinctio.\",\n      \"owner\": \"Eveniet dolor sunt soluta tenetur et.\",\n      \"reserved_at\": \"2006-10-21T04:41:45Z\",\n      \"site\": \"Similique quia est quos neque rem.\",\n      \"ticket\": \"Est neque velit.\"\n   }'")
 		}
 		if body.ReservedAt != nil {
 			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
@@ -118,6 +119,13 @@ func BuildReserveSiteIDPayload(ipamReserveSiteIDBody *string, ipamReserveSiteIDT
 		Description: body.Description,
 		Ticket:      body.Ticket,
 		ReservedAt:  body.ReservedAt,
+		DryRun:      body.DryRun,
+	}
+	{
+		var zero bool
+		if v.DryRun == zero {
+			v.DryRun = false
+		}
 	}
 	v.Tailnet = tailnet
 
@@ -126,7 +134,8 @@ func BuildReserveSiteIDPayload(ipamReserveSiteIDBody *string, ipamReserveSiteIDT
 
 // BuildReleaseSiteIDPayload builds the payload for the ipam release_site_id
 // endpoint from CLI flags.
-func BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnet *string, ipamReleaseSiteIDID *string) (*ipam.ReleaseSiteIDPayload, error) {
+func BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnet *string, ipamReleaseSiteIDID *string, ipamReleaseSiteIDDryRun string) (*ipam.ReleaseSiteIDPayload, error) {
+	var err error
 	var tailnet string
 	{
 		if ipamReleaseSiteIDTailnet == nil {
@@ -141,9 +150,17 @@ func BuildReleaseSiteIDPayload(ipamReleaseSiteIDTailnet *string, ipamReleaseSite
 		}
 		id = *ipamReleaseSiteIDID
 	}
+	var dryRun bool
+	{
+		dryRun, err = strconv.ParseBool(ipamReleaseSiteIDDryRun)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for dryRun, must be BOOL")
+		}
+	}
 	v := &ipam.ReleaseSiteIDPayload{}
 	v.Tailnet = tailnet
 	v.ID = id
+	v.DryRun = dryRun
 
 	return v, nil
 }
@@ -175,7 +192,7 @@ func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody *string, ipamReserv
 		}
 		err = json.Unmarshal([]byte(*ipamReserveSubnetPoolBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"cidr\": \"Sint et.\",\n      \"description\": \"Vel quo et aliquam ducimus quia ut.\",\n      \"owner\": \"Animi nisi totam.\",\n      \"reserved_at\": \"2013-06-13T22:28:00Z\",\n      \"site\": \"Ab aut sequi soluta expedita accusantium.\",\n      \"ticket\": \"Minima accusantium qui ratione quis sunt maiores.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"cidr\": \"Sint et.\",\n      \"description\": \"Vel quo et aliquam ducimus quia ut.\",\n      \"dry_run\": false,\n      \"owner\": \"Animi nisi totam.\",\n      \"reserved_at\": \"2013-06-13T22:28:00Z\",\n      \"site\": \"Ab aut sequi soluta expedita accusantium.\",\n      \"ticket\": \"Minima accusantium qui ratione quis sunt maiores.\"\n   }'")
 		}
 		if body.ReservedAt != nil {
 			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
@@ -198,6 +215,13 @@ func BuildReserveSubnetPoolPayload(ipamReserveSubnetPoolBody *string, ipamReserv
 		Description: body.Description,
 		Ticket:      body.Ticket,
 		ReservedAt:  body.ReservedAt,
+		DryRun:      body.DryRun,
+	}
+	{
+		var zero bool
+		if v.DryRun == zero {
+			v.DryRun = false
+		}
 	}
 	v.Tailnet = tailnet
 
@@ -215,7 +239,7 @@ func BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBody *string, ipamAllo
 		}
 		err = json.Unmarshal([]byte(*ipamAllocateSubnetPoolBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Consequatur numquam dolores excepturi ratione.\",\n      \"live_taken\": [\n         \"Et minus excepturi consectetur vel officiis atque.\",\n         \"Molestiae voluptatem quaerat magni alias.\",\n         \"Explicabo natus expedita praesentium enim rerum.\",\n         \"Quibusdam consectetur.\"\n      ],\n      \"owner\": \"Qui totam.\",\n      \"pool\": \"Qui quasi molestiae molestiae.\",\n      \"reserved_at\": \"2001-04-05T06:12:25Z\",\n      \"site\": \"Officia doloribus est eius quas sunt optio.\",\n      \"size\": 3038387140018466755,\n      \"ticket\": \"Sunt cumque.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"description\": \"Consequatur numquam dolores excepturi ratione.\",\n      \"dry_run\": false,\n      \"live_taken\": [\n         \"Et minus excepturi consectetur vel officiis atque.\",\n         \"Molestiae voluptatem quaerat magni alias.\",\n         \"Explicabo natus expedita praesentium enim rerum.\",\n         \"Quibusdam consectetur.\"\n      ],\n      \"owner\": \"Qui totam.\",\n      \"pool\": \"Qui quasi molestiae molestiae.\",\n      \"reserved_at\": \"2001-04-05T06:12:25Z\",\n      \"site\": \"Officia doloribus est eius quas sunt optio.\",\n      \"size\": 3038387140018466755,\n      \"ticket\": \"Sunt cumque.\"\n   }'")
 		}
 		if body.ReservedAt != nil {
 			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
@@ -239,11 +263,18 @@ func BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBody *string, ipamAllo
 		Description: body.Description,
 		Ticket:      body.Ticket,
 		ReservedAt:  body.ReservedAt,
+		DryRun:      body.DryRun,
 	}
 	if body.LiveTaken != nil {
 		v.LiveTaken = make([]string, len(body.LiveTaken))
 		for i, val := range body.LiveTaken {
 			v.LiveTaken[i] = val
+		}
+	}
+	{
+		var zero bool
+		if v.DryRun == zero {
+			v.DryRun = false
 		}
 	}
 	v.Tailnet = tailnet
@@ -253,7 +284,8 @@ func BuildAllocateSubnetPoolPayload(ipamAllocateSubnetPoolBody *string, ipamAllo
 
 // BuildReleaseSubnetPoolPayload builds the payload for the ipam
 // release_subnet_pool endpoint from CLI flags.
-func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet *string, ipamReleaseSubnetPoolCidr *string) (*ipam.ReleaseSubnetPoolPayload, error) {
+func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet *string, ipamReleaseSubnetPoolCidr *string, ipamReleaseSubnetPoolDryRun string) (*ipam.ReleaseSubnetPoolPayload, error) {
+	var err error
 	var tailnet string
 	{
 		if ipamReleaseSubnetPoolTailnet == nil {
@@ -268,9 +300,17 @@ func BuildReleaseSubnetPoolPayload(ipamReleaseSubnetPoolTailnet *string, ipamRel
 		}
 		cidr = *ipamReleaseSubnetPoolCidr
 	}
+	var dryRun bool
+	{
+		dryRun, err = strconv.ParseBool(ipamReleaseSubnetPoolDryRun)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for dryRun, must be BOOL")
+		}
+	}
 	v := &ipam.ReleaseSubnetPoolPayload{}
 	v.Tailnet = tailnet
 	v.CIDR = cidr
+	v.DryRun = dryRun
 
 	return v, nil
 }
@@ -302,7 +342,7 @@ func BuildReserveServiceAddressPayload(ipamReserveServiceAddressBody *string, ip
 		}
 		err = json.Unmarshal([]byte(*ipamReserveServiceAddressBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"address\": \"Distinctio qui sed ipsum ut.\",\n      \"description\": \"Aperiam quo.\",\n      \"owner\": \"Quae facere deserunt sit saepe.\",\n      \"reserved_at\": \"1980-11-01T05:11:18Z\",\n      \"service\": \"Non ut quidem dolores modi.\",\n      \"ticket\": \"Qui pariatur dignissimos.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"address\": \"Distinctio qui sed ipsum ut.\",\n      \"description\": \"Aperiam quo.\",\n      \"dry_run\": false,\n      \"owner\": \"Quae facere deserunt sit saepe.\",\n      \"reserved_at\": \"1980-11-01T05:11:18Z\",\n      \"service\": \"Non ut quidem dolores modi.\",\n      \"ticket\": \"Qui pariatur dignissimos.\"\n   }'")
 		}
 		if body.ReservedAt != nil {
 			err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
@@ -325,6 +365,13 @@ func BuildReserveServiceAddressPayload(ipamReserveServiceAddressBody *string, ip
 		Description: body.Description,
 		Ticket:      body.Ticket,
 		ReservedAt:  body.ReservedAt,
+		DryRun:      body.DryRun,
+	}
+	{
+		var zero bool
+		if v.DryRun == zero {
+			v.DryRun = false
+		}
 	}
 	v.Tailnet = tailnet
 
@@ -333,7 +380,8 @@ func BuildReserveServiceAddressPayload(ipamReserveServiceAddressBody *string, ip
 
 // BuildReleaseServiceAddressPayload builds the payload for the ipam
 // release_service_address endpoint from CLI flags.
-func BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnet *string, ipamReleaseServiceAddressAddress *string) (*ipam.ReleaseServiceAddressPayload, error) {
+func BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnet *string, ipamReleaseServiceAddressAddress *string, ipamReleaseServiceAddressDryRun string) (*ipam.ReleaseServiceAddressPayload, error) {
+	var err error
 	var tailnet string
 	{
 		if ipamReleaseServiceAddressTailnet == nil {
@@ -348,9 +396,17 @@ func BuildReleaseServiceAddressPayload(ipamReleaseServiceAddressTailnet *string,
 		}
 		address = *ipamReleaseServiceAddressAddress
 	}
+	var dryRun bool
+	{
+		dryRun, err = strconv.ParseBool(ipamReleaseServiceAddressDryRun)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for dryRun, must be BOOL")
+		}
+	}
 	v := &ipam.ReleaseServiceAddressPayload{}
 	v.Tailnet = tailnet
 	v.Address = address
+	v.DryRun = dryRun
 
 	return v, nil
 }
@@ -389,7 +445,7 @@ func BuildReserveUDPPortPayload(ipamReserveUDPPortBody *string, ipamReserveUDPPo
 		}
 		err = json.Unmarshal([]byte(*ipamReserveUDPPortBody), &body)
 		if err != nil {
-			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"device\": \"Voluptates aspernatur tenetur et eaque.\",\n      \"port\": \"Ut rerum.\",\n      \"site\": \"Corrupti maiores occaecati incidunt sit.\"\n   }'")
+			return nil, fmt.Errorf("invalid JSON for body, \nerror: %s, \nexample of valid JSON:\n%s", err, "'{\n      \"device\": \"Voluptates aspernatur tenetur et eaque.\",\n      \"dry_run\": true,\n      \"port\": \"Ut rerum.\",\n      \"site\": \"Corrupti maiores occaecati incidunt sit.\"\n   }'")
 		}
 	}
 	var tailnet string
@@ -403,6 +459,13 @@ func BuildReserveUDPPortPayload(ipamReserveUDPPortBody *string, ipamReserveUDPPo
 		Site:   body.Site,
 		Port:   body.Port,
 		Device: body.Device,
+		DryRun: body.DryRun,
+	}
+	{
+		var zero bool
+		if v.DryRun == zero {
+			v.DryRun = false
+		}
 	}
 	v.Tailnet = tailnet
 
@@ -411,7 +474,8 @@ func BuildReserveUDPPortPayload(ipamReserveUDPPortBody *string, ipamReserveUDPPo
 
 // BuildReleaseUDPPortPayload builds the payload for the ipam release_udp_port
 // endpoint from CLI flags.
-func BuildReleaseUDPPortPayload(ipamReleaseUDPPortTailnet *string, ipamReleaseUDPPortSite *string, ipamReleaseUDPPortPort *string) (*ipam.ReleaseUDPPortPayload, error) {
+func BuildReleaseUDPPortPayload(ipamReleaseUDPPortTailnet *string, ipamReleaseUDPPortSite *string, ipamReleaseUDPPortPort *string, ipamReleaseUDPPortDryRun string) (*ipam.ReleaseUDPPortPayload, error) {
+	var err error
 	var tailnet string
 	{
 		if ipamReleaseUDPPortTailnet == nil {
@@ -433,10 +497,18 @@ func BuildReleaseUDPPortPayload(ipamReleaseUDPPortTailnet *string, ipamReleaseUD
 		}
 		port = *ipamReleaseUDPPortPort
 	}
+	var dryRun bool
+	{
+		dryRun, err = strconv.ParseBool(ipamReleaseUDPPortDryRun)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for dryRun, must be BOOL")
+		}
+	}
 	v := &ipam.ReleaseUDPPortPayload{}
 	v.Tailnet = tailnet
 	v.Site = site
 	v.Port = port
+	v.DryRun = dryRun
 
 	return v, nil
 }
