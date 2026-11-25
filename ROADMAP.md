@@ -14,8 +14,8 @@ Planning for this module lived in the `tailscale-utils` monorepo until the
 
 ## Immediate Focus
 
-No open issue holds this slot. `refactor-registry-store` is archived, which
-opens the server track below; its first feature is `add-sqlite-store`.
+No open issue holds this slot. `add-sqlite-store` is archived; the next step of
+the server track below is #22.
 
 ## Near-Term Vision
 
@@ -30,14 +30,10 @@ OpenSpec change under `openspec/changes/`, listed in dependency order.
 - **`refactor-client-server-boundary`** `[M]`, no issue filed, archived:
   separated client code from server code with no behavior change.
   `add-sqlite-store` and `add-serve-tsnet` build on it.
-- **`add-sqlite-store`** `[L]`, no issue filed: the `sqlite://` backend,
-  `--registry` and `TSIPAM_REGISTRY`, append-only audit events, and the
-  `registry` command group with `registry history`. Its prerequisites are
-  done.
 - [ ] #22 `add-registry-export-import`: `registry export` and
       `registry import` (`--merge`, `--plan`), to move reservations between
-      stores losslessly, including HuJSON to SQLite. Needs
-      `add-sqlite-store`. [L]
+      stores losslessly, including HuJSON to SQLite. Its prerequisites are
+      done. [L]
 
 Not filed yet, in order after #22:
 
@@ -122,6 +118,10 @@ condition is met.
 
 ### 2026-Q4
 
+- The SQLite registry backend: `sqlite://` through `--registry` and
+  `TSIPAM_REGISTRY`, append-only audit events, and the `registry` command
+  group with `registry history` (`add-sqlite-store`, PR #56, merged
+  2026-11-25; archived 2026-11-25). [L]
 - The ax-go v0.10.0 CLI runtime: `__schema`, MCP, dry-run, confirmation, and
   tracing through `ax.Execute` (`adopt-ax-go-runtime`, #4, PRs #43 to #50 and
   #52, merged 2026-11-25; archived 2026-11-25). The MCP server covers writes as
