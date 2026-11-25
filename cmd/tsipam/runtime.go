@@ -78,7 +78,8 @@ func (inv invocation) commandTree(state *commandState) *cobra.Command {
 	addRuntimeFlags(root)
 	schema := ax.NewSchemaCommand(root, ax.WithSchemaVersion(resolvedVersion()))
 	schema.Args = cobra.NoArgs
-	root.AddCommand(schema)
+	root.AddCommand(schema, newMCPServerCommand(root, state))
+	excludeTools(root)
 	// Cobra's completion command keeps the writer it finds when it is created.
 	state.stdout = stdoutWriter{writer: inv.stdout}
 	root.SetOut(state.stdout)

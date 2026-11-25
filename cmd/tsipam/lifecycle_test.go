@@ -57,6 +57,10 @@ func TestNoFailureEscapesTheBoundary(t *testing.T) {
 	}
 	for _, path := range commandPaths() {
 		for name, extra := range failures {
+			// With nothing wrong it would serve this process's own stdin.
+			if len(extra) == 0 && slices.Equal(path, []string{commandMCPServer}) {
+				continue
+			}
 			t.Run(strings.Join(path, " ")+"/"+name, func(t *testing.T) {
 				t.Parallel()
 				assertBoundedFailure(t, slices.Concat(path, extra), name == "unknown flag")

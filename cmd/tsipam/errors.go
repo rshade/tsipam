@@ -272,6 +272,8 @@ func (s *commandState) usageFailed(cmd *cobra.Command, args []string, err error)
 	if err == nil || errors.Is(err, errBoundaryApplied) {
 		return err
 	}
+	// The run ends before it could replace what an earlier tool call left.
+	s.reset()
 	return s.parseFailed(cmd, args, failure{code: codeValidationError}, err)
 }
 
@@ -357,6 +359,11 @@ func (s *commandState) argumentSanitizer(
 // command line could be read. A value that cannot be understood still means
 // the caller wanted something hidden.
 func (s *commandState) requestedLevel(cmd *cobra.Command) sanitize.Level {
+	// A tool call's arguments are not on the command line, and parsing may have
+	// stopped before its sanitize argument.
+	if s.serving && s.sanitizeResolution.Level == "" {
+		return sanitize.Identity
+	}
 	flagValue := s.sanitizeLevel
 	if flagValue == string(sanitize.Off) {
 		flagValue = sanitizeArgument(s.argv)

@@ -13,6 +13,7 @@ and flags; `tsipam --help` and `tsipam -schema` are authoritative.
 - [Adopt tsipam for an existing tailnet](how-to/adopt-existing-tailnet.md)
 - [Gate address space in CI](how-to/gate-address-space-in-ci.md)
 - [Redact output for sharing](how-to/redact-output-for-sharing.md)
+- [Use tsipam from an MCP client](how-to/use-from-an-mcp-client.md)
 - [Smoke-test a release](how-to/release-smoke.md)
 
 ## Reference

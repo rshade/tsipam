@@ -72,6 +72,8 @@ type commandState struct {
 	argv []string
 	// stdout is the run's own stdout, for the root command.
 	stdout io.Writer
+	// serving is true once this process serves MCP tool calls.
+	serving bool
 	// stdinIsTTY is true when a person can answer a prompt.
 	stdinIsTTY bool
 }

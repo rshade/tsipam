@@ -50,7 +50,7 @@ func TestDiscovery(t *testing.T) {
 			"subnet reserve", "subnet release", "subnet list", "subnet allocate",
 			"service reserve", "service release", "service list",
 			"port reserve", "port release", "port list",
-			"devices list", "plan", "check", "check-policy",
+			"devices list", "plan", "check", "check-policy", "mcp-server", "__schema",
 		} {
 			if !names[want] {
 				t.Errorf("schema lacks command %q", want)

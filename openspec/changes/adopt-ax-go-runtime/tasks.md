@@ -125,18 +125,18 @@
 
 ## 8. Discovery and MCP
 
-- [ ] 8.1 Add goldens for `__schema` (mounted in 4.4) and `--as=mcp`; verify the
+- [x] 8.1 Add goldens for `__schema` (mounted in 4.4) and `--as=mcp`; verify the
       schema scenarios and that `-schema` stays unwrapped
-- [ ] 8.2 Add `mcp-server` per D9 with the pinned 20-tool list, and regenerate
+- [x] 8.2 Add `mcp-server` per D9 with the pinned 20-tool list, and regenerate
       `schema.golden.json` and the `__schema` goldens; verify a stdio test for
       `tools/list`, parity with `--as=mcp`, `--transport` rejected, exit on
       stdin close, and the same version from `__schema`, the error object, and
       the initialize handshake
-- [ ] 8.3 Test tool calls: `site-id list` byte parity, `calc split`, release
+- [x] 8.3 Test tool calls: `site-id list` byte parity, `calc split`, release
       with and without `yes`, approval not carried over, two tailnets with
       different sanitization, `sanitize: off` refused by the environment, and
       policy drift with `drift_count`; verify with `-race`
-- [ ] 8.4 Write `docs/how-to/use-from-an-mcp-client.md` covering authority,
+- [x] 8.4 Write `docs/how-to/use-from-an-mcp-client.md` covering authority,
       approval, redaction, and why `check` is absent; verify its commands run
       and `mise run lint-md` passes
 
