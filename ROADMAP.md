@@ -92,13 +92,12 @@ an OpenSpec change. Not filed yet, highest value first:
 
 ## Future Vision (Long-Term)
 
-- [ ] #4 Adopt the ax-go v0.7.0 CLI runtime: `__schema`, MCP, dry-run,
-      confirmation, and tracing through `ax.Execute` [L]
-      Gated on the repo-wide decision in rshade/tailscale-utils#394, because
-      `ax-go` is a personal-repo dependency (a `CONTEXT.md` hard no without
-      an explicit exception).
-      A read-only MCP server is the first slice worth shipping:
-      Infoblox, BlueCat, and NetBox all ship MCP access in 2026.
+- [ ] #4 Adopt the ax-go v0.10.0 CLI runtime (`adopt-ax-go-runtime`):
+      `__schema`, MCP, dry-run, confirmation, and tracing through
+      `ax.Execute` [L]
+      `tsipam` records its own dependency exception in `CONTEXT.md`, so it no
+      longer waits for rshade/tailscale-utils#394. The MCP server covers
+      writes as well as reads: every leaf command except `check` is a tool.
 
 Repo-wide, with no work needed here: rshade/tailscale-utils#320 asks every CLI
 to specify its `--schema` output, and `tsipam` already does.
@@ -163,4 +162,4 @@ From [`CONTEXT.md`](./CONTEXT.md):
 - Policy and address logic come from `tsacl`, not reimplemented here.
 - Commands, flags, exit codes, the JSON envelope, and the registry format
   change only through OpenSpec.
-- No new personal-repo dependencies beyond `tscli`.
+- No new personal-repo dependencies beyond `tscli` and `ax-go`.

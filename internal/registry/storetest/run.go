@@ -261,4 +261,5 @@ func Run(t *testing.T, newStore NewStore) {
 	})
 
 	runLedgerRules(t, newStore)
+	runRehearsal(t, newStore)
 }
