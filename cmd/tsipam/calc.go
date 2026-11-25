@@ -13,6 +13,7 @@ import (
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	"github.com/rshade/tsipam/internal/diagnostics"
+	"github.com/rshade/tsipam/internal/registry"
 )
 
 // wrapSplitError wraps a split error with context about 4-in-6 normalization if applicable.
@@ -211,14 +212,14 @@ func nextFreeTaken(reservations []*ipam.SubnetPoolReservation, devices []deviceR
 	for _, reservation := range reservations {
 		prefix, err := netip.ParsePrefix(reservation.CIDR)
 		if err == nil {
-			taken = append(taken, prefix)
+			taken = registry.AppendTaken(taken, prefix)
 		}
 	}
 	for _, device := range devices {
 		for _, route := range device.AdvertisedRoutes {
 			prefix, err := netip.ParsePrefix(route)
 			if err == nil {
-				taken = append(taken, prefix)
+				taken = registry.AppendTaken(taken, prefix)
 			}
 		}
 	}

@@ -164,6 +164,27 @@ func TestCalcNextFreeExclusionSourcesAndCount(t *testing.T) {
 			wantOutput: "10.0.0.0/26\n",
 		},
 		{
+			name:       "IPv4-mapped reservation",
+			registry:   `{"subnetPools":{"::ffff:10.0.0.0/122":"reserved"}}`,
+			args:       []string{"10.0.0.0/24", "--size", "26"},
+			wantOutput: "10.0.0.64/26\n",
+		},
+		{
+			name:     "IPv4-mapped live route",
+			registry: `{}`,
+			devices: []deviceRecord{{
+				Name: "router", AdvertisedRoutes: []string{"::ffff:10.0.0.0/122"},
+			}},
+			args:       []string{"10.0.0.0/24", "--size", "26"},
+			wantOutput: "10.0.0.64/26\n",
+		},
+		{
+			name:       "IPv4-mapped reservation in an IPv6 pool",
+			registry:   `{"subnetPools":{"::ffff:0.0.0.0/96":"reserved"}}`,
+			args:       []string{"::fffe:0:0/95", "--size", "96", "--all"},
+			wantOutput: "::fffe:0:0/96\n",
+		},
+		{
 			name:       "short count flag",
 			registry:   `{}`,
 			args:       []string{"10.0.0.0/29", "--size", "31", "-n", "2"},

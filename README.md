@@ -701,7 +701,9 @@ writes nothing to stdout in either format, and writes the exhaustion message to
 stderr instead. IPv4-mapped prefixes of
 `/96` or longer are normalized to their plain IPv4 equivalent before searching,
 so `--size` uses the IPv4 prefix length. Shorter mapped-looking prefixes remain
-native IPv6. Host bits in pool inputs are masked before searching.
+native IPv6. A reservation or live route written in IPv4-mapped form excludes the
+same space from an IPv4 pool. Host bits in pool inputs are masked before
+searching.
 
 #### `calc info`
 
