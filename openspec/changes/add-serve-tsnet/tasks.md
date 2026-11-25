@@ -3,16 +3,16 @@
 ## 1. Dependencies and the live identity check
 
 - [ ] 1.1 Add `tailscale.com` and `github.com/pires/go-proxyproto` to
-      `go.mod`; verify `mise run cross`, `mise run license-check`,
-      `mise run govulncheck`, and `mise run tidy-check` pass, and record the
-      release binary size before and after
+      `go.mod`; verify `mise run cross`, `mise run license-check`, and
+      `mise run govulncheck` pass, and record the release binary size before
+      and after
 - [ ] 1.2 Add `TestLiveServiceIdentity` in `internal/server`, skipped unless
       `TSIPAM_LIVE_AUTHZ=1` and never run in CI (modeled on tail-watch's
       `TestLiveAuthzWhoIs`). It starts a tagged tsnet host from
       `TSIPAM_LIVE_HOST_AUTHKEY` serving `TSIPAM_LIVE_SERVICE` (default
       `svc:tsipam-live`) with `ServiceModeTCP{Port: 443, TerminateTLS: true,
-      PROXYProtocolVersion: 2}` behind a `REQUIRE` PROXY listener, and a
-      caller tsnet node from `TSIPAM_LIVE_CALLER_AUTHKEY` that dials the
+      PROXYProtocolVersion: 2}` behind a `REQUIRE` `proxyproto.Listener`, and
+      a caller tsnet node from `TSIPAM_LIVE_CALLER_AUTHKEY` that dials the
       Service. It logs the raw `RemoteAddr` (expected loopback), the PROXY
       source (expected the caller's tailnet address), the capability map
       from plain `WhoIs` and from `WhoIsForService`, and the lookup time.
@@ -21,7 +21,9 @@
       the Service only, and no capability grant. Run all three, record the
       results in design.md under the `WhoIsForService` facts, and stop and
       revise design.md if the PROXY source is not the caller or the
-      Service-only grant is missing from `WhoIsForService`
+      Service-only grant is missing from `WhoIsForService`. The test is the
+      first import of both modules from 1.1, so verify `mise run tidy-check`
+      passes here
 
 ## 2. Contract hooks
 
@@ -41,14 +43,19 @@
       `list_identities`, and `whoami`,
       make `plan.live_tailnet` optional, and document network-layer
       authentication in the API description; regenerate with `mise run gen`
-      and verify `mise run gen-check` and `go build ./...` pass and the `gen/`
-      diff touches only these additions
+      and verify `mise run gen-check` passes, the `gen/` diff touches only
+      these additions, and `go build ./...` fails only in `internal/ipamsvc`:
+      for the missing `ListLiveRoutes`, `ListIdentities`, and `Whoami`, and
+      for the uses of `PlanPayload.LiveTailnet`, now a pointer
 - [ ] 3.2 Implement `ListLiveRoutes` and `ListIdentities` in `ipamsvc` (the
       latter over `Ledger.IdentityValues`) and `LiveFromServer` (refuse
       client `live_taken`, collect live inside allocate, server tailnet for
-      `plan`, refuse a mismatched `live_tailnet`); verify with `ipamsvc`
-      unit tests using a fake collector, including the missing-credential
-      message
+      `plan`, refuse a mismatched `live_tailnet`). Add a `Whoami` that
+      returns `identified: false` until 5.1 supplies the caller, and update
+      the other uses of `PlanPayload.LiveTailnet`, in
+      `cmd/tsipam/planning.go` and the tests; verify `go build ./...` and
+      `go vet ./...` pass, with `ipamsvc` unit tests using a fake collector,
+      including the missing-credential message
 
 ## 4. Authorization
 
@@ -79,7 +86,7 @@
       `ConnContext` storing the PROXY source, the
       `ipamhttp.NewHandler` handler behind an identity middleware that
       calls `WhoIsForService` on every request and sets `WithActor` and
-      `WithDefaultOwner`, the `whoami` handler, a pending-approval warning,
+      `WithDefaultOwner`, the caller for `whoami`, a pending-approval warning,
       the health listener, and graceful shutdown; verify unit tests with a
       fake identity source cover a lookup on each of two requests on one
       connection (a grant removed between them denies the second), lookup

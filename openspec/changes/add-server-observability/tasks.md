@@ -31,24 +31,28 @@
 
 ## 3. Scheduled drift
 
-- [ ] 3.1 Extract the body of `ipamsvc.Plan` into an unexported
-      `compare(ctx, alias)` used by `Plan`; verify
+- [ ] 3.1 Extract the body of `ipamsvc.Plan` into an exported
+      `Service.Compare(ctx, alias, liveTailnet)` that returns the report and
+      the live snapshot, and call it from `Plan`; verify
       `go test ./internal/ipamsvc/ ./cmd/...` passes and
       `allocations.report.golden.json` is unchanged
 - [ ] 3.2 Implement `internal/drift`, with the server role in the boundary
       test (`Holder` with per-alias latest complete report, live taken set,
-      and run status; `Scheduler` with a startup run, a per-target ticker,
-      skip-if-running, a `min(interval, 5m)` timeout, and cancellation on
-      shutdown); verify the boundary tests pass and `go test -race
+      and run status; `Scheduler` with the comparison function as a
+      parameter, a startup run, a per-target ticker, skip-if-running, a
+      `min(interval, 5m)` timeout, and cancellation on shutdown), without
+      importing `ipamsvc`; verify the boundary tests pass and `go test -race
       ./internal/drift/` covers a failed run keeping the previous report, a
       skipped overlapping tick, and identical
-      `entries`/`drift_count`/`excluded` versus a direct `Plan` call
+      `entries`/`drift_count`/`excluded` versus a direct `Plan` call. That
+      last test imports `ipamsvc`, so it goes in `package drift_test`
 - [ ] 3.3 Add `--drift-tailnet` (repeatable) and `--drift-interval` (default
       `15m`) to `serve`, refusing an interval below `1m` and targets without
-      live credentials with exit 2 before listening. Here and in groups 4 and
-      5, add each new server package that `serve.go` imports to its entry in
-      `commandExceptions`. Verify the boundary tests pass, and `cmd` tests for
-      each refusal and for no targets meaning no live calls
+      live credentials with exit 2 before listening, and start the scheduler
+      with `Service.Compare`. Here and in groups 4 and 5, add each new server
+      package that `serve.go` imports to its entry in `commandExceptions`.
+      Verify the boundary tests pass, and `cmd` tests for each refusal and for
+      no targets meaning no live calls
 - [ ] 3.4 Add `latest_drift` (`GET /tailnet/{tailnet}/ipam/drift`), the
       `DriftRun` type, and the `drift_unavailable` (503) error to `design/`,
       run `mise run gen`, and implement it in `ipamsvc` behind `read` on the
