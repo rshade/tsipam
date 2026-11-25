@@ -362,11 +362,12 @@ then closes the store.
 - [`tailscale.com` is a large dependency: govulncheck exposure, build time,
   Windows and macOS cross-compiles] → Task 5.1 runs `mise run cross`,
   `govulncheck`, and `license-check`. They see only imported, non-test code,
-  so they cannot run usefully earlier. If Windows fails, `serve` gets a build
-  constraint and the client stays portable. On 2026-11-25 all three passed on
-  a copy of this repository with blank imports of `tsnet` and `tailcfg` from
-  `tailscale.com@v1.106.1` and of `go-proxyproto@v0.16.0`. Those imports took
-  the stripped Linux binary from 25.0 MB to 43.1 MB.
+  so they cannot run usefully earlier. If Windows fails, `internal/server` and
+  later `serve.go` get a build constraint and the client stays portable. On
+  2026-11-25 all three passed on a copy of this repository with blank imports
+  of `tsnet` and `tailcfg` from `tailscale.com@v1.106.1` and of
+  `go-proxyproto@v0.16.0`. Those imports took the stripped Linux binary from
+  25.0 MB to 43.1 MB.
 - [One replica means a few seconds of unavailability on restart] → Accepted.
   tsipam is not in the data path, and clients report `server unreachable`
   with exit 2, which CI retries.
