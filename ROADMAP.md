@@ -92,13 +92,6 @@ an OpenSpec change. Not filed yet, highest value first:
 
 ## Future Vision (Long-Term)
 
-- [ ] #4 Adopt the ax-go v0.10.0 CLI runtime (`adopt-ax-go-runtime`):
-      `__schema`, MCP, dry-run, confirmation, and tracing through
-      `ax.Execute` [L]
-      `tsipam` records its own dependency exception in `CONTEXT.md`, so it no
-      longer waits for rshade/tailscale-utils#394. The MCP server covers
-      writes as well as reads: every leaf command except `check` is a tool.
-
 Repo-wide, with no work needed here: rshade/tailscale-utils#320 asks every CLI
 to specify its `--schema` output, and `tsipam` already does.
 
@@ -128,6 +121,10 @@ condition is met.
 
 ### 2026-Q4
 
+- The ax-go v0.10.0 CLI runtime: `__schema`, MCP, dry-run, confirmation, and
+  tracing through `ax.Execute` (`adopt-ax-go-runtime`, #4, PRs #43 to #50 and
+  #52, merged 2026-11-25; archived 2026-11-25). The MCP server covers writes as
+  well as reads: every leaf command except `check` is a tool. [L]
 - Registry store split from the allocation rules: a `Store` seam, the
   `hujsonstore` backend, and a conformance suite, with no user-visible
   change (`refactor-registry-store`, PR #13, merged 2026-11-17; archived

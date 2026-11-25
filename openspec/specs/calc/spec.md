@@ -162,8 +162,9 @@ SHALL replace IPv6 suggestions and pool identifiers in exhaustion messages.
 
 #### Scenario: Single suggestion is usable in shell substitution
 
-- **WHEN** an operator runs `tsipam calc next-free 10.0.0.0/24 --size 26`
-  and the first child is available
+- **WHEN** an operator runs
+  `tsipam calc next-free 10.0.0.0/24 --size 26 --format human` with stdout
+  captured, and the first child is available
 - **THEN** human stdout is exactly `10.0.0.0/26` followed by a newline
 
 #### Scenario: Count limits returned suggestions
@@ -313,9 +314,10 @@ its plain IPv4 equivalent before block-fact reporting, consistent with
 
 ### Requirement: Calc info accepts one CIDR and rejects malformed input
 
-`calc info` SHALL require exactly one CIDR argument and compute its facts
-without registry or control-plane access. It SHALL accept the shared output
-and sanitization flags without introducing command-specific flags.
+`calc info` SHALL require exactly one CIDR, given by position or by `--cidr`,
+and compute its facts without registry or control-plane access. It SHALL
+accept the shared output and sanitization flags and no other command-specific
+flag.
 An argument that does not parse as a CIDR SHALL fail with usage exit code 2,
 an error on stderr naming the invalid input, and nothing on stdout.
 
@@ -323,6 +325,11 @@ an error on stderr naming the invalid input, and nothing on stdout.
 
 - **WHEN** `tsipam calc info not-a-cidr` runs
 - **THEN** it exits 2, stdout is empty, and stderr names `not-a-cidr`
+
+#### Scenario: CIDR given by flag
+
+- **WHEN** `tsipam calc info --cidr 10.0.0.0/24` runs
+- **THEN** its result equals that of `tsipam calc info 10.0.0.0/24`
 
 ### Requirement: Calc info renders block facts in the versioned envelope
 
@@ -416,8 +423,9 @@ selection (default `.`); the tailnet SHALL resolve from `--tailnet`, then
 
 ### Requirement: Aggregate sources are mutually exclusive
 
-`--from-registry` SHALL accept no positional CIDRs. Without registry mode,
-aggregate SHALL require at least one positional CIDR and SHALL reject
+`--from-registry` SHALL accept no positional CIDRs and no `--cidr`. Without
+registry mode, aggregate SHALL require at least one CIDR, given all by
+position or all by `--cidr`, and SHALL reject
 explicit `--registry-dir` or `--tailnet` flags. Invalid source combinations
 SHALL fail with exit 2 and empty stdout before registry or live-state access.
 Explicit `--from-registry=false` SHALL retain positional mode. Single-dash
@@ -445,13 +453,19 @@ long flags SHALL behave identically to their double-dash spellings.
 - **WHEN** `calc aggregate --from-registry=false 10.0.0.0/24` runs
 - **THEN** it returns the positional aggregate without registry access
 
+#### Scenario: Registry mode rejects CIDR flags
+
+- **WHEN** `calc aggregate --from-registry --cidr 10.0.0.0/24` runs
+- **THEN** it exits 2 with an error identifying the conflicting sources
+  and performs no registry read
+
 ### Requirement: Calc next-free rejects exhausted pools and invalid target sizes
 
 When no requested IPv4 or IPv6 child is available, `calc next-free` SHALL
 exit 2, write the exhaustion message to stderr, and write nothing to stdout
 in either output format, so the documented composition
-`tsipam subnet reserve "$(tsipam calc next-free ...)"` fails at the
-composing command instead of passing text as a CIDR. Target widths shorter
+`tsipam subnet reserve "$(tsipam calc next-free ... --format human)"` fails
+at the composing command instead of passing text as a CIDR. Target widths shorter
 than the canonical pool or greater than the address-family width SHALL be
 usage errors.
 
