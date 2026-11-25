@@ -142,6 +142,8 @@ jobs:
       - name: Check dependency licenses
         run: mise run license-check
 
+  # The check is required, so the job always runs and reports; only its work is
+  # conditional. The release workflow builds and smoke-tests the real archives.
   release-check:
     name: GoReleaser snapshot
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
@@ -152,8 +154,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Look for a goreleaser change
+        id: goreleaser
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A diff that cannot be computed counts as a change.
+          changed=true
+          if git diff --quiet "$BASE_SHA...HEAD" -- .goreleaser.yaml &&
+            pin=$(git diff "$BASE_SHA...HEAD" -G'^goreleaser = ' --name-only -- mise.toml) &&
+            [ -z "$pin" ]; then
+            changed=false
+          fi
+          echo "changed=$changed" | tee -a "$GITHUB_OUTPUT"
+
       - name: Install pinned tools
+        if: steps.goreleaser.outputs.changed == 'true'
         uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5
 
       - name: Validate and snapshot-build
+        if: steps.goreleaser.outputs.changed == 'true'
         run: mise run release-check
