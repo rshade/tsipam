@@ -58,8 +58,11 @@
       `--tailnet`), with the envelope's `run` object, the human `Last run:`
       line, client-side sanitization, and exit 0 or 2 as specified, and add it
       to the schema catalog. It reaches the server through `target.go` and
-      needs no entry in `commandExceptions`. Verify the boundary tests pass,
-      `cmd` tests, the updated `schema.golden.json`, and that `-schema` shows
+      needs no entry in `commandExceptions`. Declare it `read-only` in
+      `leafContracts`, add it to the pinned MCP tool set, and give
+      `drift_unavailable` its error code in `classify`. Verify the boundary,
+      leaf-contract, and tool-set tests pass, `cmd` tests, the updated schema
+      goldens, and that `-schema` shows
       the summary that points to `check` for gating
 - [ ] 3.6 Add a "Scheduled comparisons" section to
       `docs/explanation/registry-and-live-state.md` covering in-memory

@@ -5,7 +5,7 @@
 - [x] 1.1 Amend `CONTEXT.md` with the D1 exception, the D9 `mcp-server` text,
       and the inbound MCP path, and update ROADMAP item #4 and its "beyond
       `tscli`" dependency rule; verify `mise run lint-md` passes and the text matches the design
-- [ ] 1.2 Record the stripped linux/amd64 size of `main`; verify the number is
+- [x] 1.2 Record the stripped linux/amd64 size of `main`; verify the number is
       in the PR body
 
 ## 2. Rehearsal in the registry
@@ -142,17 +142,17 @@
 
 ## 9. Release verification
 
-- [ ] 9.1 Add the release build tags to `.goreleaser.yaml` and a dependency
+- [x] 9.1 Add the release build tags to `.goreleaser.yaml` and a dependency
       test for that configuration; verify `mise run release-check` passes and
       the exporters and gRPC are absent
-- [ ] 9.2 Record stripped linux/amd64 sizes after the change, with and without
+- [x] 9.2 Record stripped linux/amd64 sizes after the change, with and without
       the tags; verify the delta is in the PR body
-- [ ] 9.3 Run `mise run test vet lint cross smoke` and `go test -race ./...`;
+- [x] 9.3 Run `mise run test vet lint cross smoke` and `go test -race ./...`;
       verify all pass
 - [ ] 9.4 File `ax-go` issues for the `--strict` stdout and write-error bugs
       and for mapping positional arguments in MCP, and note on rshade/ax-go#331
       the pre-`RunE` paths found here; verify the links are in the PR body
-- [ ] 9.5 Update the four in-flight changes named in the design's contact
+- [x] 9.5 Update the four in-flight changes named in the design's contact
       table; verify `openspec validate --all --strict` reports no new problem
 
 ## Workflow follow-up

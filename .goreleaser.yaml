@@ -18,6 +18,11 @@ builds:
     binary: tsipam
     env:
       - CGO_ENABLED=0
+    # Telemetry never leaves the machine, so the exporters that could send it are
+    # left out. scripts/notice.sh lists modules with the same tags.
+    tags:
+      - ax_no_grpc
+      - ax_no_otlp
     ldflags:
       - -s -w -X main.version={{ .Version }}
     goos: [linux, darwin, windows]

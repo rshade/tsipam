@@ -58,7 +58,8 @@ flag SHALL take precedence over `TSIPAM_SERVER`. `TSIPAM_SERVER` and
 ### Requirement: Remote results match local results
 
 Remote mode SHALL produce the same human output, JSON envelope, and exit
-code as local mode for the same registry state and request, including
+code as local mode for the same registry state and request, once the published
+run-varying fields and the error object's `trace_id` are masked, including
 collisions (exit 1), drift (exit 1 for `check` and `check-policy`), no-op
 reserves and releases (`status: "no_changes"`), and invalid input (exit 2).
 
@@ -66,8 +67,8 @@ reserves and releases (`status: "no_changes"`), and invalid input (exit 2).
 
 - **WHEN** site ID 7 is reserved for `hq` on the server and a client runs
   `site-id reserve 7 branch --server https://tsipam.example.ts.net`
-- **THEN** the client exits 1 with the same stderr message local mode
-  prints, and stdout is empty
+- **THEN** the client exits 1 with the same error object local mode writes,
+  apart from its `trace_id`, and stdout is empty
 
 ### Requirement: Transport failures exit 2
 
@@ -123,3 +124,32 @@ fetched, the command SHALL fail with exit 2 before running the operation.
 - **THEN** the command exits 2 with empty stdout before the operation runs,
   and stderr says that sanitized remote output requires `read` access to
   the registry alias
+
+### Requirement: An MCP client cannot choose the server
+
+A tool call SHALL use the server that `TSIPAM_SERVER` named when `mcp-server`
+started. A call that passes `server` SHALL fail with `validation_error` before
+any request is sent.
+
+#### Scenario: A server input is refused
+
+- **WHEN** a client calls `tsipam-site-id-list` with `server`
+  `https://other.example.ts.net`
+- **THEN** the call fails with `validation_error` and no request is sent
+
+#### Scenario: The environment selects the server
+
+- **WHEN** `mcp-server` starts with `TSIPAM_SERVER` set and a client calls
+  `tsipam-site-id-list`
+- **THEN** the result is that server's registry
+
+### Requirement: A remote rehearsal needs the real permission
+
+A `--dry-run` request SHALL be authorized as the action it rehearses, and SHALL
+record no audit event.
+
+#### Scenario: A reader cannot rehearse a reserve
+
+- **WHEN** a caller granted only `read` runs `site-id reserve 7 hq --dry-run`
+  against a server
+- **THEN** the command exits 2 with `error_code` `access_denied`

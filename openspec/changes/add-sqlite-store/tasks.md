@@ -46,15 +46,20 @@
       the typed `Tx` mutations, writing one `events` row per `Put*`/`Delete*`
       with prior value, `Action`, `Now`, and actor; verify `storetest.Run`,
       including history cases, passes against `sqlitestore` with `-race`
-- [ ] 2.5 Add storage-integrity tests that insert directly through
+- [ ] 2.5 Decide the rehearsal read path (see the open question), record it in
+      design.md, and implement rule 9 with it; verify the rehearsal cases in
+      `storetest.Run` pass, and tests show an unchanged directory listing and
+      bytes for a present, absent, older-schema, and read-only database, and no
+      `events` row
+- [ ] 2.6 Add storage-integrity tests that insert directly through
       `database/sql`: a cross-site overlapping pool, an out-of-range site ID
       or port, an event `UPDATE`/`DELETE`, and a corrupted `cidr`/range pair
       (scoped map error on read, `Delete` fails closed); verify each is
       rejected or fails closed
-- [ ] 2.6 Implement `IdentitySource` and `HistoryReader` on `sqlitestore`;
+- [ ] 2.7 Implement `IdentitySource` and `HistoryReader` on `sqlitestore`;
       verify unit tests cover identity collection from a database containing
       one invalid row
-- [ ] 2.7 Add a concurrency test that starts ten goroutines, each with its own
+- [ ] 2.8 Add a concurrency test that starts ten goroutines, each with its own
       `Open` on one file, each running `Ledger.AllocateSubnetPool`; verify
       ten distinct, non-overlapping blocks and ten `allocate` events
 
@@ -83,8 +88,9 @@
 - [ ] 3.4 Add CLI tests running each registry command family (site-id,
       subnet including allocate, service, udp-port, plan, check-policy, calc
       aggregate, calc next-free) against `sqlite://`, comparing JSON envelopes
-      with the same sequence on `file://`; verify identical output apart from
-      backend-specific fields (none expected)
+      with the same sequence on `file://`, each with and without `--dry-run`;
+      verify identical output once the fields `__schema` publishes and the error
+      object's `trace_id` are masked
 - [ ] 3.5 Document `--registry`, `TSIPAM_REGISTRY`, the schemes, and
       precedence in `docs/reference/registry-format.md` (renamed sections or
       a new `docs/reference/registry-backends.md` linked from it), and add
@@ -104,8 +110,9 @@
 - [ ] 4.3 Add `tsipam registry history` under the `registry` group (create
       the group if `add-registry-export-import` has not landed it) with human
       tab-separated output, the `events` JSON array, flag validation, and
-      sanitization; verify CLI tests for every scenario in
-      `specs/registry-history/spec.md`
+      sanitization. Declare it `read-only` in `leafContracts` and add it to the
+      pinned MCP tool set. Verify CLI tests for every scenario in
+      `specs/registry-history/spec.md`, and the leaf-contract and tool-set tests
 - [ ] 4.4 Document the `events` array in `docs/reference/json-envelope.md`
       and the history command in the CLI reference; verify
       `mise run lint-md` passes
@@ -113,8 +120,9 @@
 ## 5. Schema catalog
 
 - [ ] 5.1 Make the `registry` flag and `registry history` appear in
-      `tsipam -schema`, regenerate `cmd/tsipam/testdata/schema.golden.json`
-      with `-update`, and inspect that the diff adds only those entries;
+      `tsipam -schema`, regenerate the three schema goldens in
+      `cmd/tsipam/testdata/` with `-update`, and inspect that the diffs add only
+      those entries;
       verify both scenarios in `specs/schema/spec.md`
 
 ## 6. Operator documentation and smoke
@@ -132,8 +140,8 @@
 
 - [ ] 7.1 Run `mise run test lint cross smoke`; verify all pass
 - [ ] 7.2 Verify that with `TSIPAM_REGISTRY` unset, the full `cmd/` and
-      `smoke/` suites pass with no golden or fixture changes other than
-      `schema.golden.json`
+      `smoke/` suites pass with no golden or fixture changes other than the
+      three schema goldens
 
 ## Workflow follow-up
 

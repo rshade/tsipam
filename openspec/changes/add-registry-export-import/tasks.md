@@ -77,26 +77,33 @@
       mode (exit 1, empty stdout) and plan mode (exit 1, report on stdout),
       success (exit 0, `status: ok`), and an all-unchanged merge (`status:
       no_changes`)
-- [ ] 4.3 Map `import_refused` and `errImportRefused` to exit 1 in
-      `exitCodeFor`; verify `contract_test.go` cases assert the exit codes and
-      empty stdout on refusals
+- [ ] 4.3 Give `import_refused` its error code in `classify`, with the verdict
+      codes that exit 1, and return it after a refused plan's report; verify the
+      table test in `errors_test.go` gains both rows and CLI tests assert the
+      code, the exit status, and empty stdout on an applied refusal
 - [ ] 4.4 Wire sanitization: placeholders applied after ordering in the
       rendered export, the import report's field kinds, and path sweep values;
       verify `error_sanitize_test.go` cases for a sanitized export, a sanitized
       import report, and a loader error that echoes a source value
 - [ ] 4.5 Update `schema.go`'s exit-code 1 text and sanitization text, then
-      regenerate `testdata/schema.golden.json` with `-update`; verify the
-      golden diff adds only the `registry` commands and the two text changes,
-      and that the schema delta's scenarios hold
+      regenerate the three schema goldens in `testdata/` with `-update`; verify
+      the golden diffs add only the `registry` commands and the two text
+      changes, and that the schema delta's scenarios hold
+- [ ] 4.6 Declare both commands in `leafContracts` (`read-only` and `mutate`),
+      take the import source through `bindInputs` as `--source`, make
+      `--dry-run` on import the same run as `--plan`, and add both to the pinned
+      MCP tool set; verify `import` has a dry-run case and an input case, and
+      the leaf-contract, dry-run, input, and tool-set tests pass
 
 ## 5. Documentation and smoke
 
 - [ ] 5.1 Document both commands in `docs/reference/json-envelope.md` (the
-      `document`/`counts` and `import` payloads), `exit-codes.md` (import
-      refusals at 1, source failures at 2), and `registry-format.md` (export
+      `document`/`counts` and `import` payloads), `exit-codes.md`
+      (`import_refused` at 1, source failures at 2), and `registry-format.md` (export
       is canonical, not a byte copy); verify `mise run lint-md` passes
 - [ ] 5.2 Add `docs/how-to/export-and-import-a-registry.md` (snapshot for CI,
-      copy between tailnets, merge, plan, and the sanitized-backup warning) and
+      copy between tailnets, merge, plan, `--format human` in a pipe or
+      redirect, and the sanitized-backup warning) and
       link it from `docs/README.md`; verify `mise run lint-md` passes and every
       command in it runs as written against a temp registry
 - [ ] 5.3 Add README examples for export and a merge import with their
@@ -105,8 +112,8 @@
 ## 6. Integration verification
 
 - [ ] 6.1 Run `mise run test lint cross smoke` and verify all pass
-- [ ] 6.2 Verify that no existing golden fixture other than
-      `schema.golden.json` changed (`git diff --stat main -- '*testdata*'`)
+- [ ] 6.2 Verify that no existing golden fixture other than the three schema
+      goldens changed (`git diff --stat main -- '*testdata*'`)
 
 ## Workflow follow-up
 

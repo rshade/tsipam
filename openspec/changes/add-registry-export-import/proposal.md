@@ -47,6 +47,10 @@ document they can commit, wherever the reservations actually live.
 
 - `schema`: the catalog gains `registry export` and `registry import`
   with their flags, and the exit-code descriptions cover import refusals.
+- `error-envelope`: `import_refused` joins the verdict codes that exit 1, and a
+  refused plan leaves its report on stdout.
+- `mutation-safety`, `command-inputs`: `registry import` joins their command
+  lists.
 
 ## Impact
 
