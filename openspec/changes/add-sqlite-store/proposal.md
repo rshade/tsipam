@@ -55,13 +55,14 @@ codes are unchanged.
 
 - **Code:** new `internal/registry/sqlitestore`; backend selection in
   `cmd/tsipam` (flag parsing, `TSIPAM_REGISTRY`, sanitizer registration);
-  `internal/loopback` and `internal/ipamsvc` receive a selected `Store`; a new
+  `cmd/tsipam/target.go` builds the service from a selected `Store`; a new
   history method in `design/` with regenerated `gen/`.
 - **Dependencies:** `modernc.org/sqlite` and its `modernc.org/*` runtime
   modules (BSD-3-Clause, already in the license allowlist).
 - **Depends on:** `refactor-registry-store` (the `Store` contract and
-  conformance suite) and `add-registry-export-import` (the `registry` command
-  group and `import`, used for migration).
+  conformance suite), `refactor-client-server-boundary` (`target.go`), and
+  `add-registry-export-import` (the `registry` command group and `import`, used
+  for migration).
 - **Enables:** `add-serve-tsnet`, which runs the SQLite backend behind a
   Tailscale Service and fills the audit actor from `WhoIs`.
 - **Out of scope:** Postgres, multiple writers or replicas, expiring

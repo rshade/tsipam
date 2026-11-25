@@ -13,7 +13,6 @@ import (
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	"github.com/rshade/tsipam/internal/diagnostics"
-	"github.com/rshade/tsipam/internal/loopback"
 )
 
 // wrapSplitError wraps a split error with context about 4-in-6 normalization if applicable.
@@ -92,7 +91,7 @@ func executeCalcNextFree(
 	registerSweepValue(outputSanitizer, kindCIDR, pool.String())
 
 	var result *outputEnvelope
-	err = loopback.RunWithLogger(cmd.Context(), registryDir, state.logger,
+	err = state.registryTarget(registryDir).run(cmd.Context(),
 		func(ctx context.Context, client *ipamclient.Client) error {
 			output, outputErr := nextFreeOutput(ctx, client, tailnet, listDevices, state.logger, pool, size, count, all)
 			if outputErr != nil {

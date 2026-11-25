@@ -8,7 +8,13 @@ import (
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
 
 	ipam "github.com/rshade/tsipam/gen/ipam"
-	"github.com/rshade/tsipam/internal/planner"
+)
+
+// The entry kinds that sanitization treats specially. They are the API's
+// values, and must match the ones internal/planner reports.
+const (
+	comparisonKindSiteID         = "site_id"
+	comparisonKindServiceAddress = "service_address"
 )
 
 type comparisonEntryOutput struct {
@@ -76,7 +82,7 @@ func sanitizeComparison(input *comparisonOutput, output *sanitize.Sanitizer) *co
 	for index, entry := range input.Entries {
 		keyKind, expectedKind, observedKind := comparisonIdentityKinds(entry.Kind)
 		key := entry.Key
-		if entry.Kind != planner.KindSiteID {
+		if entry.Kind != comparisonKindSiteID {
 			key = output.Value(keyKind, key)
 		}
 		observed := make([]string, len(entry.Observed))
@@ -92,7 +98,7 @@ func sanitizeComparison(input *comparisonOutput, output *sanitize.Sanitizer) *co
 }
 
 func comparisonIdentityKinds(kind string) (string, string, string) {
-	if kind == planner.KindServiceAddress {
+	if kind == comparisonKindServiceAddress {
 		return kindIP, kindService, kindService
 	}
 	return kindCIDR, kindSite, kindHostname

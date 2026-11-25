@@ -2,12 +2,16 @@
 
 ## Context
 
-See `proposal.md` for motivation. This change builds on three earlier ones:
+See `proposal.md` for motivation. This change builds on four earlier ones:
 
 - `refactor-registry-store`: `registry.Ledger` holds every rule and runs
   against a `registry.Store` (`View`/`Update`). `ipamsvc.Service` holds a
-  `*registry.Ledger`. `loopback` builds the generated goa client over an
-  in-process Unix socket.
+  `*registry.Ledger`.
+- `refactor-client-server-boundary`: `ipamhttp.NewHandler` builds the goa
+  handler, `ipamconn.NewClient` builds the generated client, `loopback.Run`
+  serves a handler over an in-process Unix socket, and
+  `cmd/tsipam/target.go` is the one place commands reach them. An import
+  test enforces it.
 - `add-registry-export-import`: the `registry` command group.
 - `add-sqlite-store`: `--registry <url>` and `TSIPAM_REGISTRY` select the
   backend; `sqlitestore` writes one `events` row per mutation with a
@@ -88,14 +92,14 @@ Constraints from the repo:
 
 ### Embed tsnet and listen on the Service with TCP and TLS termination
 
-`tsipam serve` creates `tsnet.Server{Dir: stateDir, Hostname,
-AdvertiseTags, AuthKey: TS_AUTHKEY}`, calls `Up`, then
-`ListenService(service, tsnet.ServiceModeTCP{Port: 443, TerminateTLS: true,
-PROXYProtocolVersion: 2})`. It wraps the returned listener in a
-`proxyproto.Listener` whose policy is `REQUIRE`, so a connection without a
-valid PROXY header is closed before any HTTP is read, and runs a standard
-`http.Server` with the goa handler on the wrapped listener. The wrapped
-connection's `RemoteAddr` is the caller's tailnet source address.
+`tsipam serve` creates `tsnet.Server{Dir: stateDir, Hostname, AdvertiseTags,
+AuthKey: TS_AUTHKEY}`, calls `Up`, then `ListenService(service,
+tsnet.ServiceModeTCP{Port: 443, TerminateTLS: true, PROXYProtocolVersion: 2})`.
+It wraps the returned listener in a `proxyproto.Listener` whose policy is
+`REQUIRE`, so a connection without a valid PROXY header is closed before any
+HTTP is read, and runs a standard `http.Server` with the `ipamhttp.NewHandler`
+handler on the wrapped listener. The wrapped connection's `RemoteAddr` is the
+caller's tailnet source address.
 
 *Alternatives considered:*
 
@@ -181,7 +185,8 @@ caller can see why. `tsipam whoami` calls it and needs `--server` or
 `roleFromCaps` does, so one malformed value is ignored without discarding
 the valid values beside it. Two checkpoints apply them:
 
-1. **At method entry** (a goa endpoint middleware), the method's action and
+1. **At method entry** (a goa endpoint middleware, passed to
+   `ipamhttp.NewHandler` through a new parameter), the method's action and
    the registry alias are checked. A caller with no action on the alias is
    denied here, before any registry read, which gives the non-disclosure
    requirement.
@@ -217,15 +222,17 @@ reserves to admins for no security gain.
 
 ### Remote client: the same goa client, a different transport
 
-`internal/remote.Run(ctx, serverURL, logger, fn)` builds the generated
-`ipamclient.Client` with `goahttp` over an `http.Client` that uses system
+`internal/remote.Run(ctx, serverURL, logger, fn)` builds the generated client
+with `ipamconn.NewClient` over an `http.Client` that uses system
 TLS roots (Service certificates are publicly trusted `*.ts.net`
 certificates), a 10-second dial timeout, and a 60-second overall request
-timeout. A single resolver `cmd/tsipam/target.go` turns flags and
-environment into either `{local Store URL}` or `{server URL}`. Every
-registry call site changes from `loopback.RunWithLogger(ctx, registryDir,
-...)` to `target.Run(ctx, ...)`. That is the payoff of the loopback design:
-command code does not branch on mode.
+timeout. The resolver in `cmd/tsipam/target.go` turns flags and
+environment into either `{local Store URL}` or `{server URL}`. All eight
+call sites, including `plan` and `check`, already go through that file, so
+the transport choice happens in one place. Command code branches on mode
+only for live reads and credential checks (`calc next-free` calls
+`list_live_routes` instead), for sanitizer seeding from `list_identities`, and
+for `whoami`, which needs a server.
 
 Error classification for stderr, all exiting 2:
 

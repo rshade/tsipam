@@ -11,7 +11,6 @@ import (
 	"github.com/rshade/tsacl/pkg/ipcalc"
 
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
-	"github.com/rshade/tsipam/internal/loopback"
 )
 
 func newCalcAggregateCommand(state *commandState) *cobra.Command {
@@ -72,7 +71,7 @@ func aggregateRegistryCIDRs(
 	ctx context.Context, state *commandState, registryDir, tailnet string,
 ) ([]string, error) {
 	var cidrs []string
-	err := loopback.RunWithLogger(ctx, registryDir, state.logger,
+	err := state.registryTarget(registryDir).run(ctx,
 		func(callCtx context.Context, client *ipamclient.Client) error {
 			reservations, listErr := listSubnetPoolReservations(callCtx, client, tailnet)
 			if listErr != nil {

@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
-
-	"github.com/rshade/tsipam/internal/policycheck"
 )
 
 const (
@@ -174,7 +172,7 @@ type outputEnvelope struct {
 	FreeBlocks       *[]string               `json:"free_blocks,omitempty"`
 	BlockInfo        *blockInfoOutput        `json:"block_info,omitempty"`
 	Comparison       *comparisonOutput       `json:"comparison,omitempty"`
-	PolicyComparison *policycheck.Report     `json:"policy_comparison,omitempty"`
+	PolicyComparison *policyComparisonOutput `json:"policy_comparison,omitempty"`
 
 	// messageBuilder, when set, renders Message from this envelope's own
 	// exported fields at emit time instead of Message being pre-formatted

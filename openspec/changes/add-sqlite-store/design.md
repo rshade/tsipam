@@ -16,7 +16,8 @@ See `proposal.md` for motivation. This change builds on:
 
 Current CLI wiring: `addRegistryFlags` (`cmd/tsipam/siteid.go`) defines
 `--registry-dir` (default `.`) and `--tailnet`, and every registry command
-reaches `ipamsvc` through `internal/loopback`. After execution,
+reaches `ipamsvc` through `cmd/tsipam/target.go`, which builds the service
+over a `hujsonstore` and serves it on `internal/loopback`. After execution,
 `registerKnownIdentityInventory` (`cmd/tsipam/main.go`) registers the
 registry directory, file path, and every raw identity value from the file for
 the free-text error sweep. The existing lockfile waits at most 5 seconds.
@@ -258,12 +259,15 @@ In `cmd/tsipam`, `addRegistryFlags` adds `--registry`. A resolver applies
 the precedence: explicit `--registry` or `--registry-dir` (both explicit is a
 usage error), then `TSIPAM_REGISTRY`, then `file://.`. It uses
 `Flags().Changed` so the `--registry-dir` default does not count as explicit.
-`loopback.RunWithLogger` takes a `registry.Store` instead of a directory.
+`registryTarget` in `target.go` holds the opened `registry.Store` instead of a
+directory, and the sanitizer setup reads `IdentitySource` from that store.
 
 ### Sanitization
 
-- The CLI registers the raw `--registry` value, the parsed path, and the
-  path's base name with the free-text sweep.
+- The CLI registers the raw `--registry` value and the parsed path with the
+  free-text sweep, plus the base name for `sqlite://`, or the registry file's
+  path and name for `file://`, as today. `internal/registry/backend` returns
+  these values, and `target.go` passes them to the sanitizer setup.
 - `registerKnownIdentityInventory` switches from calling
   `hujsonstore.RawEntries` directly to a new optional
   `registry.IdentitySource` interface, `IdentityValues(ctx, tailnet)`, which

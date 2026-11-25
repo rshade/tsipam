@@ -8,7 +8,6 @@ import (
 
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tsipam/gen/ipam"
-	"github.com/rshade/tsipam/internal/loopback"
 	"github.com/rshade/tsipam/internal/registry"
 )
 
@@ -217,8 +216,8 @@ func newUDPPortLeafCommand(
 					return validateErr
 				}
 			}
-			return loopback.RunWithLogger(
-				cmd.Context(), registryDir, state.logger,
+			return state.registryTarget(registryDir).run(
+				cmd.Context(),
 				func(ctx context.Context, client *ipamclient.Client) error {
 					output, callErr := call(ctx, client, args, tailnet, site, siteSet)
 					if callErr != nil {

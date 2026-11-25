@@ -9,12 +9,6 @@ import (
 
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tsipam/gen/ipam"
-	"github.com/rshade/tsipam/internal/devices"
-	"github.com/rshade/tsipam/internal/diagnostics"
-	"github.com/rshade/tsipam/internal/ipamsvc"
-	"github.com/rshade/tsipam/internal/loopback"
-	"github.com/rshade/tsipam/internal/registry"
-	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 const (
@@ -24,8 +18,6 @@ const (
 )
 
 var errRegistryDrift = errors.New("registry differs from live allocations")
-
-type liveSnapshotFunc func(context.Context, string, diagnostics.Logger) (devices.Snapshot, error)
 
 func newPlanningCommand(state *commandState, name string, collect liveSnapshotFunc) *cobra.Command {
 	var registryDir, tailnetFlag string
@@ -66,23 +58,12 @@ func executePlanning(
 		return errors.New("TAILSCALE_TAILNET is required")
 	}
 	if collect == nil {
-		collect = func(ctx context.Context, source string, logger diagnostics.Logger) (devices.Snapshot, error) {
-			getenv := func(key string) string {
-				if key == "TAILSCALE_TAILNET" {
-					return source
-				}
-				return state.getenv(key)
-			}
-			return devices.CollectSnapshot(ctx, getenv, logger)
-		}
+		collect = liveCollector(state.getenv)
 	}
-	svc := &ipamsvc.Service{
-		Ledger:      registry.NewLedger(hujsonstore.New(registryDir, state.logger), state.logger),
-		Logger:      state.logger,
-		CollectLive: collect,
-	}
+	target := state.registryTarget(registryDir)
+	target.collectLive = collect
 	var report *ipam.ComparisonReport
-	err = loopback.RunWithService(cmd.Context(), svc, func(ctx context.Context, client *ipamclient.Client) error {
+	err = target.run(cmd.Context(), func(ctx context.Context, client *ipamclient.Client) error {
 		result, callErr := client.Plan()(ctx, &ipam.PlanPayload{Tailnet: tailnet, LiveTailnet: liveTailnet})
 		if callErr != nil {
 			return callErr

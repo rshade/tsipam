@@ -11,7 +11,6 @@ import (
 
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tsipam/gen/ipam"
-	"github.com/rshade/tsipam/internal/loopback"
 )
 
 const commandCheckPolicy = "check-policy"
@@ -61,7 +60,7 @@ func executePolicyCheck(
 		return errors.New("policy must contain valid UTF-8")
 	}
 	var report *ipam.PolicyComparison
-	err = loopback.RunWithLogger(cmd.Context(), registryDir, state.logger,
+	err = state.registryTarget(registryDir).run(cmd.Context(),
 		func(ctx context.Context, client *ipamclient.Client) error {
 			result, callErr := client.CheckPolicy()(
 				ctx,

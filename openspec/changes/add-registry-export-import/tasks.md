@@ -62,17 +62,21 @@
 
 - [ ] 4.1 Add the `registry` command group with `export` (`--output`, the
       registry flags) rendering text, JSON envelope (`document`, `counts`), or
-      a `0600` atomic temp-file-and-rename write; verify tests in
-      `cmd/tsipam` for each output path, an envelope golden, file mode and the
-      absence of a temp file on failure, and exit 2 for a missing registry and
-      for a malformed map
+      a `0600` atomic temp-file-and-rename write. Call the service through
+      `target.go`, and give each command file that imports `hujsonstore` its
+      own entry in `commandExceptions`, listing only that package. Verify the
+      boundary tests pass, and tests in `cmd/tsipam` for each output path, an
+      envelope golden, file mode and the absence of a temp file on failure,
+      and exit 2 for a missing registry and for a malformed map
 - [ ] 4.2 Add `import <file|->` with `--merge`, `--plan`, and
       `--drop-unknown`: read the source, reject invalid UTF-8, pre-register
-      sweep values, parse, apply the unknown-keys refusal, call the service,
-      and render the `import` envelope with `dropped` and `refusal`; verify
-      tests for stdin, each refusal reason in apply mode (exit 1, empty stdout)
-      and plan mode (exit 1, report on stdout), success (exit 0,
-      `status: ok`), and an all-unchanged merge (`status: no_changes`)
+      sweep values, parse, apply the unknown-keys refusal, call the service
+      through `target.go`, and render the `import` envelope with `dropped` and
+      `refusal`, with the same `commandExceptions` rule as 4.1; verify the
+      boundary tests pass, and tests for stdin, each refusal reason in apply
+      mode (exit 1, empty stdout) and plan mode (exit 1, report on stdout),
+      success (exit 0, `status: ok`), and an all-unchanged merge (`status:
+      no_changes`)
 - [ ] 4.3 Map `import_refused` and `errImportRefused` to exit 1 in
       `exitCodeFor`; verify `contract_test.go` cases assert the exit codes and
       empty stdout on refusals

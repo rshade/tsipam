@@ -13,7 +13,6 @@ import (
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
 
 	"github.com/rshade/tsipam/internal/diagnostics"
-	"github.com/rshade/tsipam/internal/policycheck"
 )
 
 func policyFile(t *testing.T, dir, content string) string {
@@ -36,8 +35,9 @@ func runPolicyCommand(t *testing.T, env map[string]string, args ...string) (int,
 }
 
 type policyContractCase struct {
-	name, policy, registry    string
-	drift, authored, reserved int
+	name, policy, registry string
+	drift                  int
+	report                 string
 }
 
 func TestPolicyCheckOfflineContract(t *testing.T) {
@@ -48,12 +48,16 @@ func TestPolicyCheckOfflineContract(t *testing.T) {
 			`{"ipsets":{"ipset:office":["192.0.2.0/25"]}}`,
 			`{"subnetPools":{"192.0.2.0/24":"office"},"siteIDs":false,"serviceAddresses":false,"udpPorts":false}`,
 			0,
-			1,
-			1,
+			`{"drift_count":0,"authored":[{"ipset":"ipset:office","cidr":"192.0.2.0/25","state":"matched","pools":["192.0.2.0/24"]}],"reserved":[{"cidr":"192.0.2.0/24","site":"office","state":"matched","ipsets":["ipset:office"]}]}`,
 		},
-		{"both directions", `{"ipsets":{"ipset:office":["198.51.100.0/24"]}}`,
-			`{"subnetPools":{"192.0.2.0/24":"office"}}`, 2, 1, 1},
-		{"empty", `{}`, `{}`, 0, 0, 0},
+		{
+			"both directions",
+			`{"ipsets":{"ipset:office":["198.51.100.0/24"]}}`,
+			`{"subnetPools":{"192.0.2.0/24":"office"}}`,
+			2,
+			`{"drift_count":2,"authored":[{"ipset":"ipset:office","cidr":"198.51.100.0/24","state":"authored_but_unreserved","pools":[]}],"reserved":[{"cidr":"192.0.2.0/24","site":"office","state":"reserved_but_unreferenced","ipsets":[]}]}`,
+		},
+		{"empty", `{}`, `{}`, 0, `{"drift_count":0,"authored":[],"reserved":[]}`},
 	}
 	for _, tc := range cases {
 		for _, format := range []string{formatJSON, formatHuman} {
@@ -104,20 +108,25 @@ func checkPolicyOfflineContract(t *testing.T, tc policyContractCase, format stri
 
 func assertPolicyJSONContract(t *testing.T, out string, tc policyContractCase) {
 	t.Helper()
-	var result outputEnvelope
+	var result struct {
+		Command          string          `json:"command"`
+		Tailnet          string          `json:"tailnet"`
+		Comparison       json.RawMessage `json:"comparison"`
+		Changed          json.RawMessage `json:"changed"`
+		PolicyComparison json.RawMessage `json:"policy_comparison"`
+	}
 	if err := json.Unmarshal([]byte(out), &result); err != nil {
 		t.Fatal(err)
 	}
-	report := result.PolicyComparison
-	if result.Command != commandCheckPolicy || result.Tailnet != "alias" || report == nil {
+	if result.Command != commandCheckPolicy || result.Tailnet != "alias" || result.PolicyComparison == nil {
 		t.Fatalf("wrong envelope: %s", out)
 	}
-	if report.DriftCount != tc.drift || len(report.Authored) != tc.authored ||
-		len(report.Reserved) != tc.reserved {
-		t.Fatalf("wrong report: %s", out)
+	var report bytes.Buffer
+	if err := json.Compact(&report, result.PolicyComparison); err != nil {
+		t.Fatal(err)
 	}
-	if report.Authored == nil || report.Reserved == nil {
-		t.Fatalf("null report arrays: %s", out)
+	if report.String() != tc.report {
+		t.Fatalf("policy_comparison = %s, want %s", report.String(), tc.report)
 	}
 	if result.Comparison != nil || result.Changed != nil {
 		t.Fatalf("unexpected fields: %s", out)
@@ -256,13 +265,19 @@ func TestPolicyCheckSanitizedErrors(t *testing.T) {
 
 func TestPolicyComparisonSanitizationFieldDecisions(t *testing.T) {
 	t.Parallel()
-	if fields := sanitize.UnhandledFields[policycheck.Report]("DriftCount", "Authored", "Reserved"); len(fields) > 0 {
+	if fields := sanitize.UnhandledFields[policyComparisonOutput](
+		"DriftCount", "Authored", "Reserved",
+	); len(fields) > 0 {
 		t.Fatalf("unhandled report fields: %v", fields)
 	}
-	if fields := sanitize.UnhandledFields[policycheck.Authored]("IPSet", "CIDR", "State", "Pools"); len(fields) > 0 {
+	if fields := sanitize.UnhandledFields[policyAuthoredOutput](
+		"IPSet", "CIDR", "State", "Pools",
+	); len(fields) > 0 {
 		t.Fatalf("unhandled authored fields: %v", fields)
 	}
-	if fields := sanitize.UnhandledFields[policycheck.Reserved]("CIDR", "Site", "State", "IPSets"); len(fields) > 0 {
+	if fields := sanitize.UnhandledFields[policyReservedOutput](
+		"CIDR", "Site", "State", "IPSets",
+	); len(fields) > 0 {
 		t.Fatalf("unhandled reserved fields: %v", fields)
 	}
 }
