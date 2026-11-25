@@ -303,6 +303,42 @@ type CheckPolicyPolicyCheckFailedResponseBody struct {
 	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
 }
 
+// ListHistoryInvalidInputResponseBody is the type of the "ipam" service
+// "list_history" endpoint HTTP response body for the "invalid_input" error.
+type ListHistoryInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
+// ListHistoryUnsupportedResponseBody is the type of the "ipam" service
+// "list_history" endpoint HTTP response body for the "unsupported" error.
+type ListHistoryUnsupportedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name *string `form:"name,omitempty" json:"name,omitempty" xml:"name,omitempty"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID *string `form:"id,omitempty" json:"id,omitempty" xml:"id,omitempty"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message *string `form:"message,omitempty" json:"message,omitempty" xml:"message,omitempty"`
+	// Is the error temporary?
+	Temporary *bool `form:"temporary,omitempty" json:"temporary,omitempty" xml:"temporary,omitempty"`
+	// Is the error a timeout?
+	Timeout *bool `form:"timeout,omitempty" json:"timeout,omitempty" xml:"timeout,omitempty"`
+	// Is the error a server-side fault?
+	Fault *bool `form:"fault,omitempty" json:"fault,omitempty" xml:"fault,omitempty"`
+}
+
 // ReserveSiteIDInvalidInputResponseBody is the type of the "ipam" service
 // "reserve_site_id" endpoint HTTP response body for the "invalid_input" error.
 type ReserveSiteIDInvalidInputResponseBody struct {
@@ -619,6 +655,41 @@ type PolicyReservedResponseBody struct {
 	IPSets []string `form:"ipsets,omitempty" json:"ipsets,omitempty" xml:"ipsets,omitempty"`
 }
 
+// RegistryEventResponse is used to define fields on response body types.
+type RegistryEventResponse struct {
+	// RFC 3339 UTC time of the change.
+	At *string `form:"at,omitempty" json:"at,omitempty" xml:"at,omitempty"`
+	// Operation that made the change.
+	Action *string `form:"action,omitempty" json:"action,omitempty" xml:"action,omitempty"`
+	// Registry map that changed.
+	Kind *string `form:"kind,omitempty" json:"kind,omitempty" xml:"kind,omitempty"`
+	// Canonical key of the reservation.
+	Key *string `form:"key,omitempty" json:"key,omitempty" xml:"key,omitempty"`
+	// Site that scopes a UDP-port key; absent for other kinds.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Stored value before the change; absent when the key was not reserved.
+	Before *RegistryEventValueResponse `form:"before,omitempty" json:"before,omitempty" xml:"before,omitempty"`
+	// Stored value after the change; absent when the key was released.
+	After *RegistryEventValueResponse `form:"after,omitempty" json:"after,omitempty" xml:"after,omitempty"`
+	// Authenticated caller that made the change; absent for a local command.
+	Actor *string `form:"actor,omitempty" json:"actor,omitempty" xml:"actor,omitempty"`
+}
+
+// RegistryEventValueResponse is used to define fields on response body types.
+type RegistryEventValueResponse struct {
+	// Site of a site ID or subnet pool, service of an address, or device of a UDP
+	// port.
+	Target *string `form:"target,omitempty" json:"target,omitempty" xml:"target,omitempty"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+}
+
 // SiteIDReservationResponse is used to define fields on response body types.
 type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -864,6 +935,51 @@ func NewCheckPolicyPolicyComparisonOK(body *CheckPolicyResponseBody) *ipam.Polic
 // NewCheckPolicyPolicyCheckFailed builds a ipam service check_policy endpoint
 // policy_check_failed error.
 func NewCheckPolicyPolicyCheckFailed(body *CheckPolicyPolicyCheckFailedResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewListHistoryRegistryEventOK builds a "ipam" service "list_history"
+// endpoint result from a HTTP "OK" response.
+func NewListHistoryRegistryEventOK(body []*RegistryEventResponse) []*ipam.RegistryEvent {
+	v := make([]*ipam.RegistryEvent, len(body))
+	for i, val := range body {
+		if val == nil {
+			v[i] = nil
+			continue
+		}
+		v[i] = unmarshalRegistryEventResponseToIpamRegistryEvent(val)
+	}
+
+	return v
+}
+
+// NewListHistoryInvalidInput builds a ipam service list_history endpoint
+// invalid_input error.
+func NewListHistoryInvalidInput(body *ListHistoryInvalidInputResponseBody) *goa.ServiceError {
+	v := &goa.ServiceError{
+		Name:      *body.Name,
+		ID:        *body.ID,
+		Message:   *body.Message,
+		Temporary: *body.Temporary,
+		Timeout:   *body.Timeout,
+		Fault:     *body.Fault,
+	}
+
+	return v
+}
+
+// NewListHistoryUnsupported builds a ipam service list_history endpoint
+// unsupported error.
+func NewListHistoryUnsupported(body *ListHistoryUnsupportedResponseBody) *goa.ServiceError {
 	v := &goa.ServiceError{
 		Name:      *body.Name,
 		ID:        *body.ID,
@@ -1535,6 +1651,54 @@ func ValidateCheckPolicyPolicyCheckFailedResponseBody(body *CheckPolicyPolicyChe
 	return
 }
 
+// ValidateListHistoryInvalidInputResponseBody runs the validations defined on
+// ListHistoryInvalidInputResponseBody
+func ValidateListHistoryInvalidInputResponseBody(body *ListHistoryInvalidInputResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
+// ValidateListHistoryUnsupportedResponseBody runs the validations defined on
+// ListHistoryUnsupportedResponseBody
+func ValidateListHistoryUnsupportedResponseBody(body *ListHistoryUnsupportedResponseBody) (err error) {
+	if body.Name == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("name", "body"))
+	}
+	if body.ID == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("id", "body"))
+	}
+	if body.Message == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("message", "body"))
+	}
+	if body.Temporary == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("temporary", "body"))
+	}
+	if body.Timeout == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("timeout", "body"))
+	}
+	if body.Fault == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("fault", "body"))
+	}
+	return
+}
+
 // ValidateReserveSiteIDInvalidInputResponseBody runs the validations defined
 // on ReserveSiteIDInvalidInputResponseBody
 func ValidateReserveSiteIDInvalidInputResponseBody(body *ReserveSiteIDInvalidInputResponseBody) (err error) {
@@ -2045,6 +2209,111 @@ func validatePolicyReservedResponseBody(body *PolicyReservedResponseBody, path s
 		if !(*body.State == "matched" || *body.State == "reserved_but_unreferenced") {
 			err = goa.MergeErrors(err, goa.InvalidEnumValueError(path+".state", *body.State, []any{"matched", "reserved_but_unreferenced"}))
 		}
+	}
+	return
+}
+
+// ValidateRegistryEventResponse runs the validations defined on RegistryEvent
+func ValidateRegistryEventResponse(body *RegistryEventResponse) (err error) {
+	if body.At == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("at", "body"))
+	}
+	if body.Action == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("action", "body"))
+	}
+	if body.Kind == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("kind", "body"))
+	}
+	if body.Key == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("key", "body"))
+	}
+	if body.At != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.at", *body.At, goa.FormatDateTime))
+	}
+	if body.Action != nil {
+		if !(*body.Action == "reserve" || *body.Action == "allocate" || *body.Action == "release" || *body.Action == "import") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.action", *body.Action, []any{"reserve", "allocate", "release", "import"}))
+		}
+	}
+	if body.Kind != nil {
+		if !(*body.Kind == "site_id" || *body.Kind == "subnet_pool" || *body.Kind == "service_address" || *body.Kind == "udp_port") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError("body.kind", *body.Kind, []any{"site_id", "subnet_pool", "service_address", "udp_port"}))
+		}
+	}
+	if body.Before != nil {
+		if err2 := validateRegistryEventValueResponse(body.Before, "body.before"); err2 != nil {
+			err = goa.MergeErrors(err, err2)
+		}
+	}
+	if body.After != nil {
+		if err2 := validateRegistryEventValueResponse(body.After, "body.after"); err2 != nil {
+			err = goa.MergeErrors(err, err2)
+		}
+	}
+	return
+}
+
+// validateRegistryEventResponse checks RegistryEvent and reports errors using
+// the path supplied by its caller
+func validateRegistryEventResponse(body *RegistryEventResponse, path string) (err error) {
+	if body.At == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("at", path))
+	}
+	if body.Action == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("action", path))
+	}
+	if body.Kind == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("kind", path))
+	}
+	if body.Key == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("key", path))
+	}
+	if body.At != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat(path+".at", *body.At, goa.FormatDateTime))
+	}
+	if body.Action != nil {
+		if !(*body.Action == "reserve" || *body.Action == "allocate" || *body.Action == "release" || *body.Action == "import") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError(path+".action", *body.Action, []any{"reserve", "allocate", "release", "import"}))
+		}
+	}
+	if body.Kind != nil {
+		if !(*body.Kind == "site_id" || *body.Kind == "subnet_pool" || *body.Kind == "service_address" || *body.Kind == "udp_port") {
+			err = goa.MergeErrors(err, goa.InvalidEnumValueError(path+".kind", *body.Kind, []any{"site_id", "subnet_pool", "service_address", "udp_port"}))
+		}
+	}
+	if body.Before != nil {
+		if err2 := validateRegistryEventValueResponse(body.Before, path+".before"); err2 != nil {
+			err = goa.MergeErrors(err, err2)
+		}
+	}
+	if body.After != nil {
+		if err2 := validateRegistryEventValueResponse(body.After, path+".after"); err2 != nil {
+			err = goa.MergeErrors(err, err2)
+		}
+	}
+	return
+}
+
+// ValidateRegistryEventValueResponse runs the validations defined on
+// RegistryEventValue
+func ValidateRegistryEventValueResponse(body *RegistryEventValueResponse) (err error) {
+	if body.Target == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("target", "body"))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat("body.reserved_at", *body.ReservedAt, goa.FormatDateTime))
+	}
+	return
+}
+
+// validateRegistryEventValueResponse checks RegistryEventValue and reports
+// errors using the path supplied by its caller
+func validateRegistryEventValueResponse(body *RegistryEventValueResponse, path string) (err error) {
+	if body.Target == nil {
+		err = goa.MergeErrors(err, goa.MissingFieldError("target", path))
+	}
+	if body.ReservedAt != nil {
+		err = goa.MergeErrors(err, goa.ValidateFormat(path+".reserved_at", *body.ReservedAt, goa.FormatDateTime))
 	}
 	return
 }

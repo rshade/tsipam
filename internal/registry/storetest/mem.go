@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"slices"
 	"sync"
+	"time"
 
 	"github.com/rshade/tsipam/internal/registry"
 )
@@ -32,13 +34,19 @@ func (s *MemStore) FailNextCommit() {
 	s.mu.Unlock()
 }
 
-var _ registry.Store = (*MemStore)(nil)
+var (
+	_ registry.Store          = (*MemStore)(nil)
+	_ registry.HistoryReader  = (*MemStore)(nil)
+	_ registry.IdentitySource = (*MemStore)(nil)
+)
 
 type memRegistry struct {
 	siteIDs          map[string]registry.Entry
 	subnetPools      map[string]registry.Entry
 	serviceAddresses map[string]registry.ServiceEntry
 	udpPorts         map[string]map[string]string
+	// events is oldest first.
+	events []registry.Event
 }
 
 func (r *memRegistry) clone() *memRegistry {
@@ -47,6 +55,7 @@ func (r *memRegistry) clone() *memRegistry {
 		subnetPools:      cloneEntries(r.subnetPools),
 		serviceAddresses: cloneServices(r.serviceAddresses),
 		udpPorts:         map[string]map[string]string{},
+		events:           slices.Clone(r.events),
 	}
 	for site, ports := range r.udpPorts {
 		out.udpPorts[site] = cloneStrings(ports)
@@ -80,7 +89,37 @@ func cloneStrings(in map[string]string) map[string]string {
 
 type memTx struct {
 	reg      *memRegistry
+	opts     registry.TxOptions
+	actor    string
 	repaired bool
+}
+
+func (t *memTx) record(event registry.Event, fallback registry.Action) {
+	event.At = t.opts.EventTime()
+	event.Action = t.opts.EventAction(fallback)
+	event.Actor = t.actor
+	t.reg.events = append(t.reg.events, event)
+}
+
+func entryValue(entry registry.Entry, exists bool) *registry.EventValue {
+	if !exists {
+		return nil
+	}
+	return &registry.EventValue{Target: entry.Site, ReservationMetadata: entry.ReservationMetadata}
+}
+
+func serviceValue(entry registry.ServiceEntry, exists bool) *registry.EventValue {
+	if !exists {
+		return nil
+	}
+	return &registry.EventValue{Target: entry.Service, ReservationMetadata: entry.ReservationMetadata}
+}
+
+func deviceValue(device string, exists bool) *registry.EventValue {
+	if !exists {
+		return nil
+	}
+	return &registry.EventValue{Target: device}
 }
 
 func (t *memTx) Repaired() bool { return t.repaired }
@@ -115,41 +154,68 @@ func (t *memTx) Counts() registry.Counts {
 }
 
 func (t *memTx) PutSiteID(id string, entry registry.Entry) error {
+	prior, exists := t.reg.siteIDs[id]
 	t.reg.siteIDs[id] = entry
+	t.record(registry.Event{
+		Kind: registry.MapSiteIDs, Key: id,
+		Before: entryValue(prior, exists), After: entryValue(entry, true),
+	}, registry.ActionReserve)
 	return nil
 }
 
 func (t *memTx) DeleteSiteID(id string) (bool, error) {
-	if _, ok := t.reg.siteIDs[id]; !ok {
+	prior, exists := t.reg.siteIDs[id]
+	if !exists {
 		return false, nil
 	}
 	delete(t.reg.siteIDs, id)
+	t.record(registry.Event{
+		Kind: registry.MapSiteIDs, Key: id, Before: entryValue(prior, true),
+	}, registry.ActionRelease)
 	return true, nil
 }
 
 func (t *memTx) PutSubnetPool(cidr string, entry registry.Entry) error {
+	prior, exists := t.reg.subnetPools[cidr]
 	t.reg.subnetPools[cidr] = entry
+	t.record(registry.Event{
+		Kind: registry.MapSubnetPools, Key: cidr,
+		Before: entryValue(prior, exists), After: entryValue(entry, true),
+	}, registry.ActionReserve)
 	return nil
 }
 
 func (t *memTx) DeleteSubnetPool(cidr string) (bool, error) {
-	if _, ok := t.reg.subnetPools[cidr]; !ok {
+	prior, exists := t.reg.subnetPools[cidr]
+	if !exists {
 		return false, nil
 	}
 	delete(t.reg.subnetPools, cidr)
+	t.record(registry.Event{
+		Kind: registry.MapSubnetPools, Key: cidr, Before: entryValue(prior, true),
+	}, registry.ActionRelease)
 	return true, nil
 }
 
 func (t *memTx) PutServiceAddress(address string, entry registry.ServiceEntry) error {
+	prior, exists := t.reg.serviceAddresses[address]
 	t.reg.serviceAddresses[address] = entry
+	t.record(registry.Event{
+		Kind: registry.MapServiceAddresses, Key: address,
+		Before: serviceValue(prior, exists), After: serviceValue(entry, true),
+	}, registry.ActionReserve)
 	return nil
 }
 
 func (t *memTx) DeleteServiceAddress(address string) (bool, error) {
-	if _, ok := t.reg.serviceAddresses[address]; !ok {
+	prior, exists := t.reg.serviceAddresses[address]
+	if !exists {
 		return false, nil
 	}
 	delete(t.reg.serviceAddresses, address)
+	t.record(registry.Event{
+		Kind: registry.MapServiceAddresses, Key: address, Before: serviceValue(prior, true),
+	}, registry.ActionRelease)
 	return true, nil
 }
 
@@ -157,15 +223,24 @@ func (t *memTx) PutUDPPort(site, port, device string) error {
 	if t.reg.udpPorts[site] == nil {
 		t.reg.udpPorts[site] = map[string]string{}
 	}
+	prior, exists := t.reg.udpPorts[site][port]
 	t.reg.udpPorts[site][port] = device
+	t.record(registry.Event{
+		Kind: registry.MapUDPPorts, Key: port, Site: site,
+		Before: deviceValue(prior, exists), After: deviceValue(device, true),
+	}, registry.ActionReserve)
 	return nil
 }
 
 func (t *memTx) DeleteUDPPort(site, port string) (bool, error) {
-	if _, ok := t.reg.udpPorts[site][port]; !ok {
+	prior, exists := t.reg.udpPorts[site][port]
+	if !exists {
 		return false, nil
 	}
 	delete(t.reg.udpPorts[site], port)
+	t.record(registry.Event{
+		Kind: registry.MapUDPPorts, Key: port, Site: site, Before: deviceValue(prior, true),
+	}, registry.ActionRelease)
 	return true, nil
 }
 
@@ -219,7 +294,7 @@ func (s *MemStore) Update(
 		return err
 	}
 	working := reg.clone()
-	tx := &memTx{reg: working}
+	tx := &memTx{reg: working, opts: opts, actor: registry.ActorFrom(ctx)}
 	if err := fn(tx); err != nil {
 		return err
 	}
@@ -233,6 +308,81 @@ func (s *MemStore) Update(
 	s.regs[tailnet] = working
 	registry.RunAfterSuccess(ctx)
 	return nil
+}
+
+// History returns matching events newest first.
+func (s *MemStore) History(
+	_ context.Context, tailnet string, filter registry.HistoryFilter,
+) ([]registry.Event, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reg, ok := s.regs[tailnet]
+	if !ok {
+		return nil, registry.ErrNotFound
+	}
+	matched := []registry.Event{}
+	for _, event := range slices.Backward(reg.events) {
+		if len(matched) == filter.Limit {
+			break
+		}
+		keep, err := matches(event, filter)
+		if err != nil {
+			return nil, err
+		}
+		if keep {
+			matched = append(matched, event)
+		}
+	}
+	return matched, nil
+}
+
+func matches(event registry.Event, filter registry.HistoryFilter) (bool, error) {
+	if filter.Kind != 0 && event.Kind != filter.Kind {
+		return false, nil
+	}
+	if filter.Key != "" && event.Key != filter.Key {
+		return false, nil
+	}
+	at, err := time.Parse(time.RFC3339, event.At)
+	if err != nil {
+		return false, err
+	}
+	return !at.Before(filter.Since), nil
+}
+
+// IdentityValues returns the identity values of one tailnet's registry.
+func (s *MemStore) IdentityValues(_ context.Context, tailnet string, _ bool) registry.Identities {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out registry.Identities
+	reg, ok := s.regs[tailnet]
+	if !ok {
+		return out
+	}
+	for _, entry := range reg.siteIDs {
+		out.Sites = append(out.Sites, entry.Site)
+		out.Owners = append(out.Owners, entry.Owner)
+	}
+	for cidr, entry := range reg.subnetPools {
+		out.CIDRs = append(out.CIDRs, cidr)
+		out.Sites = append(out.Sites, entry.Site)
+		out.Owners = append(out.Owners, entry.Owner)
+	}
+	for address, entry := range reg.serviceAddresses {
+		out.Addresses = append(out.Addresses, address)
+		out.Services = append(out.Services, entry.Service)
+		out.Owners = append(out.Owners, entry.Owner)
+	}
+	for site, ports := range reg.udpPorts {
+		out.Sites = append(out.Sites, site)
+		for _, device := range ports {
+			out.Devices = append(out.Devices, device)
+		}
+	}
+	for _, event := range reg.events {
+		out.Actors = append(out.Actors, event.Actor)
+	}
+	return out
 }
 
 func requireMem(kinds []registry.MapKind) error {

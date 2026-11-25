@@ -5,9 +5,10 @@
 ### Requirement: Schema exposes registry export and import
 
 `tsipam -schema` SHALL list `registry`, `registry export`, and `registry
-import`. `registry export` SHALL list `output`, `registry-dir`, and `tailnet`.
-`registry import` SHALL list `source`, `merge`, `plan`, `drop-unknown`,
-`registry-dir`, and `tailnet`, with usage line `registry import <file>`. The exit-code 1
+import`. `registry export` SHALL list `output`, `registry`, `registry-dir`, and
+`tailnet`. `registry import` SHALL list `source`, `merge`, `plan`,
+`drop-unknown`, `registry`, `registry-dir`, and `tailnet`, with usage line
+`registry import <file>`. The exit-code 1
 description SHALL cover an import refused or planned as refused.
 
 #### Scenario: An agent discovers registry transfer

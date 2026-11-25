@@ -63,13 +63,6 @@ func newSiteIDCommand(state *commandState) *cobra.Command {
 	return cmd
 }
 
-func addRegistryFlags(cmd *cobra.Command, registryDir, tailnet *string) {
-	cmd.Flags().StringVar(registryDir, "registry-dir", defaultRegistryDir,
-		"directory holding <tailnet>.ipam.hujson registry files")
-	cmd.Flags().StringVar(tailnet, "tailnet", "",
-		"routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")")
-}
-
 // newSiteIDReserveCommand structurally mirrors newSubnetReserveCommand
 // (subnet.go) by design: each reserves its own registry entry shape through
 // the shared leaf-command plumbing.
@@ -200,7 +193,7 @@ func newSiteIDLeafCommand(
 	metadataFlags *reservationMetadataFlags,
 	call siteIDLeafCall,
 ) *cobra.Command {
-	var registryDir, tailnetFlag string
+	var tailnetFlag string
 	var bound inputs
 	cmd := &cobra.Command{
 		Use:           use,
@@ -241,13 +234,13 @@ func newSiteIDLeafCommand(
 			if err = state.approve(cmd, args, registry.NormalizeSiteID); err != nil {
 				return err
 			}
-			return state.runRegistryCall(cmd, registryDir, outputSanitizer,
+			return state.runRegistryCall(cmd, outputSanitizer,
 				func(ctx context.Context, client *ipamclient.Client) (*outputEnvelope, error) {
 					return call(ctx, client, args, tailnet)
 				})
 		},
 	}
 	bound = bindInputs(cmd, specs...)
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	addRegistryFlags(cmd, &tailnetFlag)
 	return cmd
 }

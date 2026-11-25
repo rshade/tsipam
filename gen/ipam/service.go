@@ -22,6 +22,8 @@ type Service interface {
 	// Compare static ipset definitions with subnet reservations without modifying
 	// either.
 	CheckPolicy(context.Context, *CheckPolicyPayload) (res *PolicyComparison, err error)
+	// List the audit events of one tailnet's registry, newest first.
+	ListHistory(context.Context, *ListHistoryPayload) (res []*RegistryEvent, err error)
 	// ListSiteIds implements list_site_ids.
 	ListSiteIds(context.Context, *ListSiteIdsPayload) (res []*SiteIDReservation, err error)
 	// ReserveSiteID implements reserve_site_id.
@@ -66,7 +68,7 @@ const ServiceName = "ipam"
 // MethodNames lists the service method names as defined in the design. These
 // are the same values that are set in the endpoint request contexts under the
 // MethodKey key.
-var MethodNames = [15]string{"plan", "check_policy", "list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "allocate_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
+var MethodNames = [16]string{"plan", "check_policy", "list_history", "list_site_ids", "reserve_site_id", "release_site_id", "list_subnet_pools", "reserve_subnet_pool", "allocate_subnet_pool", "release_subnet_pool", "list_service_addresses", "reserve_service_address", "release_service_address", "list_udp_ports", "reserve_udp_port", "release_udp_port"}
 
 // AllocateSubnetPoolPayload is the payload type of the ipam service
 // allocate_subnet_pool method.
@@ -152,6 +154,21 @@ type ComparisonReport struct {
 	Excluded []string
 }
 
+// ListHistoryPayload is the payload type of the ipam service list_history
+// method.
+type ListHistoryPayload struct {
+	// Routing/storage key for the registry.
+	Tailnet string
+	// Keep only events of this kind.
+	Kind *string
+	// Keep only events of this canonical key.
+	Key *string
+	// Keep only events at or after this RFC 3339 time.
+	Since *string
+	// Most events to return.
+	Limit int
+}
+
 // ListServiceAddressesPayload is the payload type of the ipam service
 // list_service_addresses method.
 type ListServiceAddressesPayload struct {
@@ -227,6 +244,41 @@ type PolicyReserved struct {
 	State string
 	// Sorted ipsets with overlapping effective address space.
 	IPSets []string
+}
+
+// One append-only audit record of a registry change.
+type RegistryEvent struct {
+	// RFC 3339 UTC time of the change.
+	At string
+	// Operation that made the change.
+	Action string
+	// Registry map that changed.
+	Kind string
+	// Canonical key of the reservation.
+	Key string
+	// Site that scopes a UDP-port key; absent for other kinds.
+	Site *string
+	// Stored value before the change; absent when the key was not reserved.
+	Before *RegistryEventValue
+	// Stored value after the change; absent when the key was released.
+	After *RegistryEventValue
+	// Authenticated caller that made the change; absent for a local command.
+	Actor *string
+}
+
+// A reservation's stored value before or after a change.
+type RegistryEventValue struct {
+	// Site of a site ID or subnet pool, service of an address, or device of a UDP
+	// port.
+	Target string
+	// Operator or team that owns this reservation.
+	Owner *string
+	// Free-text description of why this address space is reserved.
+	Description *string
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string
 }
 
 // ReleaseServiceAddressPayload is the payload type of the ipam service
@@ -529,14 +581,19 @@ func MakePolicyCheckFailed(err error) *goa.ServiceError {
 	return goa.NewServiceError(err, "policy_check_failed", false, false, false)
 }
 
-// MakeCollision builds a goa.ServiceError from an error.
-func MakeCollision(err error) *goa.ServiceError {
-	return goa.NewServiceError(err, "collision", false, false, false)
-}
-
 // MakeInvalidInput builds a goa.ServiceError from an error.
 func MakeInvalidInput(err error) *goa.ServiceError {
 	return goa.NewServiceError(err, "invalid_input", false, false, false)
+}
+
+// MakeUnsupported builds a goa.ServiceError from an error.
+func MakeUnsupported(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "unsupported", false, false, false)
+}
+
+// MakeCollision builds a goa.ServiceError from an error.
+func MakeCollision(err error) *goa.ServiceError {
+	return goa.NewServiceError(err, "collision", false, false, false)
 }
 
 // MakeExhausted builds a goa.ServiceError from an error.

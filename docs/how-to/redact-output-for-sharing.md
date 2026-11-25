@@ -34,7 +34,8 @@ Redacted, on stdout and stderr alike:
 - Site labels, service identities, reservation owners
 - Device names, addresses, advertised routes, enabled routes, users, and hostnames
 - Reserved subnet CIDRs, reserved service addresses
-- Registry directory paths in error messages
+- Registry URLs, directories, and database paths in error messages
+- Actors, keys, and values in `registry history`
 - Ipset names and CIDRs in `check-policy` output
 
 `devices list` redacts device names, addresses, advertised routes, enabled

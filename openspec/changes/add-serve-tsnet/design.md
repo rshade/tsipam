@@ -12,9 +12,10 @@ See `proposal.md` for motivation. This change builds on four earlier ones:
   serves a handler over an in-process Unix socket, and
   `cmd/tsipam/target.go` is the one place commands reach them. An import
   test enforces it.
-- `add-registry-export-import`: the `registry` command group.
-- `add-sqlite-store`: `--registry <url>` and `TSIPAM_REGISTRY` select the
-  backend; `sqlitestore` writes one `events` row per mutation with a
+- `add-registry-export-import`: `registry import`, which the deployment guide
+  uses to move an existing registry into SQLite.
+- `add-sqlite-store`: the `registry` command group; `--registry <url>` and
+  `TSIPAM_REGISTRY` select the backend; `sqlitestore` writes one `events` row per mutation with a
   nullable `actor` read from `registry.ActorFrom(ctx)`; the optional
   `registry.IdentitySource` interface feeds the sanitizer.
 

@@ -140,6 +140,7 @@ func assertSchemaCatalog(t *testing.T, document struct {
 		commandSubnet, commandSubnetList, commandSubnetRelease, commandSubnetReserve, commandSubnetAllocate,
 		commandService, commandServiceList, commandServiceRelease, commandServiceReserve,
 		commandCalc, commandCalcSplit, commandCalcInfo, commandCalcAggregate,
+		commandRegistry, commandRegistryHistory,
 	}
 	for _, want := range wantCommands {
 		if !slices.ContainsFunc(document.Commands, func(command schemaCommand) bool { return command.Name == want }) {
@@ -149,10 +150,12 @@ func assertSchemaCatalog(t *testing.T, document struct {
 	for _, command := range document.Commands {
 		if !strings.HasPrefix(command.Name, commandSiteID+" ") &&
 			!strings.HasPrefix(command.Name, commandSubnet+" ") &&
-			!strings.HasPrefix(command.Name, commandService+" ") {
+			!strings.HasPrefix(command.Name, commandService+" ") &&
+			!strings.HasPrefix(command.Name, commandRegistry+" ") &&
+			!slices.Contains([]string{commandPlan, commandCheck, commandCheckPolicy}, command.Name) {
 			continue
 		}
-		for _, want := range []string{"registry-dir", "tailnet"} {
+		for _, want := range []string{registryFlag, registryDirFlag, tailnetFlagName} {
 			if !slices.ContainsFunc(command.Flags, func(flag schemaFlag) bool { return flag.Name == want }) {
 				t.Errorf("schema command %q omits flag %q", command.Name, want)
 			}
@@ -394,12 +397,20 @@ func TestSanitizedOutputTypesRequireExplicitFieldDecisions(t *testing.T) {
 		"SchemaVersion", "Tool", "Sanitization", "Command", "Status", "Message", "Tailnet",
 		"Changed", "ID", "CIDR", "Address", "Site", "Service", "SiteIDs", "SubnetPools",
 		"ServiceAddresses", "Port", "Device", "UDPPorts", "Devices", "Subnets", "Supernets", "FreeBlocks", "BlockInfo",
-		"Comparison", "PolicyComparison",
+		"Comparison", "PolicyComparison", "Events",
 	); len(missing) != 0 {
 		t.Errorf("outputEnvelope fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[siteIDOutput]("ID", "Site"); len(missing) != 0 {
 		t.Errorf("siteIDOutput fields without an explicit sanitization decision: %v", missing)
+	}
+	if missing := sanitize.UnhandledFields[eventOutput](
+		"At", "Action", "Kind", "Key", "Site", "Before", "After", "Actor",
+	); len(missing) != 0 {
+		t.Errorf("eventOutput fields without an explicit sanitization decision: %v", missing)
+	}
+	if missing := sanitize.UnhandledFields[eventValueOutput]("Target"); len(missing) != 0 {
+		t.Errorf("eventValueOutput fields without an explicit sanitization decision: %v", missing)
 	}
 	if missing := sanitize.UnhandledFields[comparisonOutput](
 		"LiveTailnet", "DriftCount", "Entries", "Excluded",

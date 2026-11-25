@@ -147,7 +147,7 @@ func newServiceLeafCommand(
 	metadataFlags *reservationMetadataFlags,
 	call serviceLeafCall,
 ) *cobra.Command {
-	var registryDir, tailnetFlag string
+	var tailnetFlag string
 	var bound inputs
 	cmd := &cobra.Command{
 		Use:           use,
@@ -182,13 +182,13 @@ func newServiceLeafCommand(
 			if err = state.approve(cmd, args, registry.NormalizeServiceAddress); err != nil {
 				return err
 			}
-			return state.runRegistryCall(cmd, registryDir, outputSanitizer,
+			return state.runRegistryCall(cmd, outputSanitizer,
 				func(ctx context.Context, client *ipamclient.Client) (*outputEnvelope, error) {
 					return call(ctx, client, args, tailnet)
 				})
 		},
 	}
 	bound = bindInputs(cmd, specs...)
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	addRegistryFlags(cmd, &tailnetFlag)
 	return cmd
 }

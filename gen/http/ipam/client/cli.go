@@ -69,6 +69,70 @@ func BuildCheckPolicyPayload(ipamCheckPolicyBody *string, ipamCheckPolicyTailnet
 	return v, nil
 }
 
+// BuildListHistoryPayload builds the payload for the ipam list_history
+// endpoint from CLI flags.
+func BuildListHistoryPayload(ipamListHistoryTailnet *string, ipamListHistoryKind *string, ipamListHistoryKey *string, ipamListHistorySince *string, ipamListHistoryLimit string) (*ipam.ListHistoryPayload, error) {
+	var err error
+	var tailnet string
+	{
+		if ipamListHistoryTailnet == nil {
+			return nil, fmt.Errorf("missing required flag --tailnet")
+		}
+		tailnet = *ipamListHistoryTailnet
+	}
+	var kind *string
+	{
+		if ipamListHistoryKind != nil {
+			kind = ipamListHistoryKind
+			if !(*ipamListHistoryKind == "site_id" || *ipamListHistoryKind == "subnet_pool" || *ipamListHistoryKind == "service_address" || *ipamListHistoryKind == "udp_port") {
+				err = goa.MergeErrors(err, goa.InvalidEnumValueError("kind", *ipamListHistoryKind, []any{"site_id", "subnet_pool", "service_address", "udp_port"}))
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	var key *string
+	{
+		if ipamListHistoryKey != nil {
+			key = ipamListHistoryKey
+		}
+	}
+	var since *string
+	{
+		if ipamListHistorySince != nil {
+			since = ipamListHistorySince
+			err = goa.MergeErrors(err, goa.ValidateFormat("since", *ipamListHistorySince, goa.FormatDateTime))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	var limit int
+	{
+		var v int64
+		v, err = strconv.ParseInt(ipamListHistoryLimit, 10, strconv.IntSize)
+		limit = int(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for limit, must be INT")
+		}
+		if limit < 1 {
+			err = goa.MergeErrors(err, goa.InvalidRangeError("limit", limit, 1, true))
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	v := &ipam.ListHistoryPayload{}
+	v.Tailnet = tailnet
+	v.Kind = kind
+	v.Key = key
+	v.Since = since
+	v.Limit = limit
+
+	return v, nil
+}
+
 // BuildListSiteIdsPayload builds the payload for the ipam list_site_ids
 // endpoint from CLI flags.
 func BuildListSiteIdsPayload(ipamListSiteIdsTailnet *string) (*ipam.ListSiteIdsPayload, error) {

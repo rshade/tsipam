@@ -154,9 +154,13 @@ func scrubbedEnv(env map[string]string) []string {
 	return out
 }
 
-// runtimeVariables are the variables the CLI runtime reads.
+// runtimeVariables are the variables tsipam and its CLI runtime read, beyond
+// TAILSCALE_*.
 func runtimeVariables() []string {
-	return []string{envAgentMode, "TRACEPARENT", "TRACESTATE", "AX_OTEL_DEBUG", "OTEL_EXPORTER_OTLP_ENDPOINT"}
+	return []string{
+		envAgentMode, "TSIPAM_REGISTRY", "TRACEPARENT", "TRACESTATE", "AX_OTEL_DEBUG",
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+	}
 }
 
 // envelope is the versioned JSON contract every successful command emits.

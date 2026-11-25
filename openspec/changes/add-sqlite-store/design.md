@@ -11,8 +11,12 @@ See `proposal.md` for motivation. This change builds on:
   store. The contract's eight rules (not found, serialization, atomicity,
   read-your-writes, scoped validation, canonical keys, fail-closed deletes,
   commit errors) are what this backend must meet.
-- `add-registry-export-import`: the `tsipam registry` command group and
-  `registry import`, which is the migration path from HuJSON to SQLite.
+- `refactor-client-server-boundary`: `cmd/tsipam/target.go` is the one place
+  commands assemble a service, and an import test enforces it.
+
+`add-registry-export-import` lands after this change. This change creates the
+`tsipam registry` command group with `history` in it; that one adds `export`
+and `import`, and with them the migration path from HuJSON to SQLite.
 
 Current CLI wiring: `addRegistryFlags` (`cmd/tsipam/siteid.go`) defines
 `--registry-dir` (default `.`) and `--tailnet`, and every registry command
@@ -40,9 +44,8 @@ tree is BSD-3-Clause, MIT, and Apache-2.0, all within the
 **Non-Goals:**
 
 - Postgres, replicas, or more than one writer process.
-- Converting between backends at runtime. Migration is
-  `registry export` followed by `registry import` (owned by
-  `add-registry-export-import`).
+- Moving reservations between backends. `add-registry-export-import`, which
+  follows, owns `registry export` and `registry import`.
 - Expiring reservations, history pruning, or history export.
 - Running tsipam on a network filesystem. This is documented as unsupported
   rather than detected.
@@ -62,10 +65,21 @@ Each `Store` holds two `*sql.DB` handles on the same file:
   `_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(ON)`.
   `Update` runs as `BEGIN IMMEDIATE`, so the write lock is taken before the
   read-decide-write span starts. That gives contract rule 2 across processes.
-- **Reader pool:** the same pragmas plus `query_only(1)`. `View` runs in a
+- **Reader pool:** `busy_timeout(5000)` and `query_only(1)`. `View` runs in a
   deferred read transaction, which gives a consistent WAL snapshot.
 
-`busy_timeout(5000)` matches the lockfile's 5-second wait. `SQLITE_BUSY`
+The reader leaves `journal_mode` alone and reads the schema version, because
+setting the mode writes to the file and a refused database must stay unchanged.
+Both handles use `mode=rw`, so SQLite never creates the file, and the path is
+percent-encoded so nothing in it can act as a DSN parameter.
+
+SQLite releases the write lock at commit, so across processes the after-success
+hook runs just after serialization ends. Within one `Store` the writer
+connection is held until the hook returns.
+
+`busy_timeout(5000)` matches the lockfile's 5-second wait. Switching a database
+to WAL ignores it and reports busy at once while another connection holds the
+write lock, so taking the lock is retried for up to 5 seconds. `SQLITE_BUSY`
 maps to the same "timed out after 5s waiting for a concurrent tsipam to
 finish" error, so exit codes and messages agree across backends.
 `synchronous(FULL)` costs little at this write rate and keeps the last
@@ -87,6 +101,11 @@ handles cost nothing.
   `registry.ErrNotFound` that says "no registry for tailnet %q in the
   selected sqlite database". The path is not included (see sanitization).
 - Existing file permissions are never changed.
+- A refused operation that created the registry leaves it behind, empty, as the
+  file backend does. A `SAVEPOINT` around the operation keeps the `tailnets` row
+  and undoes the rest.
+- `Store.Close` releases both handles, which folds the write-ahead log back into
+  the database. `target.go` closes the store after each command.
 
 ### Schema (version 1)
 
@@ -150,15 +169,24 @@ CREATE INDEX events_by_tailnet ON events (tailnet_id, id DESC);
 CREATE INDEX events_by_key ON events (tailnet_id, kind, key, id DESC);
 ```
 
+Every table is also `STRICT`. Without it a 16-character text value passes the
+`length(range_start) = 16` check, sorts before every BLOB, and slips past the
+overlap trigger.
+
 Addresses are stored as 16 bytes, with IPv4 in its IPv4-mapped form, so
-within one `family` a byte-wise BLOB comparison is a numeric comparison.
+within one `family` a byte-wise BLOB comparison is a numeric comparison. An
+IPv4-mapped IPv6 pool gets the family and range of the IPv4 pool it maps,
+because the Ledger treats the two as overlapping.
 
 A cross-site overlap trigger fires `BEFORE INSERT` and
-`BEFORE UPDATE OF site, range_start, range_end, family` on `subnet_pools`. It
+`BEFORE UPDATE OF tailnet_id, site, range_start, range_end, family` on
+`subnet_pools`. It
 raises `ABORT` when another row in the same tailnet and family has
 `range_start <= NEW.range_end AND NEW.range_start <= range_end` and a
 different site. Events get `BEFORE UPDATE` and `BEFORE DELETE` triggers that
-raise `ABORT`, making the table append-only at the storage layer.
+raise `ABORT`, and a `BEFORE INSERT` one refuses an existing `id`, because
+`INSERT OR REPLACE` deletes the old row without firing delete triggers. Together
+they make the table append-only at the storage layer.
 
 `reserved_at` stays RFC 3339 UTC text, exactly as the file stores it, so no
 timestamp format conversion can change output. Metadata columns are `NULL`
@@ -182,17 +210,25 @@ error (contract rule 7). The SQLite backend has no repair path.
 ### Migrations
 
 SQL files are embedded as `migrations/0001_init.sql` and onward, and the
-version is tracked with `PRAGMA user_version`. On each transaction's first
-open, a writer connection compares `user_version` with the latest embedded
-version:
+version is tracked with `PRAGMA user_version`. `PRAGMA application_id` holds
+`TSIP`, because any program may number its own schema. Each transaction first
+compares `user_version` with the latest embedded version, through the reader:
 
 - **Equal:** proceed.
 - **Lower:** apply the missing files inside one `BEGIN IMMEDIATE`, then set
-  `user_version`.
+  `user_version` and `application_id`. Version 0 holds no registry, so a read of
+  it is `ErrNotFound` and writes nothing.
+- **0 with tables in it, or another `application_id`:** another program's database,
+  refused unchanged.
 - **Higher:** return an error saying the database needs a newer tsipam,
   without writing anything.
 
-A `View` against an old database therefore takes the write lock once to
+Closing the last connection to a database copies its log into it, even through a
+`query_only` connection. When there is a `-wal` file, the versions are therefore
+first checked on a copy in memory (see Rehearsal), and a refused database is never
+opened. The sanitizer reads a refused database's identities from the same copy.
+
+A `View` against an old database takes the write lock once to
 upgrade it, which matches the spec's "upgrade before the command proceeds."
 
 *Alternative:* a migrations library such as goose or golang-migrate. That is
@@ -204,7 +240,8 @@ atomic with the schema change.
 The `Store` contract grows two small additions in `registry`:
 
 - `TxOptions.Action` (`reserve`, `allocate`, `release`, `import`). The
-  Ledger sets it on every `Update`.
+  Ledger sets it on every `Update`. Nothing sets `import` yet: it is in the
+  version 1 `CHECK` so `add-registry-export-import` needs no schema change.
 - `registry.WithActor(ctx, actor string)` and `registry.ActorFrom(ctx)`. The
   local CLI never sets an actor. `add-serve-tsnet` sets it from `WhoIs` in
   its HTTP middleware, so it reaches the store through the existing context
@@ -212,7 +249,9 @@ The `Store` contract grows two small additions in `registry`:
 
 `sqlitestore`'s `Put*` and `Delete*` read the row's prior value in the same
 transaction and insert one `events` row. Its `at` comes from the Ledger's
-injectable `now`, carried in `TxOptions.Now` so tests are deterministic.
+injectable `now`, carried in `TxOptions.Now` so tests are deterministic. `Now` is
+a function, read under the lock, so a caller that waited for the lock does not
+stamp an event earlier than one already committed.
 `before_value` and `after_value` hold a JSON object of the entry (target plus
 non-empty metadata). Because the Ledger only issues a `Put` when something
 changed, "one event per changed reservation" holds without the store
@@ -226,24 +265,61 @@ structural.
 ### Rehearsal
 
 `Store` rule 9 (from `adopt-ax-go-runtime`) applies: `Update` with `DryRun`
-validates, runs `fn`, discards everything, and creates nothing. A rolled-back
-`BEGIN IMMEDIATE` does not meet it. It takes the write lock, can create the
-database and its `-wal` and `-shm` files, and fails in a read-only directory. A
-rehearsal therefore uses a read path: it stats the file first, supplies an empty
-registry when the file or the `tailnets` row is absent and `CreateIfMissing` is
-set, loads the four maps, and runs `fn` on an in-memory transaction. It never
-migrates: a database with an older schema rehearses through the same queries
-when they still apply, and otherwise fails with the error that asks for a real
-command first. It records no event.
+validates, runs `fn`, discards everything, and creates nothing. "Dry run
+rehearses without writing" in `mutation-safety` is stricter still: it creates,
+changes, and removes **no file**. A rolled-back `BEGIN IMMEDIATE` does not meet
+that. It takes the write lock, can create the database and its `-wal` and `-shm`
+files, and fails in a read-only directory. An ordinary read-only connection to a
+WAL database also creates both companions.
 
-An ordinary read-only WAL connection creates `-wal` and `-shm` and cannot open
-the database in a read-only directory, so the read path itself is an open
-question below.
+A rehearsal therefore runs on a copy in memory:
+
+1. Read the database file, then the `-wal` file, then both again. Accept them
+   when neither changed; otherwise retry for up to 5 seconds. Both files then held
+   those bytes at the moment between the two readings, and SQLite keeps the pair
+   recoverable at every moment, so a checkpoint cannot split them.
+2. Apply the log's committed frames to the database bytes, by SQLite's recovery
+   rule: up to the last commit, ending at the first frame with a stale salt or a
+   wrong checksum. Mark the result as rollback format.
+3. Load it into a `:memory:` connection with `sqlite3_deserialize`, and run the
+   same code a real `Update` runs: migrate, open the registry, run `fn`. Then
+   close it.
+
+Because the copy is a real database, the triggers, constraints, and errors are
+the real ones, and an older schema rehearses exactly: the copy is migrated, the
+file is not.
+
+Rules for the reading:
+
+- **Files are found as SQLite finds them:** the log is beside the file a symbolic
+  link leads to, and a log beside an empty or missing database is ignored.
+- **The database file is read through SQLite** (`mode=ro&immutable=1`, then
+  `sqlite3_serialize`), never with `os.ReadFile`. POSIX locks belong to the
+  process, so closing any descriptor of ours on that file would drop the locks of
+  every other connection this process has to it. The `-wal` file carries no such
+  locks and is read directly.
+- **A state that only recovery can fix is refused**, after the retries: a hot
+  rollback journal, or a database file a checkpoint left half copied. A rehearsal
+  that guessed there could report a wrong outcome.
+- **`IdentityValues` reads the same copy in a rehearsal**, because a failed
+  rehearsal's error text is sanitized from it. A real command reads through its
+  connection, which recovers states the copy refuses, so it never sanitizes from
+  an empty list for that reason. `Ledger.Rehearsal` wraps the store, so `History` and
+  `IdentityValues` look behind the wrapper for the optional interfaces.
+
+**Rejected.** `immutable=1` alone ignores commits that are still in the log. A
+copy in a private temporary directory lets SQLite do the recovery, but writes
+files, and leaves the registry's identities behind after a crash. A `mode=ro`
+connection with `readonly_shm=1` creates nothing, but SQLite shares one `-shm`
+handle per process, so a real write at the same time would find it read-only.
 
 ### Runtime contracts
 
 `registry history` is `read-only` in `leafContracts` and joins the pinned MCP
-tool set. Its `events` are read back from the database, so none of its fields
+tool set. On a file registry it fails with `validation_error`, since the registry
+selection is what the caller has to change, and its `actionable_fix` says so. An
+invalid selection is a `validation_error` too, and a `release` reports it before
+it asks for approval. Its `events` are read back from the database, so none of its fields
 varies between identical runs. Output comparisons between the backends mask the
 fields `__schema` publishes and the error object's `trace_id`.
 
@@ -329,23 +405,15 @@ directory, and the sanitizer setup reads `IdentitySource` from that store.
 
 ## Migration Plan
 
-This is additive and opt-in. Operators adopt it with:
+This is additive and opt-in, and no existing file changes. Operators adopt it
+by selecting a `sqlite://` registry with `--registry` or `TSIPAM_REGISTRY`.
 
-```bash
-tsipam registry export --registry-dir . --output snapshot.hujson
-tsipam registry import snapshot.hujson --registry sqlite://./tsipam.db
-```
-
-Import records one `import` event per entry. Rollback means exporting back
-to HuJSON and unsetting `TSIPAM_REGISTRY`. No existing file changes.
+Until `add-registry-export-import` lands there is no command that moves a
+HuJSON registry into SQLite, so this change suits new registries. Rollback
+means unsetting `TSIPAM_REGISTRY`; reservations made in SQLite stay in the
+database until that change can export them.
 
 ## Open Questions
 
-- How does a rehearsal read a WAL database without creating `-wal` and `-shm`?
-  Opening it with `immutable=1` works in a read-only directory, but ignores
-  committed pages that are still in the WAL. Copying the database and its WAL to
-  a private temporary directory sees them, but races a checkpoint. If neither is
-  acceptable, this change modifies "Dry run rehearses without writing" in
-  `mutation-safety`. Decide before task 2.3, and record it here.
 - Should history accept `--action` or `--actor` filters? This is additive
   and can wait for `add-serve-tsnet`, when actors exist.

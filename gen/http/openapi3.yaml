@@ -105,6 +105,177 @@ paths:
                                 name: policy_check_failed
                                 temporary: false
                                 timeout: false
+    /tailnet/{tailnet}/ipam/history:
+        get:
+            tags:
+                - ipam
+            summary: list_history ipam
+            description: List the audit events of one tailnet's registry, newest first.
+            operationId: ipam#list_history
+            parameters:
+                - name: kind
+                  in: query
+                  description: Keep only events of this kind.
+                  allowEmptyValue: true
+                  schema:
+                    type: string
+                    description: Keep only events of this kind.
+                    example: site_id
+                    enum:
+                        - site_id
+                        - subnet_pool
+                        - service_address
+                        - udp_port
+                  example: site_id
+                - name: key
+                  in: query
+                  description: Keep only events of this canonical key.
+                  allowEmptyValue: true
+                  schema:
+                    type: string
+                    description: Keep only events of this canonical key.
+                    example: Id magni harum porro autem veniam unde.
+                  example: Id magni harum porro autem veniam unde.
+                - name: since
+                  in: query
+                  description: Keep only events at or after this RFC 3339 time.
+                  allowEmptyValue: true
+                  schema:
+                    type: string
+                    description: Keep only events at or after this RFC 3339 time.
+                    example: "1988-09-08T14:10:44Z"
+                    format: date-time
+                  example: "1988-09-08T14:10:44Z"
+                - name: limit
+                  in: query
+                  description: Most events to return.
+                  allowEmptyValue: true
+                  schema:
+                    type: integer
+                    description: Most events to return.
+                    default: 100
+                    example: 8394326019436510354
+                    format: int64
+                    minimum: 1
+                  example: 8394326019436510354
+                - name: tailnet
+                  in: path
+                  description: Routing/storage key for the registry.
+                  required: true
+                  schema:
+                    type: string
+                    description: Routing/storage key for the registry.
+                    example: Repellendus eos ad harum qui occaecati.
+                  example: Repellendus eos ad harum qui occaecati.
+            responses:
+                "200":
+                    description: OK response.
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/RegistryEvent'
+                                example:
+                                    - action: release
+                                      actor: Quia ut ut.
+                                      after:
+                                        description: Sed facilis et sed.
+                                        owner: Aut aut.
+                                        reserved_at: "1999-11-09T06:11:20Z"
+                                        target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                                        ticket: Rerum vitae ea.
+                                      at: "1977-09-21T20:47:33Z"
+                                      before:
+                                        description: Sed facilis et sed.
+                                        owner: Aut aut.
+                                        reserved_at: "1999-11-09T06:11:20Z"
+                                        target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                                        ticket: Rerum vitae ea.
+                                      key: Quis quibusdam quas voluptatem dolor odio aut.
+                                      kind: subnet_pool
+                                      site: Et itaque et.
+                                    - action: release
+                                      actor: Quia ut ut.
+                                      after:
+                                        description: Sed facilis et sed.
+                                        owner: Aut aut.
+                                        reserved_at: "1999-11-09T06:11:20Z"
+                                        target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                                        ticket: Rerum vitae ea.
+                                      at: "1977-09-21T20:47:33Z"
+                                      before:
+                                        description: Sed facilis et sed.
+                                        owner: Aut aut.
+                                        reserved_at: "1999-11-09T06:11:20Z"
+                                        target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                                        ticket: Rerum vitae ea.
+                                      key: Quis quibusdam quas voluptatem dolor odio aut.
+                                      kind: subnet_pool
+                                      site: Et itaque et.
+                            example:
+                                - action: release
+                                  actor: Quia ut ut.
+                                  after:
+                                    description: Sed facilis et sed.
+                                    owner: Aut aut.
+                                    reserved_at: "1999-11-09T06:11:20Z"
+                                    target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                                    ticket: Rerum vitae ea.
+                                  at: "1977-09-21T20:47:33Z"
+                                  before:
+                                    description: Sed facilis et sed.
+                                    owner: Aut aut.
+                                    reserved_at: "1999-11-09T06:11:20Z"
+                                    target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                                    ticket: Rerum vitae ea.
+                                  key: Quis quibusdam quas voluptatem dolor odio aut.
+                                  kind: subnet_pool
+                                  site: Et itaque et.
+                                - action: release
+                                  actor: Quia ut ut.
+                                  after:
+                                    description: Sed facilis et sed.
+                                    owner: Aut aut.
+                                    reserved_at: "1999-11-09T06:11:20Z"
+                                    target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                                    ticket: Rerum vitae ea.
+                                  at: "1977-09-21T20:47:33Z"
+                                  before:
+                                    description: Sed facilis et sed.
+                                    owner: Aut aut.
+                                    reserved_at: "1999-11-09T06:11:20Z"
+                                    target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                                    ticket: Rerum vitae ea.
+                                  key: Quis quibusdam quas voluptatem dolor odio aut.
+                                  kind: subnet_pool
+                                  site: Et itaque et.
+                "400":
+                    description: 'invalid_input: A filter is invalid.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                            example:
+                                fault: false
+                                id: 123abc
+                                message: parameter 'p' must be an integer
+                                name: invalid_input
+                                temporary: false
+                                timeout: false
+                "501":
+                    description: 'unsupported: The selected registry backend keeps no history.'
+                    content:
+                        application/vnd.goa.error:
+                            schema:
+                                $ref: '#/components/schemas/Error'
+                            example:
+                                fault: false
+                                id: 123abc
+                                message: parameter 'p' must be an integer
+                                name: unsupported
+                                temporary: false
+                                timeout: false
     /tailnet/{tailnet}/ipam/plan:
         get:
             tags:
@@ -1546,6 +1717,106 @@ components:
                 - site
                 - state
                 - ipsets
+        RegistryEvent:
+            type: object
+            properties:
+                action:
+                    type: string
+                    description: Operation that made the change.
+                    example: release
+                    enum:
+                        - reserve
+                        - allocate
+                        - release
+                        - import
+                actor:
+                    type: string
+                    description: Authenticated caller that made the change; absent for a local command.
+                    example: Quia ut ut.
+                after:
+                    $ref: '#/components/schemas/RegistryEventValue'
+                at:
+                    type: string
+                    description: RFC 3339 UTC time of the change.
+                    example: "1977-09-21T20:47:33Z"
+                    format: date-time
+                before:
+                    $ref: '#/components/schemas/RegistryEventValue'
+                key:
+                    type: string
+                    description: Canonical key of the reservation.
+                    example: Quis quibusdam quas voluptatem dolor odio aut.
+                kind:
+                    type: string
+                    description: Registry map that changed.
+                    example: subnet_pool
+                    enum:
+                        - site_id
+                        - subnet_pool
+                        - service_address
+                        - udp_port
+                site:
+                    type: string
+                    description: Site that scopes a UDP-port key; absent for other kinds.
+                    example: Et itaque et.
+            description: One append-only audit record of a registry change.
+            example:
+                action: release
+                actor: Quia ut ut.
+                after:
+                    description: Sed facilis et sed.
+                    owner: Aut aut.
+                    reserved_at: "1999-11-09T06:11:20Z"
+                    target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                    ticket: Rerum vitae ea.
+                at: "1977-09-21T20:47:33Z"
+                before:
+                    description: Sed facilis et sed.
+                    owner: Aut aut.
+                    reserved_at: "1999-11-09T06:11:20Z"
+                    target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                    ticket: Rerum vitae ea.
+                key: Quis quibusdam quas voluptatem dolor odio aut.
+                kind: subnet_pool
+                site: Et itaque et.
+            required:
+                - at
+                - action
+                - kind
+                - key
+        RegistryEventValue:
+            type: object
+            properties:
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Sed facilis et sed.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Aut aut.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "1999-11-09T06:11:20Z"
+                    format: date-time
+                target:
+                    type: string
+                    description: Site of a site ID or subnet pool, service of an address, or device of a UDP port.
+                    example: Adipisci dolorum et sapiente eum quo voluptatibus.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Rerum vitae ea.
+            description: A reservation's stored value before or after a change.
+            example:
+                description: Sed facilis et sed.
+                owner: Aut aut.
+                reserved_at: "1999-11-09T06:11:20Z"
+                target: Adipisci dolorum et sapiente eum quo voluptatibus.
+                ticket: Rerum vitae ea.
+            required:
+                - target
         ReleaseServiceAddressResponseBody:
             type: object
             properties:

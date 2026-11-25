@@ -94,6 +94,7 @@ Every field below is inside `data`.
 | `calc next-free` | `free_blocks` | array of CIDR strings; an exhausted pool exits 2 with no document |
 | `plan`, `check` | `comparison` | see below |
 | `check-policy` | `policy_comparison` | see below |
+| `registry history` | `events` | see below |
 
 Empty lists are always `[]`, never `null`. Optional metadata fields are
 omitted rather than emitted as empty strings.
@@ -158,6 +159,33 @@ Entries sort by kind, then numeric ID or network address and prefix length.
 
 Authored rows sort by ipset name, then network address and prefix length;
 reserved rows by network address and prefix length.
+
+## `events`
+
+```json
+[
+  {
+    "at": "2026-03-01T12:00:00Z",
+    "action": "reserve",
+    "kind": "subnet_pool",
+    "key": "10.20.0.0/24",
+    "before": { "target": "hq-vpc", "ticket": "OPS-1", "reserved_at": "2026-02-01T09:00:00Z" },
+    "after": { "target": "hq-vpc", "ticket": "OPS-2", "reserved_at": "2026-02-01T09:00:00Z" },
+    "actor": null
+  }
+]
+```
+
+- `at`: when the change was made, RFC 3339 in UTC.
+- `action`: `reserve`, `allocate`, `release`, or `import`.
+- `kind`: `site_id`, `subnet_pool`, `service_address`, or `udp_port`.
+- `key`: the canonical key. `site` is present for `udp_port` only, whose keys are
+  scoped to a site.
+- `before`, `after`: the stored value, or `null` when the key was not reserved.
+  `target` is the site, service, or device; metadata fields are as in the lists.
+- `actor`: the authenticated caller, or `null` for a local command.
+
+Events are newest first.
 
 ## Under sanitization
 

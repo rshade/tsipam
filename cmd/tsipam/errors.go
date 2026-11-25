@@ -40,6 +40,7 @@ const (
 	kindArgument           = "argument"
 	//nolint:gosec // advice naming variables, not a credential
 	fixMissingCredentials = "set TAILSCALE_TAILNET and either TAILSCALE_API_KEY or an OAuth client ID and secret"
+	fixHistoryUnsupported = "select a sqlite registry: --registry sqlite://<path>, or TSIPAM_REGISTRY"
 	fixExhaustedPool      = "release a reservation inside the pool, or choose a larger pool or a longer prefix"
 	withheldFailurePrefix = "the failure text is withheld because sanitization could not start: "
 )
@@ -53,6 +54,7 @@ const (
 	serviceErrorComparisonFailed  = "comparison_failed"
 	serviceErrorPolicyCheckFailed = "policy_check_failed"
 	serviceErrorInvalidInput      = "invalid_input"
+	serviceErrorUnsupported       = "unsupported"
 )
 
 // inputError is a value the caller supplied that the command cannot use.
@@ -194,6 +196,8 @@ func classifyServiceError(err *goa.ServiceError) failure {
 		return failure{code: codeComparisonFailed, retryable: err.Timeout || err.Temporary}
 	case serviceErrorPolicyCheckFailed:
 		return failure{code: codePolicyCheckFailed}
+	case serviceErrorUnsupported:
+		return failure{code: codeValidationError, fix: fixHistoryUnsupported}
 	case serviceErrorInvalidInput,
 		// The rest are the names goa gives a request its own decoder refuses.
 		goa.InvalidFieldType, goa.MissingField, goa.InvalidEnumValue, goa.InvalidFormat,

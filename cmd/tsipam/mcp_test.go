@@ -31,6 +31,7 @@ func pinnedTools() []string {
 		"tsipam-calc-aggregate", "tsipam-calc-info", "tsipam-calc-next-free", "tsipam-calc-split",
 		"tsipam-check-policy", "tsipam-devices-list", "tsipam-plan",
 		"tsipam-port-list", "tsipam-port-release", "tsipam-port-reserve",
+		"tsipam-registry-history",
 		"tsipam-service-list", "tsipam-service-release", "tsipam-service-reserve",
 		"tsipam-site-id-list", "tsipam-site-id-release", "tsipam-site-id-reserve",
 		"tsipam-subnet-allocate", "tsipam-subnet-list", "tsipam-subnet-release", "tsipam-subnet-reserve",
@@ -361,6 +362,42 @@ func TestMCPResultMatchesTheCommandLine(t *testing.T) {
 	// The repeated flag does not carry over.
 	if failure := session.mustFail("tsipam-calc-aggregate", nil); failure.ErrorCode != codeValidationError {
 		t.Errorf("failure = %+v, want %s", failure, codeValidationError)
+	}
+}
+
+// TestMCPRegistrySelectionIsPerCall covers the two selection flags, which refuse
+// each other, across calls on one command tree.
+func TestMCPRegistrySelectionIsPerCall(t *testing.T) {
+	t.Parallel()
+	url, _ := sqliteURL(t)
+	dir := t.TempDir()
+	writeAggregateRegistry(t, dir, localTailnet, writesRegistry)
+	session := startMCP(t, nil)
+	session.mustCall("tsipam-site-id-reserve", map[string]any{"id": "7", "site": "lab", "registry": url})
+	fromFile := session.mustCall("tsipam-site-id-list", map[string]any{"registry-dir": dir})
+	fromSQLite := session.mustCall("tsipam-site-id-list", map[string]any{"registry": url})
+	if !strings.Contains(fromFile, `"site":"hq"`) || strings.Contains(fromFile, "lab") ||
+		!strings.Contains(fromSQLite, `"site":"lab"`) || strings.Contains(fromSQLite, "hq") {
+		t.Errorf("file registry = %s, sqlite registry = %s", fromFile, fromSQLite)
+	}
+	if failure := session.mustFail("tsipam-site-id-list", map[string]any{
+		"registry": url, "registry-dir": dir,
+	}); failure.ErrorCode != codeValidationError {
+		t.Errorf("both selections: failure = %+v", failure)
+	}
+
+	var history historyDocument
+	if err := decodeData([]byte(session.mustCall("tsipam-registry-history", map[string]any{
+		"registry": url, "kind": "site_id", "limit": 1,
+	})), &history); err != nil {
+		t.Fatal(err)
+	}
+	if history.Events == nil || len(*history.Events) != 1 {
+		t.Errorf("history = %+v, want the one reserve", history)
+	}
+	failure := session.mustFail("tsipam-registry-history", map[string]any{"registry-dir": dir})
+	if failure.ErrorCode != codeValidationError || failure.ActionableFix != fixHistoryUnsupported {
+		t.Errorf("history of a file registry: failure = %+v", failure)
 	}
 }
 

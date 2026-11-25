@@ -85,6 +85,7 @@ var _ = Service("ipam", func() {
 	Description("Reserve, release, and list address-space and UDP-port allocations for one tailnet's registry.")
 	planningMethod()
 	policyCheckMethod()
+	historyMethod()
 
 	Method("list_site_ids", func() {
 		Payload(func() {

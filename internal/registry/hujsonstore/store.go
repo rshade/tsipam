@@ -24,7 +24,10 @@ type Store struct {
 	failCommit bool
 }
 
-var _ registry.Store = (*Store)(nil)
+var (
+	_ registry.Store          = (*Store)(nil)
+	_ registry.IdentitySource = (*Store)(nil)
+)
 
 // New returns a store whose files live in dir. A nil logger is quiet.
 func New(dir string, logger diagnostics.Logger) *Store {

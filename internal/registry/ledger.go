@@ -45,6 +45,15 @@ func (l *Ledger) Rehearsal() *Ledger {
 	return &rehearsing
 }
 
+// backing returns the store that reads go to. A rehearsal wraps it, and the
+// wrapper would hide the optional interfaces it implements.
+func (l *Ledger) backing() Store {
+	if rehearsing, ok := l.store.(rehearsalStore); ok {
+		return rehearsing.Store
+	}
+	return l.store
+}
+
 // rehearsalStore sets DryRun on every Update.
 type rehearsalStore struct {
 	Store
@@ -109,6 +118,8 @@ func (l *Ledger) ReserveSiteID(
 	err = l.store.Update(l.after(ctx, &event), tailnet, TxOptions{
 		CreateIfMissing: true,
 		Require:         []MapKind{MapSiteIDs},
+		Action:          ActionReserve,
+		Now:             l.now,
 	}, func(tx Tx) error {
 		sites, readErr := tx.SiteIDs()
 		if readErr != nil {
@@ -209,6 +220,8 @@ func (l *Ledger) ReserveSubnetPool(
 	err = l.store.Update(l.after(ctx, &event), tailnet, TxOptions{
 		CreateIfMissing: true,
 		Require:         []MapKind{MapSubnetPools},
+		Action:          ActionReserve,
+		Now:             l.now,
 	}, func(tx Tx) error {
 		pools, readErr := tx.SubnetPools()
 		if readErr != nil {
@@ -273,6 +286,8 @@ func (l *Ledger) AllocateSubnetPool(
 	err = l.store.Update(l.after(ctx, &event), tailnet, TxOptions{
 		CreateIfMissing: true,
 		Require:         []MapKind{MapSubnetPools},
+		Action:          ActionAllocate,
+		Now:             l.now,
 	}, func(tx Tx) error {
 		pools, readErr := tx.SubnetPools()
 		if readErr != nil {
@@ -371,6 +386,8 @@ func (l *Ledger) ReserveServiceAddress(
 	err = l.store.Update(l.after(ctx, &event), tailnet, TxOptions{
 		CreateIfMissing: true,
 		Require:         []MapKind{MapServiceAddresses},
+		Action:          ActionReserve,
+		Now:             l.now,
 	}, func(tx Tx) error {
 		addresses, readErr := tx.ServiceAddresses()
 		if readErr != nil {
@@ -478,6 +495,8 @@ func (l *Ledger) ReserveUDPPort(
 	err = l.store.Update(l.after(ctx, &event), tailnet, TxOptions{
 		CreateIfMissing: true,
 		Require:         []MapKind{MapUDPPorts},
+		Action:          ActionReserve,
+		Now:             l.now,
 	}, func(tx Tx) error {
 		ports, readErr := tx.UDPPorts()
 		if readErr != nil {
@@ -600,7 +619,10 @@ func (l *Ledger) release(
 		changed bool
 		event   string
 	)
-	err := l.store.Update(l.after(ctx, &event), tailnet, TxOptions{}, func(tx Tx) error {
+	err := l.store.Update(l.after(ctx, &event), tailnet, TxOptions{
+		Action: ActionRelease,
+		Now:    l.now,
+	}, func(tx Tx) error {
 		var delErr error
 		changed, delErr = deleteFn(tx)
 		if delErr != nil {

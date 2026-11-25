@@ -55,12 +55,14 @@ has a name: `id`, `site`, `cidr`, `pool`, `address`, `service`, `port`, `device`
 or `policy-file`. See
 [inputs by position or by flag](../../README.md#inputs-by-position-or-by-flag).
 
-Pass `registry-dir` and `tailnet` in each call that uses the registry. The
-default directory is the one the client started the server in, which is rarely
+Pass `registry-dir`, or `registry` for a
+[SQLite registry](../reference/registry-backends.md), and `tailnet` in each call
+that uses the registry. Without one of the first two the server uses its own
+`TSIPAM_REGISTRY`, then the directory the client started it in, which is rarely
 the one you want.
 
-The tools carry the standard hints. The lists, `plan`, `check-policy`, and the
-calculations are read-only. Reserve and release are marked destructive: a repeat
+The tools carry the standard hints. The lists, `plan`, `check-policy`,
+`registry history`, and the calculations are read-only. Reserve and release are marked destructive: a repeat
 reserve can replace a reservation's metadata. Allocate is not, because it only
 adds.
 

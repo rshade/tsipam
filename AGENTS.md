@@ -8,6 +8,8 @@
 
 - `internal/` holds the private packages: `registry` (allocation rules and the
   `Store` contract), `registry/hujsonstore` (the HuJSON file backend),
+  `registry/sqlitestore` (the SQLite backend and its `migrations/`),
+  `registry/backend` (picks one from a registry URL),
   `registry/storetest` (the in-memory reference store and conformance suite),
   `ipamsvc` (the goa service every command runs through), `ipamhttp` (its HTTP
   handler), `ipamconn` (its generated client), `loopback` (a private Unix

@@ -3,7 +3,8 @@
 ## Context
 
 See `proposal.md` for motivation and `specs/registry-transfer/spec.md` for
-the behavior. This change assumes `refactor-registry-store` has landed:
+the behavior. This change assumes `refactor-registry-store` and
+`add-sqlite-store` have landed:
 
 - `registry.Store` runs `View` and `Update` transactions. `Update` is
   serialized per tailnet, atomic when `fn` fails, and gives read-your-writes.
@@ -12,11 +13,14 @@ the behavior. This change assumes `refactor-registry-store` has landed:
 - `hujsonstore` owns the file format: the loader's validation rules, raw
   spellings, `RawEntries` for the sanitizer, and comment-preserving writes
   through `hujsonedit`.
+- `add-sqlite-store` provides `sqlitestore`, the `--registry` resolver and
+  `internal/registry/backend`, the `registry` command group, and
+  `TxOptions.Action`/`Now`, from which `sqlitestore` records audit events.
 - Every registry command calls the goa service through `internal/loopback`.
   `check-policy` shows the pattern for local input: the CLI reads the file,
   rejects invalid UTF-8, and sends the contents in the payload.
-- `cmd/tsipam/main.go` pre-registers sanitizer sweep values from the
-  selected registry file before a registry command runs.
+- The CLI pre-registers sanitizer sweep values from the selected registry's
+  `registry.IdentitySource`.
 
 ## Goals / Non-Goals
 
@@ -33,8 +37,8 @@ the behavior. This change assumes `refactor-registry-store` has landed:
 **Non-Goals:**
 
 - `--replace` or any import mode that deletes reservations.
-- Selecting a SQLite target (`--registry`, owned by `add-sqlite-store`) or a
-  remote server (`--server`, owned by `add-serve-tsnet`).
+- Transferring through a remote server (`--server`, owned by
+  `add-serve-tsnet`).
 - Transferring several tailnets in one document. A document is one tailnet,
   matching the file format.
 - Detecting sanitizer placeholders in an import source.
@@ -105,11 +109,15 @@ itself validated.
 
 - `Ledger.PlanImport` runs it in a `View`. A missing registry is treated as
   empty rather than as `ErrNotFound`.
-- `Ledger.Import` runs it in an `Update` with `CreateIfMissing` and all four
-  maps required. If the report has any refusal, the ledger returns
+- `Ledger.Import` runs it in an `Update` with `CreateIfMissing`, all four
+  maps required, `Action` `import`, and `Now` from the ledger's clock. If the
+  report has any refusal, the ledger returns
   `*registry.ImportRefusedError` before any `Put`. Otherwise it applies
   `add` and `update` entries with `Put*`. A commit failure is wrapped as
   `importing registry: ...`.
+
+`sqlitestore` records one event per `Put*`, so a changed entry gets exactly
+one `import` event, and an `unchanged` entry, a plan, or a refusal gets none.
 
 Because the real import re-plans inside its own transaction, a plan is
 advisory: a reservation made between `--plan` and the import can still
@@ -196,8 +204,15 @@ existing stderr notice that sanitization is active makes that visible.
 
 ## Migration Plan
 
-This change is additive: two new commands and two new service methods. No
-existing output changes, except that the schema catalog and exit-code
+This change is additive: two new commands and two new service methods. It also
+gives existing HuJSON registries their way into SQLite, and back:
+
+```bash
+tsipam registry export --registry-dir . --output snapshot.hujson
+tsipam registry import snapshot.hujson --registry sqlite://./tsipam.db
+```
+
+No existing output changes, except that the schema catalog and exit-code
 description gain entries. Rollback is a revert.
 
 ## Open Questions

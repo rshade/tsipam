@@ -20,7 +20,7 @@ const (
 var errRegistryDrift = errors.New("registry differs from live allocations")
 
 func newPlanningCommand(state *commandState, name string, collect liveSnapshotFunc) *cobra.Command {
-	var registryDir, tailnetFlag string
+	var tailnetFlag string
 	summary := "Compare registry allocations with live state (read-only)."
 	if name == commandCheck {
 		summary = "Check registry allocations against live state; exit 1 on drift."
@@ -37,15 +37,15 @@ func newPlanningCommand(state *commandState, name string, collect liveSnapshotFu
 			"Comparison identities are redacted by --sanitize identity or strict.",
 		Args: cobra.NoArgs, SilenceErrors: true, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return executePlanning(cmd, state, collect, registryDir, tailnetFlag)
+			return executePlanning(cmd, state, collect, tailnetFlag)
 		},
 	}
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	addRegistryFlags(cmd, &tailnetFlag)
 	return cmd
 }
 
 func executePlanning(
-	cmd *cobra.Command, state *commandState, collect liveSnapshotFunc, registryDir, tailnetFlag string,
+	cmd *cobra.Command, state *commandState, collect liveSnapshotFunc, tailnetFlag string,
 ) error {
 	tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
 	liveTailnet := state.getenv("TAILSCALE_TAILNET")
@@ -65,7 +65,10 @@ func executePlanning(
 		}
 		collect = liveCollector(state.getenv)
 	}
-	target := state.registryTarget(registryDir)
+	target, err := state.registryTarget(cmd)
+	if err != nil {
+		return err
+	}
 	target.collectLive = collect
 	var report *ipam.ComparisonReport
 	err = target.run(cmd.Context(), func(ctx context.Context, client *ipamclient.Client) error {

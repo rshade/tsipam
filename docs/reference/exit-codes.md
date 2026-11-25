@@ -67,10 +67,10 @@ unknown.
 
 | `error_code` | When |
 | --- | --- |
-| `validation_error` | An unknown flag or command, a wrong argument count, a missing required flag, an invalid `--format` or `--sanitize` value, or malformed input: a CIDR with host bits set, a site ID outside `0`–`65535`, a service address that is not a bare IPv4 host or `/32`, a UDP port outside `1024`–`65535`, a control character in a label. |
+| `validation_error` | An unknown flag or command, a wrong argument count, a missing required flag, an invalid `--format` or `--sanitize` value, an invalid registry URL, `--registry` together with `--registry-dir`, an invalid `registry history` filter, `registry history` on a file registry, or malformed input: a CIDR with host bits set, a site ID outside `0`–`65535`, a service address that is not a bare IPv4 host or `/32`, a UDP port outside `1024`–`65535`, a control character in a label. |
 | `confirmation_required` | A `release` ran without `--yes` and nobody approved it. |
 | `pool_exhausted` | `calc next-free` or `subnet allocate` found no free block of the requested size. Nothing is written. |
-| `registry_failed` | The registry is missing, unreadable, or fails validation for the map the command touches. Reserve and allocate create a missing file; list, release, aggregate, and next-free do not. |
+| `registry_failed` | The registry is missing, unreadable, or fails validation for the map the command touches. Reserve and allocate create a missing file; list, release, aggregate, and next-free do not. Also a SQLite database that is missing, holds no registry for the routing key, was written by a newer `tsipam`, or was created by another program, and a write that waits more than 5 seconds for another command's lock. |
 | `credentials_missing` | A live command ran without `TAILSCALE_TAILNET` or credentials. |
 | `collection_failed` | `devices list`, `calc next-free`, or `subnet allocate` could not read the Tailscale API. |
 | `comparison_failed` | `plan` or `check` could not compare everything: an unreadable registry, a failed API read, or a live value it cannot parse. |

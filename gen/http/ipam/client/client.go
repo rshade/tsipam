@@ -24,6 +24,10 @@ type Client struct {
 	// check_policy endpoint.
 	CheckPolicyDoer goahttp.Doer
 
+	// ListHistory Doer is the HTTP client used to make requests to the
+	// list_history endpoint.
+	ListHistoryDoer goahttp.Doer
+
 	// ListSiteIds Doer is the HTTP client used to make requests to the
 	// list_site_ids endpoint.
 	ListSiteIdsDoer goahttp.Doer
@@ -98,6 +102,7 @@ func NewClient(
 	return &Client{
 		PlanDoer:                  doer,
 		CheckPolicyDoer:           doer,
+		ListHistoryDoer:           doer,
 		ListSiteIdsDoer:           doer,
 		ReserveSiteIDDoer:         doer,
 		ReleaseSiteIDDoer:         doer,
@@ -162,6 +167,30 @@ func (c *Client) CheckPolicy() goa.Endpoint {
 		resp, err := c.CheckPolicyDoer.Do(req)
 		if err != nil {
 			return nil, goahttp.ErrRequestError("ipam", "check_policy", err)
+		}
+		return decodeResponse(resp)
+	}
+}
+
+// ListHistory returns an endpoint that makes HTTP requests to the ipam service
+// list_history server.
+func (c *Client) ListHistory() goa.Endpoint {
+	var (
+		encodeRequest  = EncodeListHistoryRequest(c.encoder)
+		decodeResponse = DecodeListHistoryResponse(c.decoder, c.RestoreResponseBody)
+	)
+	return func(ctx context.Context, v any) (any, error) {
+		req, err := c.BuildListHistoryRequest(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		err = encodeRequest(req, v)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.ListHistoryDoer.Do(req)
+		if err != nil {
+			return nil, goahttp.ErrRequestError("ipam", "list_history", err)
 		}
 		return decodeResponse(resp)
 	}

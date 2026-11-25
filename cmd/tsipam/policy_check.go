@@ -18,7 +18,7 @@ const commandCheckPolicy = "check-policy"
 var errPolicyDrift = errors.New("authored ipsets differ from reserved subnet pools")
 
 func newPolicyCheckCommand(state *commandState) *cobra.Command {
-	var registryDir, tailnetFlag string
+	var tailnetFlag string
 	var bound inputs
 	cmd := &cobra.Command{
 		Use:   "check-policy <acl-file>",
@@ -39,16 +39,16 @@ func newPolicyCheckCommand(state *commandState) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return executePolicyCheck(cmd, state, registryDir, tailnetFlag, args[0])
+			return executePolicyCheck(cmd, state, tailnetFlag, args[0])
 		},
 	}
 	bound = bindInputs(cmd, policyFileInput())
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	addRegistryFlags(cmd, &tailnetFlag)
 	return cmd
 }
 
 func executePolicyCheck(
-	cmd *cobra.Command, state *commandState, registryDir, tailnetFlag, policyPath string,
+	cmd *cobra.Command, state *commandState, tailnetFlag, policyPath string,
 ) error {
 	tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
 	outputSanitizer, err := state.outputSanitizer(tailnet)
@@ -66,7 +66,11 @@ func executePolicyCheck(
 		return &policyReadError{err: errors.New("policy must contain valid UTF-8")}
 	}
 	var report *ipam.PolicyComparison
-	err = state.registryTarget(registryDir).run(cmd.Context(),
+	target, err := state.registryTarget(cmd)
+	if err != nil {
+		return err
+	}
+	err = target.run(cmd.Context(),
 		func(ctx context.Context, client *ipamclient.Client) error {
 			result, callErr := client.CheckPolicy()(
 				ctx,
