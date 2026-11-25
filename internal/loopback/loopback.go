@@ -1,5 +1,6 @@
-// Package loopback runs the goa-generated ipam HTTP server and client over an
-// ephemeral, per-invocation Unix domain socket, in-process.
+// Package loopback serves an ipam HTTP handler to a generated client over an
+// ephemeral, per-invocation Unix domain socket, in-process. It knows nothing
+// about the service behind the handler.
 //
 // The point is dogfooding: every tsipam invocation, including the fully
 // local default, goes through the same transport/encoding/validation path a
@@ -21,15 +22,9 @@ import (
 	"path/filepath"
 	"time"
 
-	goahttp "goa.design/goa/v3/http"
-
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
-	ipamserver "github.com/rshade/tsipam/gen/http/ipam/server"
-	ipam "github.com/rshade/tsipam/gen/ipam"
 	"github.com/rshade/tsipam/internal/diagnostics"
-	"github.com/rshade/tsipam/internal/ipamsvc"
-	"github.com/rshade/tsipam/internal/registry"
-	"github.com/rshade/tsipam/internal/registry/hujsonstore"
+	"github.com/rshade/tsipam/internal/ipamconn"
 )
 
 // socketFileName is fixed because each Run gets its own freshly created
@@ -47,32 +42,16 @@ const (
 	shutdownTimeout   = 5 * time.Second
 )
 
-// RunWithLogger starts an ephemeral server backed by a registry directory of
-// "<tailnet>.ipam.hujson" files, binds it to a fresh Unix socket, builds the
-// matching generated HTTP client pointed at that socket, calls fn with it,
+// Run serves handler on a fresh Unix socket, calls fn with a client for it,
 // then shuts the server down and removes the socket — in that order, before
 // returning fn's error (if any). logger receives identity-free structured
 // lifecycle diagnostics; nil is quiet.
-func RunWithLogger(
+func Run(
 	ctx context.Context,
-	registryDir string,
+	handler http.Handler,
 	logger diagnostics.Logger,
 	fn func(context.Context, *ipamclient.Client) error,
 ) error {
-	return RunWithService(ctx, &ipamsvc.Service{
-		Ledger: registry.NewLedger(hujsonstore.New(registryDir, logger), logger),
-		Logger: logger,
-	}, fn)
-}
-
-// RunWithService uses a configured service, including its optional live
-// collector, over the same ephemeral generated HTTP transport as registry calls.
-func RunWithService(
-	ctx context.Context,
-	svc *ipamsvc.Service,
-	fn func(context.Context, *ipamclient.Client) error,
-) error {
-	logger := svc.Logger
 	diagnostics.Debug(logger, "starting loopback registry transport")
 	socketDir, err := os.MkdirTemp("", "tsipam-*")
 	if err != nil {
@@ -90,11 +69,7 @@ func RunWithService(
 		return fmt.Errorf("listening on %s: %w", socketPath, err)
 	}
 
-	endpoints := ipam.NewEndpoints(svc)
-	mux := goahttp.NewMuxer()
-	httpSrv := ipamserver.New(endpoints, mux, goahttp.RequestDecoder, goahttp.ResponseEncoder, nil, nil)
-	ipamserver.Mount(mux, httpSrv)
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: readHeaderTimeout}
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: readHeaderTimeout}
 
 	serveErrCh := make(chan error, 1)
 	go func() { serveErrCh <- srv.Serve(listener) }()
@@ -118,8 +93,7 @@ func RunWithService(
 			},
 		},
 	}
-	client := ipamclient.NewClient("http", "tsipam.local", httpClient,
-		goahttp.RequestEncoder, goahttp.ResponseDecoder, false)
+	client := ipamconn.NewClient("http", "tsipam.local", httpClient)
 
 	diagnostics.Debug(logger, "loopback registry transport ready")
 	return fn(ctx, client)

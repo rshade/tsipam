@@ -9,9 +9,15 @@
 - `internal/` holds the private packages: `registry` (allocation rules and the
   `Store` contract), `registry/hujsonstore` (the HuJSON file backend),
   `registry/storetest` (the in-memory reference store and conformance suite),
-  `ipamsvc` and `loopback` (the goa service every command runs through over a
-  private Unix socket), `planner` and `policycheck` (pure comparisons against
-  live state), `devices` (tailnet inventory), and `diagnostics`.
+  `ipamsvc` (the goa service every command runs through), `ipamhttp` (its HTTP
+  handler), `ipamconn` (its generated client), `loopback` (a private Unix
+  socket that serves a handler for one command), `planner` and `policycheck`
+  (pure comparisons against live state), `devices` (tailnet inventory), and
+  `diagnostics`.
+- Client and server code stay separate. Commands reach server packages only
+  through `cmd/tsipam/target.go`. `cmd/tsipam/boundary_test.go` enforces this,
+  lists the few exceptions, and gives each package a role; add new packages
+  there.
 - `design/` is the goa DSL; `gen/` is its generated code. Never edit `gen/` by
   hand: change `design/`, run `mise run gen`, and commit both.
 - `smoke/` is the release smoke suite behind the `smoke` build tag.

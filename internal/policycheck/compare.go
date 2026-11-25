@@ -11,7 +11,7 @@ import (
 	"github.com/rshade/tsipam/internal/registry"
 )
 
-// Comparison states are shared by the service and CLI renderers.
+// Comparison states are the values the API allows in its state attributes.
 const (
 	Matched                 = "matched"
 	AuthoredButUnreserved   = "authored_but_unreserved"

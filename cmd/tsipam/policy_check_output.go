@@ -7,10 +7,29 @@ import (
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
 
 	ipam "github.com/rshade/tsipam/gen/ipam"
-	"github.com/rshade/tsipam/internal/policycheck"
 )
 
 const kindIPSet = "ipset"
+
+type policyAuthoredOutput struct {
+	IPSet string   `json:"ipset"`
+	CIDR  string   `json:"cidr"`
+	State string   `json:"state"`
+	Pools []string `json:"pools"`
+}
+
+type policyReservedOutput struct {
+	CIDR   string   `json:"cidr"`
+	Site   string   `json:"site"`
+	State  string   `json:"state"`
+	IPSets []string `json:"ipsets"`
+}
+
+type policyComparisonOutput struct {
+	DriftCount int                    `json:"drift_count"`
+	Authored   []policyAuthoredOutput `json:"authored"`
+	Reserved   []policyReservedOutput `json:"reserved"`
+}
 
 func policyComparisonEnvelope(tailnet string, report *ipam.PolicyComparison) *outputEnvelope {
 	status := statusOK
@@ -18,18 +37,18 @@ func policyComparisonEnvelope(tailnet string, report *ipam.PolicyComparison) *ou
 		status = statusDrift
 	}
 	result := newOutput(commandCheckPolicy, status, fmt.Sprintf("found %d policy drift(s)", report.DriftCount), tailnet)
-	comparison := &policycheck.Report{
+	comparison := &policyComparisonOutput{
 		DriftCount: report.DriftCount,
-		Authored:   make([]policycheck.Authored, len(report.Authored)),
-		Reserved:   make([]policycheck.Reserved, len(report.Reserved)),
+		Authored:   make([]policyAuthoredOutput, len(report.Authored)),
+		Reserved:   make([]policyReservedOutput, len(report.Reserved)),
 	}
 	for index, entry := range report.Authored {
-		comparison.Authored[index] = policycheck.Authored{
+		comparison.Authored[index] = policyAuthoredOutput{
 			IPSet: entry.IPSet, CIDR: entry.CIDR, State: entry.State, Pools: append([]string{}, entry.Pools...),
 		}
 	}
 	for index, entry := range report.Reserved {
-		comparison.Reserved[index] = policycheck.Reserved{
+		comparison.Reserved[index] = policyReservedOutput{
 			CIDR: entry.CIDR, Site: entry.Site, State: entry.State, IPSets: append([]string{}, entry.IPSets...),
 		}
 	}
@@ -37,7 +56,7 @@ func policyComparisonEnvelope(tailnet string, report *ipam.PolicyComparison) *ou
 	return result
 }
 
-func renderPolicyComparison(writer io.Writer, tailnet string, report *policycheck.Report) error {
+func renderPolicyComparison(writer io.Writer, tailnet string, report *policyComparisonOutput) error {
 	if _, err := fmt.Fprintf(writer, "registry=%+q comparison=authored_ipsets\n", tailnet); err != nil {
 		return err
 	}
@@ -57,17 +76,17 @@ func renderPolicyComparison(writer io.Writer, tailnet string, report *policychec
 	return err
 }
 
-func sanitizePolicyComparison(input *policycheck.Report, output *sanitize.Sanitizer) *policycheck.Report {
+func sanitizePolicyComparison(input *policyComparisonOutput, output *sanitize.Sanitizer) *policyComparisonOutput {
 	if input == nil {
 		return nil
 	}
-	result := &policycheck.Report{
+	result := &policyComparisonOutput{
 		DriftCount: input.DriftCount,
-		Authored:   make([]policycheck.Authored, len(input.Authored)),
-		Reserved:   make([]policycheck.Reserved, len(input.Reserved)),
+		Authored:   make([]policyAuthoredOutput, len(input.Authored)),
+		Reserved:   make([]policyReservedOutput, len(input.Reserved)),
 	}
 	for index, entry := range input.Authored {
-		result.Authored[index] = policycheck.Authored{
+		result.Authored[index] = policyAuthoredOutput{
 			IPSet: output.Value(kindIPSet, entry.IPSet), CIDR: output.Value(kindCIDR, entry.CIDR),
 			State: entry.State, Pools: sanitizeNetworkValues(entry.Pools, output),
 		}
@@ -77,7 +96,7 @@ func sanitizePolicyComparison(input *policycheck.Report, output *sanitize.Saniti
 		for setIndex, name := range entry.IPSets {
 			sets[setIndex] = output.Value(kindIPSet, name)
 		}
-		result.Reserved[index] = policycheck.Reserved{
+		result.Reserved[index] = policyReservedOutput{
 			CIDR: output.Value(kindCIDR, entry.CIDR), Site: output.Value(kindSite, entry.Site),
 			State: entry.State, IPSets: sets,
 		}

@@ -2,21 +2,32 @@ package loopback_test
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tsipam/gen/ipam"
+	"github.com/rshade/tsipam/internal/ipamhttp"
+	"github.com/rshade/tsipam/internal/ipamsvc"
 	"github.com/rshade/tsipam/internal/loopback"
+	"github.com/rshade/tsipam/internal/registry"
+	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
+
+func newHandler(registryDir string) http.Handler {
+	return ipamhttp.NewHandler(&ipamsvc.Service{
+		Ledger: registry.NewLedger(hujsonstore.New(registryDir, nil), nil),
+	})
+}
 
 func TestRunServesOneRequestOverTheGeneratedClient(t *testing.T) {
 	t.Parallel()
 	registryDir := t.TempDir()
 
-	err := loopback.RunWithLogger(
-		context.Background(), registryDir, nil,
+	err := loopback.Run(
+		context.Background(), newHandler(registryDir), nil,
 		func(ctx context.Context, client *ipamclient.Client) error {
 			res, callErr := client.ReserveSiteID()(
 				ctx,
@@ -54,8 +65,8 @@ func TestRunLeavesNoSocketDirectoryBehind(t *testing.T) {
 	t.Setenv("TMPDIR", tmpDir)
 	registryDir := t.TempDir()
 
-	err := loopback.RunWithLogger(
-		context.Background(), registryDir, nil,
+	err := loopback.Run(
+		context.Background(), newHandler(registryDir), nil,
 		func(ctx context.Context, client *ipamclient.Client) error {
 			payload := &ipam.ReserveSiteIDPayload{Tailnet: "local", ID: "1", Site: "hq-vpc"}
 			_, callErr := client.ReserveSiteID()(ctx, payload)
