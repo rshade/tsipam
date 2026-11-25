@@ -27,9 +27,9 @@ Promoted from Parked on 2026-11-20. `CONTEXT.md` now allows `tsipam serve` as
 the one long-running process, under the conditions it lists. Each step is an
 OpenSpec change under `openspec/changes/`, listed in dependency order.
 
-- **`refactor-client-server-boundary`** `[M]`, no issue filed: separates
-  client code from server code with no behavior change. `add-sqlite-store`
-  and `add-serve-tsnet` build on it.
+- **`refactor-client-server-boundary`** `[M]`, no issue filed, archived:
+  separated client code from server code with no behavior change.
+  `add-sqlite-store` and `add-serve-tsnet` build on it.
 - [ ] #22 `add-registry-export-import`: `registry export` and
       `registry import` (`--merge`, `--plan`), to move reservations between
       stores losslessly. Its prerequisite, `refactor-registry-store`, is
