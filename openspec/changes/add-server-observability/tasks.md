@@ -24,10 +24,14 @@
 
 ## 2. Dependency gate
 
-- [ ] 2.1 Add `github.com/prometheus/client_golang` and run
-      `mise run license-check` and `mise run govulncheck`; verify both pass,
-      or record the fallback (a hand-written text-format encoder) in
-      design.md before continuing
+- [ ] 2.1 Add `github.com/prometheus/client_golang` and create
+      `internal/metrics`, with the server role in the boundary test, holding
+      the private `prometheus.Registry`, its Go and process collectors, and
+      its HTTP handler. The checks see only imported, non-test code, so this
+      import is what makes them cover the module. Verify the boundary tests
+      and `mise run license-check ::: govulncheck` pass, or record the
+      fallback (a hand-written text-format encoder) in design.md before
+      continuing
 
 ## 3. Scheduled drift
 
@@ -80,10 +84,10 @@
       the `add-serve-tsnet` middleware into a callable function if it is not
       one yet); verify tests for granted, ungranted, and scoped callers (403
       with no samples)
-- [ ] 4.2 Implement the scrape-time collector in `internal/metrics`, with the
-      server role in the boundary test, for the ten families in design.md,
-      with server-side sanitization of identity labels and per-pool series
-      dropped (one startup warning) when sanitization is on without a key;
+- [ ] 4.2 Implement the scrape-time collector in `internal/metrics` for the
+      ten families in design.md, with server-side sanitization of identity
+      labels and per-pool series dropped (one startup warning) when
+      sanitization is on without a key;
       verify the boundary tests pass, and with
       `client_golang/prometheus/testutil` comparisons against a fixture
       registry for off, keyed identity, and keyless identity, including stable
@@ -130,8 +134,8 @@
       with one drift target and a fake live collector, then fetch
       `tsipam drift`, `/metrics`, and `/ui/<alias>/drift`; verify all three
       show the same drift count
-- [ ] 6.2 Run `mise run test lint cross` and `mise run smoke`, and verify
-      all pass
+- [ ] 6.2 Run `mise run test ::: lint ::: cross ::: smoke`, and verify all
+      pass
 
 ## Workflow follow-up
 

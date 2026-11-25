@@ -2,10 +2,11 @@
 
 ## 1. Dependencies and the live identity check
 
-- [ ] 1.1 Add `tailscale.com` and `github.com/pires/go-proxyproto` to
-      `go.mod`; verify `mise run cross`, `mise run license-check`, and
-      `mise run govulncheck` pass, and record the release binary size before
-      and after
+- [ ] 1.1 Record the release binary size, then add `tailscale.com` and
+      `github.com/pires/go-proxyproto` to `go.mod`; verify
+      `go list -m tailscale.com github.com/pires/go-proxyproto` names both.
+      Nothing imports them yet, so 5.1 and 5.2 hold the checks that see only
+      imported code
 - [ ] 1.2 Add `TestLiveServiceIdentity` in `internal/server`, skipped unless
       `TSIPAM_LIVE_AUTHZ=1` and never run in CI (modeled on tail-watch's
       `TestLiveAuthzWhoIs`). It starts a tagged tsnet host from
@@ -92,7 +93,9 @@
       connection (a grant removed between them denies the second), lookup
       failure as denial and as `identified: false` from `whoami`, a
       connection without a PROXY header closed with no response, the health
-      states, and shutdown order
+      states, and shutdown order. This is the first non-test import of `tsnet`
+      and `go-proxyproto`, so also verify
+      `mise run cross ::: license-check ::: govulncheck` passes
 - [ ] 5.2 Add `cmd/tsipam/serve.go` with the flags from design.md: refuse
       `file://` and `--registry-dir`, require `--advertise-tags`, validate
       `--capability`, open the registry before joining, log the capability
@@ -101,7 +104,8 @@
       server packages it imports. Verify the boundary tests pass, `cmd`
       tests for each startup refusal (exit 2, exact stderr), including
       a `tailscale.com` capability, and a test that the auth key never
-      appears in stderr at `--verbose`
+      appears in stderr at `--verbose`. The binary links the server from here
+      on, so record its release size beside the one from 1.1
 
 ## 6. Remote client
 
@@ -184,7 +188,7 @@
 
 ## 8. Integration verification
 
-- [ ] 8.1 Run `mise run test lint cross smoke`, and verify every task
+- [ ] 8.1 Run `mise run test ::: lint ::: cross ::: smoke`, and verify every task
       passes and no existing golden or smoke fixture changed except the three
       schema goldens
 - [ ] 8.2 Deploy to a test tailnet with the documented manifest, and verify

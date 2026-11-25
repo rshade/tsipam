@@ -243,9 +243,9 @@ service scopes using the same scope evaluation the API uses (from
   writes, and the registry is small.
 - [Risk] The license allowlist rejects a transitive module of
   `client_golang`, for example `klauspost/compress` with its mixed
-  licenses. → Mitigation: task 2.1 runs `mise run license-check` before any
-  code depends on it. The fallback is a hand-written text-format encoder
-  for these ten families.
+  licenses. → Mitigation: task 2.1 imports the module and runs
+  `mise run license-check` before the collector depends on it. The fallback
+  is a hand-written text-format encoder for these ten families.
 - [Trade-off] In-memory reports mean no drift data until the first run after
   a restart. This is accepted, and is visible as `drift_unavailable` and
   through the absent drift-row series.
