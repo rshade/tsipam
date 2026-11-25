@@ -46,6 +46,7 @@ space before it is advertised and compares those reservations with live use.
     - [`calc aggregate`](#calc-aggregate)
     - [`calc next-free`](#calc-next-free)
     - [`calc info`](#calc-info)
+  - [Inputs by position or by flag](#inputs-by-position-or-by-flag)
   - [Registry format](#registry-format)
   - [Machine-readable and diagnostic output](#machine-readable-and-diagnostic-output)
   - [Not yet implemented](#not-yet-implemented)
@@ -753,6 +754,32 @@ IPv4 first, exactly as `calc split` does, so
 `tsipam calc info '::ffff:10.0.0.0/120'` reports the facts for
 `10.0.0.0/24`. Shorter 4-in-6-like prefixes cannot be exclusively IPv4-mapped
 and are treated as native IPv6.
+
+### Inputs by position or by flag
+
+Every required positional argument also has a flag, so a command can be called
+with flags alone. The two forms are equivalent:
+
+```bash
+tsipam subnet reserve 10.20.0.0/16 hq-vpc
+tsipam subnet reserve --cidr 10.20.0.0/16 --site hq-vpc
+```
+
+| Commands | Flags |
+| --- | --- |
+| `site-id reserve`, `site-id release` | `--id`, `--site` (reserve) |
+| `subnet reserve`, `subnet release` | `--cidr`, `--site` (reserve) |
+| `subnet allocate` | `--pool`, `--site` |
+| `service reserve`, `service release` | `--address`, `--service` (reserve) |
+| `port reserve`, `port release` | `--port`, `--device` (reserve) |
+| `calc split`, `calc info` | `--cidr` |
+| `calc next-free` | `--pool` |
+| `calc aggregate` | `--cidr`, repeated |
+| `check-policy` | `--policy-file` |
+
+Give every input by position or every input by flag. Some of each is refused,
+and a missing input is reported with its flag, before anything is read or
+written.
 
 ### Registry format
 

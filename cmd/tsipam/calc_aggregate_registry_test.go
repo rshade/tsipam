@@ -212,8 +212,13 @@ func TestCalcAggregateRejectsConflictingSources(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "no input", want: "requires at least 1 arg"},
+		{name: "no input", want: "--cidr"},
 		{name: "both sources", args: []string{"--from-registry", "10.0.0.0/24"}, want: "cannot be used together"},
+		{
+			name: "registry and CIDR flag", args: []string{"--from-registry", "--cidr", "10.0.0.0/24"},
+			want: "cannot be used together",
+		},
+		{name: "position and flag", args: []string{"10.0.0.0/24", "--cidr", "10.0.1.0/24"}, want: "not both"},
 		{
 			name: "directory without mode", args: []string{"--registry-dir", "does-not-exist", "10.0.0.0/24"},
 			want: "require --from-registry",
@@ -222,7 +227,7 @@ func TestCalcAggregateRejectsConflictingSources(t *testing.T) {
 			name: "tailnet without mode", args: []string{"--tailnet", "production", "10.0.0.0/24"},
 			want: "require --from-registry",
 		},
-		{name: "false mode without input", args: []string{"--from-registry=false"}, want: "requires at least 1 arg"},
+		{name: "false mode without input", args: []string{"--from-registry=false"}, want: "--cidr"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

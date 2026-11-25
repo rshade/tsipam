@@ -75,6 +75,11 @@
       "usage": "calc aggregate [cidr...]",
       "flags": [
         {
+          "name": "cidr",
+          "usage": "CIDR prefix to aggregate; repeat for each one (instead of [cidr...])",
+          "default": "[]"
+        },
+        {
           "name": "from-registry",
           "usage": "aggregate subnet-pool reservations instead of positional CIDRs",
           "default": "false"
@@ -94,7 +99,14 @@
     {
       "name": "calc info",
       "summary": "Report network, usable range, and host count for a CIDR.",
-      "usage": "calc info \u003ccidr\u003e"
+      "usage": "calc info \u003ccidr\u003e",
+      "flags": [
+        {
+          "name": "cidr",
+          "usage": "CIDR prefix (instead of \u003ccidr\u003e)",
+          "default": ""
+        }
+      ]
     },
     {
       "name": "calc next-free",
@@ -110,6 +122,11 @@
           "name": "count",
           "usage": "number of suggestions to return",
           "default": "1"
+        },
+        {
+          "name": "pool",
+          "usage": "pool CIDR prefix (instead of \u003cpool-cidr\u003e)",
+          "default": ""
         },
         {
           "name": "registry-dir",
@@ -134,6 +151,11 @@
       "summary": "Split a CIDR into equal-sized child prefixes.",
       "usage": "calc split \u003ccidr\u003e",
       "flags": [
+        {
+          "name": "cidr",
+          "usage": "CIDR prefix (instead of \u003ccidr\u003e)",
+          "default": ""
+        },
         {
           "name": "prefix",
           "usage": "target prefix length (number of bits in each child subnet)",
@@ -164,6 +186,11 @@
       "summary": "Check authored ipsets against subnet reservations; exit 1 on drift.",
       "usage": "check-policy \u003cacl-file\u003e",
       "flags": [
+        {
+          "name": "policy-file",
+          "usage": "local HuJSON policy file (instead of \u003cacl-file\u003e)",
+          "default": ""
+        },
         {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
@@ -243,6 +270,11 @@
       "usage": "port release \u003cport\u003e",
       "flags": [
         {
+          "name": "port",
+          "usage": "UDP listen port, 1024-65535 (instead of \u003cport\u003e)",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -265,6 +297,16 @@
       "summary": "Reserve a UDP listen port for a device within a site.",
       "usage": "port reserve \u003cport\u003e \u003cdevice\u003e",
       "flags": [
+        {
+          "name": "device",
+          "usage": "device label (instead of \u003cdevice\u003e)",
+          "default": ""
+        },
+        {
+          "name": "port",
+          "usage": "UDP listen port, 1024-65535 (instead of \u003cport\u003e)",
+          "default": ""
+        },
         {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
@@ -311,6 +353,11 @@
       "usage": "service release \u003caddress\u003e",
       "flags": [
         {
+          "name": "address",
+          "usage": "IPv4 host address or exact /32 (instead of \u003caddress\u003e)",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -327,6 +374,11 @@
       "summary": "Reserve an IPv4 host address for a Tailscale Service.",
       "usage": "service reserve \u003caddress\u003e \u003cservice-name\u003e",
       "flags": [
+        {
+          "name": "address",
+          "usage": "IPv4 host address or exact /32 (instead of \u003caddress\u003e)",
+          "default": ""
+        },
         {
           "name": "description",
           "usage": "free-text description of why this address space is reserved",
@@ -345,6 +397,11 @@
         {
           "name": "reserved-at",
           "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "service",
+          "usage": "Service name, with or without svc: (instead of \u003cservice-name\u003e)",
           "default": ""
         },
         {
@@ -387,6 +444,11 @@
       "usage": "site-id release \u003cid\u003e",
       "flags": [
         {
+          "name": "id",
+          "usage": "4via6 site ID (instead of \u003cid\u003e)",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -409,6 +471,11 @@
           "default": ""
         },
         {
+          "name": "id",
+          "usage": "4via6 site ID (instead of \u003cid\u003e)",
+          "default": ""
+        },
+        {
           "name": "owner",
           "usage": "operator or team that owns this reservation",
           "default": ""
@@ -421,6 +488,11 @@
         {
           "name": "reserved-at",
           "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "site",
+          "usage": "site name (instead of \u003csite-name\u003e)",
           "default": ""
         },
         {
@@ -456,6 +528,11 @@
           "default": ""
         },
         {
+          "name": "pool",
+          "usage": "pool CIDR prefix (instead of \u003cpool-cidr\u003e)",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -463,6 +540,11 @@
         {
           "name": "reserved-at",
           "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "site",
+          "usage": "site name (instead of \u003csite-name\u003e)",
           "default": ""
         },
         {
@@ -506,6 +588,11 @@
       "usage": "subnet release \u003ccidr\u003e",
       "flags": [
         {
+          "name": "cidr",
+          "usage": "CIDR prefix (instead of \u003ccidr\u003e)",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -522,6 +609,11 @@
       "summary": "Reserve a subnet CIDR pool for a site.",
       "usage": "subnet reserve \u003ccidr\u003e \u003csite-name\u003e",
       "flags": [
+        {
+          "name": "cidr",
+          "usage": "CIDR prefix (instead of \u003ccidr\u003e)",
+          "default": ""
+        },
         {
           "name": "description",
           "usage": "free-text description of why this address space is reserved",
@@ -540,6 +632,11 @@
         {
           "name": "reserved-at",
           "usage": "RFC3339 timestamp this reservation was made (default: auto-stamped when other metadata is set)",
+          "default": ""
+        },
+        {
+          "name": "site",
+          "usage": "site name (instead of \u003csite-name\u003e)",
           "default": ""
         },
         {

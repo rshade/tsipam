@@ -6,12 +6,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rshade/tsacl/pkg/policycore/sanitize"
+
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	"github.com/rshade/tsipam/internal/registry"
 )
-
-const udpPortReserveArgs = 2
 
 // udpPortReserveMessage and udpPortReleaseMessage build user-facing text from
 // the output envelope after sanitization, keeping message and structured fields
@@ -49,7 +49,7 @@ func newUDPPortReserveCommand(state *commandState) *cobra.Command {
 		state,
 		"reserve <port> <device>",
 		"Reserve a UDP listen port for a device within a site.",
-		cobra.ExactArgs(udpPortReserveArgs),
+		[]inputSpec{portInput(), deviceInput()},
 		true,
 		1,
 		func(
@@ -88,7 +88,7 @@ func newUDPPortReleaseCommand(state *commandState) *cobra.Command {
 		state,
 		"release <port>",
 		"Release a UDP listen-port reservation from a site.",
-		cobra.ExactArgs(1),
+		[]inputSpec{portInput()},
 		true,
 		-1,
 		func(
@@ -125,7 +125,7 @@ func newUDPPortListCommand(state *commandState) *cobra.Command {
 		state,
 		commandList,
 		"List UDP listen-port reservations, optionally filtered by site.",
-		cobra.NoArgs,
+		nil,
 		false,
 		-1,
 		func(
@@ -177,30 +177,47 @@ type udpPortLeafCall func(
 	bool,
 ) (*outputEnvelope, error)
 
+// registerInvalidPort registers the port argument for the error sweep when it is
+// not a port. Port numbers stay visible, but anything else the caller put there
+// may be an identity, and the validation error echoes it.
+func registerInvalidPort(sanitizer *sanitize.Sanitizer, args []string) {
+	if len(args) == 0 {
+		return
+	}
+	if _, err := registry.NormalizePort(args[0]); err != nil {
+		registerSweepValueWithCanonical(sanitizer, kindPort, args[0], registry.NormalizePort)
+	}
+}
+
 // newUDPPortLeafCommand centralizes registry/tailnet flags, optional versus
 // required site handling, identity registration, and loopback traversal for
 // all three UDP-port operations.
 func newUDPPortLeafCommand(
 	state *commandState,
 	use, short string,
-	argsValidator cobra.PositionalArgs,
+	specs []inputSpec,
 	siteRequired bool,
 	deviceArgIndex int,
 	call udpPortLeafCall,
 ) *cobra.Command {
 	var registryDir, tailnetFlag, site string
+	var bound inputs
 	cmd := &cobra.Command{
 		Use:           use,
 		Short:         short,
-		Args:          argsValidator,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			args, err := bound.resolve(cmd, args)
+			if err != nil {
+				return err
+			}
 			tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
 			outputSanitizer, err := state.outputSanitizer(tailnet)
 			if err != nil {
 				return err
 			}
+			registerInvalidPort(outputSanitizer, args)
 			siteSet := cmd.Flags().Changed("site")
 			if siteSet {
 				if validateErr := registerAndValidate(
@@ -228,6 +245,7 @@ func newUDPPortLeafCommand(
 			)
 		},
 	}
+	bound = bindInputs(cmd, specs...)
 	cmd.Flags().StringVar(&site, "site", "", "site/firewall-boundary label")
 	if siteRequired {
 		_ = cmd.MarkFlagRequired("site")

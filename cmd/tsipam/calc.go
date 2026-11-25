@@ -39,14 +39,18 @@ func newCalcNextFreeCommand(state *commandState, listDevices devicesListFunc) *c
 	var registryDir, tailnetFlag string
 	var size, count int
 	var all bool
+	var bound inputs
 
 	cmd := &cobra.Command{
 		Use:           "next-free <pool-cidr>",
 		Short:         "Suggest available IPv4 or IPv6 child CIDRs from a subnet pool.",
-		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			args, err := bound.resolve(cmd, args)
+			if err != nil {
+				return err
+			}
 			return executeCalcNextFree(
 				cmd, state, listDevices, args[0], registryDir, tailnetFlag, size, count, all,
 				cmd.Flags().Changed("count"),
@@ -54,6 +58,7 @@ func newCalcNextFreeCommand(state *commandState, listDevices devicesListFunc) *c
 		},
 	}
 
+	bound = bindInputs(cmd, poolInput())
 	cmd.Flags().IntVar(&size, "size", 0, "target prefix length (number of bits in each suggested child subnet)")
 	cmd.Flags().IntVarP(&count, "count", "n", 1, "number of suggestions to return")
 	cmd.Flags().BoolVar(&all, "all", false, "return every available child subnet")
@@ -236,13 +241,17 @@ func nextFreeBlocks(
 }
 
 func newCalcInfoCommand(state *commandState) *cobra.Command {
+	var bound inputs
 	cmd := &cobra.Command{
 		Use:           "info <cidr>",
 		Short:         "Report network, usable range, and host count for a CIDR.",
-		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			args, err := bound.resolve(cmd, args)
+			if err != nil {
+				return err
+			}
 			cidrArg := args[0]
 
 			outputSanitizer, err := state.outputSanitizer("")
@@ -284,19 +293,24 @@ func newCalcInfoCommand(state *commandState) *cobra.Command {
 			return emitOutput(cmd, output, outputSanitizer)
 		},
 	}
+	bound = bindInputs(cmd, cidrInput())
 	return cmd
 }
 
 func newCalcSplitCommand(state *commandState) *cobra.Command {
 	var prefixFlag int
+	var bound inputs
 
 	cmd := &cobra.Command{
 		Use:           "split <cidr>",
 		Short:         "Split a CIDR into equal-sized child prefixes.",
-		Args:          cobra.ExactArgs(1),
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			args, err := bound.resolve(cmd, args)
+			if err != nil {
+				return err
+			}
 			cidrArg := args[0]
 
 			outputSanitizer, err := state.outputSanitizer("")
@@ -345,6 +359,7 @@ func newCalcSplitCommand(state *commandState) *cobra.Command {
 		},
 	}
 
+	bound = bindInputs(cmd, cidrInput())
 	cmd.Flags().IntVar(&prefixFlag, "prefix", 0,
 		"target prefix length (number of bits in each child subnet)")
 	_ = cmd.MarkFlagRequired("prefix")

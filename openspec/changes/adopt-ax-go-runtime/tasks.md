@@ -95,14 +95,14 @@
 
 ## 6. Inputs by flag
 
-- [ ] 6.1 Add `inputs.go` and convert all fourteen commands with positional
+- [x] 6.1 Add `inputs.go` and convert all fourteen commands with positional
       arguments, including the `calc aggregate` source checks; verify a
       table test that positional and flag forms give equal output, bytes, and
       exit codes, that mixed, missing, and empty inputs behave as specified,
       and that `-id 1 -site hq` behaves as the double-dash spelling
-- [ ] 6.2 Extend the sanitization tests to flag inputs; verify no raw value
+- [x] 6.2 Extend the sanitization tests to flag inputs; verify no raw value
       reaches stdout or stderr
-- [ ] 6.3 Document the flags in README and regenerate the `-schema` golden;
+- [x] 6.3 Document the flags in README and regenerate the `-schema` golden;
       verify the smoke metadata cases pass
 
 ## 7. Dry run, confirmation, and idempotency key

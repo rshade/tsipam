@@ -19,6 +19,7 @@ var errPolicyDrift = errors.New("authored ipsets differ from reserved subnet poo
 
 func newPolicyCheckCommand(state *commandState) *cobra.Command {
 	var registryDir, tailnetFlag string
+	var bound inputs
 	cmd := &cobra.Command{
 		Use:   "check-policy <acl-file>",
 		Short: "Check authored ipsets against subnet reservations; exit 1 on drift.",
@@ -32,11 +33,16 @@ func newPolicyCheckCommand(state *commandState) *cobra.Command {
 			"Expansion is limited to 128 nesting levels and 65536 prefixes across definitions.\n" +
 			"Exits 0 for consistency, 1 for drift, or 2 for incomplete input or output errors.\n" +
 			"--sanitize identity or strict redacts ipset names, CIDRs, sites, and registry aliases.",
-		Args: cobra.ExactArgs(1), SilenceErrors: true, SilenceUsage: true,
+		SilenceErrors: true, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			args, err := bound.resolve(cmd, args)
+			if err != nil {
+				return err
+			}
 			return executePolicyCheck(cmd, state, registryDir, tailnetFlag, args[0])
 		},
 	}
+	bound = bindInputs(cmd, policyFileInput())
 	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
 	return cmd
 }
