@@ -167,7 +167,7 @@ func TestPolicyCheckFailures(t *testing.T) {
 		})
 	}
 	code, out, errOut := runPolicyCommand(t, nil, commandCheckPolicy)
-	if code != exitUsage || out != "" || !strings.Contains(errOut, "accepts 1 arg") {
+	if code != exitUsage || out != "" || !strings.Contains(errOut, "--policy-file") {
 		t.Fatalf("missing argument: %d %q %q", code, out, errOut)
 	}
 }

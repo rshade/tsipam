@@ -11,8 +11,6 @@ import (
 	"github.com/rshade/tsipam/internal/registry"
 )
 
-const serviceReserveArgs = 2
-
 // serviceReserveMessage and serviceReleaseMessage build user-facing text
 // from the output envelope after sanitization, keeping message and structured
 // fields synchronized.
@@ -49,7 +47,7 @@ func newServiceReserveCommand(state *commandState) *cobra.Command {
 	var metadataFlags reservationMetadataFlags
 	cmd := newServiceLeafCommand(
 		state, "reserve <address> <service-name>", "Reserve an IPv4 host address for a Tailscale Service.",
-		cobra.ExactArgs(serviceReserveArgs), 0, 1, &metadataFlags,
+		[]inputSpec{addressInput(), serviceInput()}, 0, 1, &metadataFlags,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			response, err := client.ReserveServiceAddress()(ctx, &ipam.ReserveServiceAddressPayload{
@@ -80,7 +78,7 @@ func newServiceReserveCommand(state *commandState) *cobra.Command {
 
 func newServiceReleaseCommand(state *commandState) *cobra.Command {
 	return newServiceLeafCommand(
-		state, "release <address>", "Release a reserved service address.", cobra.ExactArgs(1), 0, -1, nil,
+		state, "release <address>", "Release a reserved service address.", []inputSpec{addressInput()}, 0, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			response, err := client.ReleaseServiceAddress()(ctx, &ipam.ReleaseServiceAddressPayload{
 				Tailnet: tailnet, Address: args[0],
@@ -104,7 +102,7 @@ func newServiceReleaseCommand(state *commandState) *cobra.Command {
 //nolint:dupl // mirrors newSubnetListCommand (subnet.go) by design; unifying needs a generic beyond this file's scope
 func newServiceListCommand(state *commandState) *cobra.Command {
 	return newServiceLeafCommand(
-		state, commandList, "List reserved service addresses.", cobra.NoArgs, -1, -1, nil,
+		state, commandList, "List reserved service addresses.", nil, -1, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, _ []string, tailnet string) (*outputEnvelope, error) {
 			response, err := client.ListServiceAddresses()(ctx, &ipam.ListServiceAddressesPayload{Tailnet: tailnet})
 			if err != nil {
@@ -145,19 +143,23 @@ type serviceLeafCall func(
 func newServiceLeafCommand(
 	state *commandState,
 	use, short string,
-	argsValidator cobra.PositionalArgs,
+	specs []inputSpec,
 	addressArgIndex, serviceArgIndex int,
 	metadataFlags *reservationMetadataFlags,
 	call serviceLeafCall,
 ) *cobra.Command {
 	var registryDir, tailnetFlag string
+	var bound inputs
 	cmd := &cobra.Command{
 		Use:           use,
 		Short:         short,
-		Args:          argsValidator,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			args, err := bound.resolve(cmd, args)
+			if err != nil {
+				return err
+			}
 			tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
 			outputSanitizer, err := state.outputSanitizer(tailnet)
 			if err != nil {
@@ -190,6 +192,7 @@ func newServiceLeafCommand(
 			)
 		},
 	}
+	bound = bindInputs(cmd, specs...)
 	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
 	return cmd
 }

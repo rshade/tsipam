@@ -386,6 +386,8 @@ const (
 	kindHostname = "hostname"
 	kindLogin    = "login"
 	kindTag      = "tag"
+	kindPort     = "port"
+	kindAddress  = "address"
 
 	svcSelectorToken = "svc:"
 )

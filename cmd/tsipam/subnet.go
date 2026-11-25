@@ -15,11 +15,6 @@ import (
 	"github.com/rshade/tsipam/internal/registry"
 )
 
-const (
-	subnetReserveArgs  = 2
-	subnetAllocateArgs = 2
-)
-
 // subnetReserveMessage and subnetReleaseMessage render their command's
 // outcome message from o's own CIDR/Site fields, at emit time -- see
 // outputEnvelope.messageBuilder's doc comment. Reading o.Site rather than
@@ -69,7 +64,7 @@ func newSubnetReserveCommand(state *commandState) *cobra.Command {
 	var metadataFlags reservationMetadataFlags
 	cmd := newSubnetLeafCommand(
 		state, "reserve <cidr> <site-name>", "Reserve a subnet CIDR pool for a site.",
-		cobra.ExactArgs(subnetReserveArgs), 0, 1, &metadataFlags,
+		[]inputSpec{cidrInput(), siteInput()}, 0, 1, &metadataFlags,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			res, err := client.ReserveSubnetPool()(ctx, &ipam.ReserveSubnetPoolPayload{
@@ -109,7 +104,7 @@ func newSubnetAllocateCommand(state *commandState, listDevices devicesListFunc) 
 	var size int
 	cmd := newSubnetLeafCommand(
 		state, "allocate <pool-cidr> <site-name>", "Reserve the next free child CIDR of a pool for a site.",
-		cobra.ExactArgs(subnetAllocateArgs), 0, 1, &metadataFlags,
+		[]inputSpec{poolInput(), siteInput()}, 0, 1, &metadataFlags,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			pool, err := registry.NormalizeAllocationPool(args[0], size)
 			if err != nil {
@@ -173,7 +168,7 @@ func liveTakenRoutes(devices []deviceRecord) []string {
 
 func newSubnetReleaseCommand(state *commandState) *cobra.Command {
 	return newSubnetLeafCommand(
-		state, "release <cidr>", "Release a reserved subnet CIDR pool.", cobra.ExactArgs(1), 0, -1, nil,
+		state, "release <cidr>", "Release a reserved subnet CIDR pool.", []inputSpec{cidrInput()}, 0, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ReleaseSubnetPool()(ctx, &ipam.ReleaseSubnetPoolPayload{
 				Tailnet: tailnet, CIDR: args[0],
@@ -203,7 +198,7 @@ func newSubnetReleaseCommand(state *commandState) *cobra.Command {
 //nolint:dupl // mirrors newServiceListCommand (service.go) by design; unifying needs a generic beyond this file's scope
 func newSubnetListCommand(state *commandState) *cobra.Command {
 	return newSubnetLeafCommand(
-		state, commandList, "List reserved subnet CIDR pools.", cobra.NoArgs, -1, -1, nil,
+		state, commandList, "List reserved subnet CIDR pools.", nil, -1, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, _ []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ListSubnetPools()(ctx, &ipam.ListSubnetPoolsPayload{Tailnet: tailnet})
 			if err != nil {
@@ -260,19 +255,23 @@ type subnetLeafCall func(
 func newSubnetLeafCommand(
 	state *commandState,
 	use, short string,
-	argsValidator cobra.PositionalArgs,
+	specs []inputSpec,
 	cidrArgIndex, siteArgIndex int,
 	metadataFlags *reservationMetadataFlags,
 	call subnetLeafCall,
 ) *cobra.Command {
 	var registryDir, tailnetFlag string
+	var bound inputs
 	cmd := &cobra.Command{
 		Use:           use,
 		Short:         short,
-		Args:          argsValidator,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			args, err := bound.resolve(cmd, args)
+			if err != nil {
+				return err
+			}
 			tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
 			outputSanitizer, err := state.outputSanitizer(tailnet)
 			if err != nil {
@@ -306,6 +305,7 @@ func newSubnetLeafCommand(
 			)
 		},
 	}
+	bound = bindInputs(cmd, specs...)
 	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
 	return cmd
 }

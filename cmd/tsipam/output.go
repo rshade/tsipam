@@ -581,12 +581,12 @@ func sanitizeNetworkValues(values []string, output *sanitize.Sanitizer) []string
 
 func networkKind(value string) string {
 	if _, err := netip.ParsePrefix(value); err == nil {
-		return "cidr"
+		return kindCIDR
 	}
 	if _, err := netip.ParseAddr(value); err == nil {
-		return "ip"
+		return kindIP
 	}
-	return "address"
+	return kindAddress
 }
 
 // emitOutput writes result to cmd's stdout in the run's output mode. JSON is

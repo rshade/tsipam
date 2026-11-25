@@ -13,7 +13,6 @@ import (
 
 const (
 	defaultRegistryDir = "."
-	siteIDReserveArgs  = 2
 	localTailnet       = "local"
 )
 
@@ -81,7 +80,7 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 	var metadataFlags reservationMetadataFlags
 	cmd := newSiteIDLeafCommand(
 		state, "reserve <id> <site-name>", "Reserve a 4via6 site ID for a site.",
-		cobra.ExactArgs(siteIDReserveArgs), 0, 1, &metadataFlags,
+		[]inputSpec{idInput(), siteInput()}, 0, 1, &metadataFlags,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			res, err := client.ReserveSiteID()(ctx, &ipam.ReserveSiteIDPayload{
@@ -113,7 +112,7 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 
 func newSiteIDReleaseCommand(state *commandState) *cobra.Command {
 	return newSiteIDLeafCommand(
-		state, "release <id>", "Release a reserved 4via6 site ID.", cobra.ExactArgs(1), 0, -1, nil,
+		state, "release <id>", "Release a reserved 4via6 site ID.", []inputSpec{idInput()}, 0, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ReleaseSiteID()(
 				ctx, &ipam.ReleaseSiteIDPayload{Tailnet: tailnet, ID: args[0]},
@@ -143,7 +142,7 @@ func newSiteIDReleaseCommand(state *commandState) *cobra.Command {
 //nolint:dupl // mirrors newSubnetListCommand (subnet.go) and newServiceListCommand (service.go) by design; unifying needs a generic beyond this file's scope
 func newSiteIDListCommand(state *commandState) *cobra.Command {
 	return newSiteIDLeafCommand(
-		state, commandList, "List reserved 4via6 site IDs.", cobra.NoArgs, -1, -1, nil,
+		state, commandList, "List reserved 4via6 site IDs.", nil, -1, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, _ []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ListSiteIds()(ctx, &ipam.ListSiteIdsPayload{Tailnet: tailnet})
 			if err != nil {
@@ -196,19 +195,23 @@ type siteIDLeafCall func(
 func newSiteIDLeafCommand(
 	state *commandState,
 	use, short string,
-	argsValidator cobra.PositionalArgs,
+	specs []inputSpec,
 	idArgIndex, siteArgIndex int,
 	metadataFlags *reservationMetadataFlags,
 	call siteIDLeafCall,
 ) *cobra.Command {
 	var registryDir, tailnetFlag string
+	var bound inputs
 	cmd := &cobra.Command{
 		Use:           use,
 		Short:         short,
-		Args:          argsValidator,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			args, err := bound.resolve(cmd, args)
+			if err != nil {
+				return err
+			}
 			tailnet := resolveTailnetWithEnv(tailnetFlag, state.getenv)
 			outputSanitizer, err := state.outputSanitizer(tailnet)
 			if err != nil {
@@ -247,6 +250,7 @@ func newSiteIDLeafCommand(
 			)
 		},
 	}
+	bound = bindInputs(cmd, specs...)
 	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
 	return cmd
 }
