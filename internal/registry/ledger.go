@@ -289,7 +289,7 @@ func (l *Ledger) AllocateSubnetPool(
 			if parseErr != nil {
 				return fmt.Errorf("stored subnet CIDR %s: %w", reserved, parseErr)
 			}
-			taken = append(taken, prefix)
+			taken = AppendTaken(taken, prefix)
 		}
 		block, ok := ipcalc.NextFree(poolPrefix, size, taken)
 		if !ok {

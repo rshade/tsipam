@@ -22,6 +22,7 @@ func runLedgerRules(t *testing.T, newStore NewStore) {
 	runMetadataRules(t, newStore)
 	runTicketReplay(t, newStore)
 	runNextFree(t, newStore)
+	runMappedExclusions(t, newStore)
 	runListOrdering(t, newStore)
 	runReleases(t, newStore)
 }
@@ -448,6 +449,11 @@ func runTicketReplay(t *testing.T, newStore NewStore) {
 				},
 				site: "hq-vpc", want: "10.0.3.0/24",
 			},
+			{
+				name: "an IPv4-mapped spelling is inside an IPv4 pool",
+				seed: []struct{ cidr, site, ticket string }{{"::ffff:10.0.3.0/120", "hq-vpc", "OPS-1"}},
+				site: "hq-vpc", want: "::ffff:10.0.3.0/120",
+			},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -568,6 +574,74 @@ func runNextFree(t *testing.T, newStore NewStore) {
 			}
 		})
 	})
+}
+
+// runMappedExclusions checks that a reservation or live route counts as taken in
+// whichever of its two spellings, IPv4 or IPv4-mapped IPv6, the pool uses.
+//
+//nolint:gocognit,goconst,mnd // reservation fixtures repeat identities and prefix lengths
+func runMappedExclusions(t *testing.T, newStore NewStore) {
+	t.Helper()
+	cases := []struct {
+		name           string
+		reserved, live []string
+		pool           string
+		size           int
+		want           string
+	}{
+		{
+			name: "mapped reservation in an IPv4 pool", reserved: []string{"::ffff:10.0.0.0/120"},
+			pool: "10.0.0.0/16", size: 24, want: "10.0.1.0/24",
+		},
+		{
+			name: "mapped reservation wider than the block", reserved: []string{"::ffff:10.0.0.0/119"},
+			pool: "10.0.0.0/16", size: 24, want: "10.0.2.0/24",
+		},
+		{
+			name: "mapped reservation in a mapped pool", reserved: []string{"::ffff:10.0.0.0/120"},
+			pool: "::ffff:10.0.0.0/112", size: 24, want: "10.0.1.0/24",
+		},
+		{
+			name: "mapped live route in an IPv4 pool", live: []string{"::ffff:10.0.0.0/120"},
+			pool: "10.0.0.0/16", size: 24, want: "10.0.1.0/24",
+		},
+		{
+			// A pool shorter than /96 is IPv6, so its children are too.
+			name: "mapped reservation in an IPv6 pool", reserved: []string{"::ffff:0.0.0.0/96"},
+			live: []string{"::fffe:0:0/97"}, pool: "::fffe:0:0/95", size: 97, want: "::fffe:8000:0/97",
+		},
+		{
+			name: "mapped reservation fills an IPv6 pool", reserved: []string{"::ffff:0.0.0.0/96"},
+			live: []string{"::fffe:0:0/96"}, pool: "::fffe:0:0/95", size: 96,
+		},
+	}
+	for _, tc := range cases {
+		for _, site := range []string{"hq-vpc", "branch"} {
+			t.Run(tc.name+" for "+site, func(t *testing.T) {
+				t.Parallel()
+				led := ledgerFor(t, newStore)
+				for _, cidr := range tc.reserved {
+					if _, _, _, _, err := led.ReserveSubnetPool(
+						t.Context(), contractTailnet, cidr, "hq-vpc", registry.ReservationMetadata{},
+					); err != nil {
+						t.Fatal(err)
+					}
+				}
+				got, _, _, _, err := led.AllocateSubnetPool(
+					t.Context(), contractTailnet, tc.pool, tc.size, site, tc.live, registry.ReservationMetadata{},
+				)
+				if tc.want == "" {
+					if _, exhausted := errors.AsType[*registry.SubnetPoolExhaustedError](err); !exhausted {
+						t.Errorf("allocated %q, %v; want an exhausted pool", got, err)
+					}
+					return
+				}
+				if err != nil || got != tc.want {
+					t.Errorf("allocated %q, %v; want %s", got, err, tc.want)
+				}
+			})
+		}
+	}
 }
 
 //nolint:gocognit,gocyclo,cyclop,funlen // one table covers every map's sort

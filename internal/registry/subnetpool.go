@@ -94,7 +94,13 @@ func findTicketReplay(pools map[string]Entry, pool netip.Prefix, site, ticket st
 			continue
 		}
 		prefix, err := netip.ParsePrefix(entry.CIDR)
-		if err != nil || prefix.Addr().BitLen() != pool.Addr().BitLen() {
+		if err != nil {
+			continue
+		}
+		if unmapped, ok := ipcalc.Unmap4In6(prefix); ok && pool.Addr().Is4() {
+			prefix = unmapped
+		}
+		if prefix.Addr().BitLen() != pool.Addr().BitLen() {
 			continue
 		}
 		if prefix.Bits() >= pool.Bits() && pool.Contains(prefix.Addr()) {
@@ -126,6 +132,16 @@ func NormalizeAllocationPool(pool string, size int) (netip.Prefix, error) {
 	return prefix, nil
 }
 
+// AppendTaken adds prefix to a taken set for [ipcalc.NextFree], which compares
+// within one address family. An IPv4-mapped prefix is the same space in both, so
+// it is added in both.
+func AppendTaken(taken []netip.Prefix, prefix netip.Prefix) []netip.Prefix {
+	if unmapped, ok := ipcalc.Unmap4In6(prefix); ok {
+		taken = append(taken, unmapped)
+	}
+	return append(taken, prefix)
+}
+
 // parseLiveTaken fails closed on a live route that does not parse: a taken
 // set missing one advertised route could hand out space a router already
 // serves. The CLI parses routes before sending them (nextFreeTaken), so
@@ -138,7 +154,7 @@ func parseLiveTaken(liveTaken []string) ([]netip.Prefix, error) {
 		if err != nil {
 			return nil, invalidInput(fmt.Errorf("live route %q is not a valid prefix: %w", route, err))
 		}
-		taken = append(taken, prefix)
+		taken = AppendTaken(taken, prefix)
 	}
 	return taken, nil
 }
