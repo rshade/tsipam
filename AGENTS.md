@@ -128,6 +128,12 @@ Use Conventional Commits; commitlint checks every PR commit. release-please
 reads them to cut `vX.Y.Z` releases, so a breaking change needs `feat!:` or a
 `BREAKING CHANGE:` footer.
 
+If you edit in one checkout and commit that work from another worktree, stash the
+originals once the commits contain them (`git stash push -u -- <paths>`), and
+name the checkout and the stash in your report. Stash only the paths you
+committed, because another session may share the checkout. Originals left behind
+follow the next branch switch, and committing them reverts later fixes.
+
 ## Security
 
 Never commit credentials, real tailnet names, or real email addresses. Use
