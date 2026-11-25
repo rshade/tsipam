@@ -58,7 +58,7 @@ belong on stdout and diagnostics on stderr; keep JSON parse-clean. Follow
 ## Testing Guidelines
 
 Use Go's `testing` package and descriptive `TestXxx` names. Add regression tests
-for behavior changes and run `mise run test lint cross` before review. Golden
+for behavior changes and run `mise run test ::: lint ::: cross` before review. Golden
 files are byte-exact: regenerate with `go test ./... -update`, then inspect every
 changed fixture. Preserve authentic bytes under `testdata/`.
 
@@ -92,6 +92,18 @@ The pinned `npm:@fission-ai/openspec` CLI generates files under `.agents/`,
 `.claude/` and `.github/`. The `OpenSpec files` workflow runs `openspec update`
 on every PR and fails if it changes anything, so after a Renovate bump run
 `mise exec npm:@fission-ai/openspec -- openspec update` and commit the result.
+
+## Dependency Updates
+
+Renovate opens one PR per dependency and cannot run project commands. Two
+bumps need a local follow-up commit before CI passes:
+
+- goa (`goa.design/goa/v3` in `go.mod` and the generator in `mise.toml`,
+  grouped in `renovate.json`): run `mise run gen`.
+- `npm:@fission-ai/openspec`: run `openspec update`, as above.
+
+`commitlint` applies to Renovate's commits too, so `renovate.json` shortens
+dependency names to keep subjects within 64 characters.
 
 ## Commit & Pull Request Guidelines
 
