@@ -33,7 +33,13 @@ const unroutableBaseURL = "http://127.0.0.1:1"
 // phase begins, which is what keeps it race-free without needing to touch
 // internal/devices.clientMu (unexported, and scoped to the credential keys
 // only -- see that type's doc comment).
+//
+// With cliEnv set the test binary is tsipam itself, so a test can drive a real
+// process.
 func TestMain(m *testing.M) {
+	if os.Getenv(cliEnv) != "" {
+		os.Exit(realMain())
+	}
 	viper.Set("base-url", unroutableBaseURL)
 	os.Exit(m.Run())
 }

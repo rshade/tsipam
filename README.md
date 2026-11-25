@@ -72,6 +72,8 @@ help with; this README stays the command and flag reference.
     merge or on a schedule.
   - [Redact output for sharing](./docs/how-to/redact-output-for-sharing.md):
     sanitize a report before it leaves the team.
+  - [Use tsipam from an MCP client](./docs/how-to/use-from-an-mcp-client.md):
+    serve the commands to an agent as tools, over stdio.
   - [Smoke-test a release](./docs/how-to/release-smoke.md): exercise a built
     binary and the release archives before merging a release PR.
 - Reference
@@ -975,10 +977,15 @@ Empty list results remain JSON arrays. Treat field names and meanings as a
 compatibility surface; `schema_version` changes before a breaking contract
 change.
 
-Run `tsipam -schema` for the authoritative machine-readable command, flag,
-and exit-code catalog. Run `tsipam --help` for examples and the human-facing
+Run `tsipam -schema` for the machine-readable command, flag, and exit-code
+catalog; it alone carries `exit_codes` and `sanitization`. `tsipam __schema`
+describes the same commands in the form shared across tools, with each flag's
+type and allowed values and each command's side-effect class and run-varying
+fields, and `tsipam __schema --as=mcp` lists the tools `tsipam mcp-server`
+serves. Neither is wrapped in the result envelope. Run `tsipam --help` for examples and the human-facing
 exit-code description. `tsipam --version` includes the embedded VCS revision
-and marks a modified working-tree build as dirty.
+and marks a modified working-tree build as dirty. `__schema`, error objects, and
+the MCP handshake report the same version.
 
 `-verbose` logs collection, loopback transport, registry loading and creation,
 and lock acquisition as JSON lines that carry the run's trace ID. Diagnostics

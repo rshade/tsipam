@@ -221,6 +221,11 @@
       ]
     },
     {
+      "name": "mcp-server",
+      "summary": "Serve the commands to an MCP client over stdin and stdout.",
+      "usage": "mcp-server"
+    },
+    {
       "name": "plan",
       "summary": "Compare registry allocations with live state (read-only).",
       "usage": "plan",
