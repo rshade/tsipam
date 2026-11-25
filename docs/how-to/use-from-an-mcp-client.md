@@ -116,7 +116,8 @@ placeholders. A call may raise the level with `sanitize`, and cannot lower the o
 `--dry-run` would not stop a call from writing.
 
 Argument names are not redacted. A call with an argument the tool does not have
-is refused before `tsipam` sees it, and the refusal repeats that name.
+is refused before `tsipam` sees it, and the refusal repeats that name
+(rshade/ax-go#354).
 
 Set `TAILSCALE_SANITIZE_KEY` in the server's environment to keep placeholders the
 same from call to call. See

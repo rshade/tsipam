@@ -119,3 +119,16 @@ body runs, because the calc specification exempts those commands.
 - **WHEN** `tsipam site-id list hq-secret` runs with
   `TAILSCALE_SANITIZE=identity`
 - **THEN** it exits 2 and stderr does not contain `hq-secret`
+
+### Requirement: An unknown tool argument's name is not redacted
+
+The MCP runtime refuses a call that passes an argument the tool does not have
+before `tsipam` sees the call. Its error object MAY repeat that argument's name
+with sanitization active, and SHALL NOT repeat the argument's value.
+
+#### Scenario: Unknown argument
+
+- **WHEN** a client calls `tsipam-calc-info` with an argument named `hq-secret`
+  and value `branch-secret` under `TAILSCALE_SANITIZE=identity`
+- **THEN** the call fails with `validation_error` and the error object does not
+  contain `branch-secret`

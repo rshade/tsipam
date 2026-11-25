@@ -149,7 +149,7 @@
       the tags; verify the delta is in the PR body
 - [x] 9.3 Run `mise run test vet lint cross smoke` and `go test -race ./...`;
       verify all pass
-- [ ] 9.4 File `ax-go` issues for the `--strict` stdout and write-error bugs
+- [x] 9.4 File `ax-go` issues for the `--strict` stdout and write-error bugs
       and for mapping positional arguments in MCP, and note on rshade/ax-go#331
       the pre-`RunE` paths found here; verify the links are in the PR body
 - [x] 9.5 Update the four in-flight changes named in the design's contact
