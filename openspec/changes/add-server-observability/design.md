@@ -95,6 +95,12 @@ envelope's `comparison` plus one human line, for example `Last run: drift at
 exit 2. Any printed report exits 0. Gating stays with `check`, so `drift`
 never has to decide whether a stale report is safe to gate on.
 
+`drift` is `read-only` in `leafContracts` and joins the pinned MCP tool set. Its
+report is a result, not a verdict, so an agent gets the rows that `check` cannot
+return. `drift_unavailable` is also its error code. In an MCP call it uses the
+server `TSIPAM_SERVER` names, and a `server` input is refused, as
+`add-serve-tsnet` defines.
+
 ### Metrics: same listener, unscoped `read`, computed at scrape time
 
 `/metrics` is mounted on the `svc:tsipam` mux before the goa handler. The

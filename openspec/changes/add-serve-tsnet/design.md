@@ -56,7 +56,7 @@ Facts from the sibling project tail-watch, checked on a lab tailnet on
 
 Constraints from the repo:
 
-- `cmd/tsipam/main.go` `exitCodeFor` maps collisions and drift to 1 and
+- `cmd/tsipam/errors.go` `classify` maps collisions and drift to 1 and
   everything else to 2. The schema spec fixes the catalog at three codes.
 - Failures write nothing to stdout (`docs/reference/json-envelope.md`).
 - Sanitization pre-registers identity values from the registry before the
@@ -271,6 +271,31 @@ remote CLI calls it whenever sanitization is active and registers the
 values in the same order local mode does. It also registers the server
 host and its MagicDNS domain (`tsipam.example.ts.net`, `example.ts.net`).
 If the call fails, the command fails closed with exit 2.
+
+### Runtime contracts
+
+`adopt-ax-go-runtime` landed first, so this change meets its contracts:
+
+- **MCP:** `serve` is excluded with `mcp.Exclude`, because it is the one
+  long-running command. `whoami` is `read-only` in `leafContracts` and joins the
+  pinned tool set: an agent may ask what it is allowed to do.
+- **Remote access through MCP:** that change made it a non-goal. This one lifts
+  it for `TSIPAM_SERVER` only, set in the environment by whoever starts
+  `mcp-server`. A `server` input in a tool call is refused with
+  `validation_error`, so a client cannot choose the server, and with it whose
+  registry it reads or where its requests go.
+- **Traces:** `internal/ipamhttp` and `internal/ipamconn` already carry
+  `traceparent`, for the loopback and for HTTPS. A remote caller's header is
+  used only to correlate, never for identity or authorization.
+- **Dry run:** a `dry_run` request needs the same capability as the real action,
+  because it answers the same question. It leaves no audit event.
+- **Errors:** `forbidden` gets the code `access_denied`, and the transport
+  classes get `server_unreachable`, `server_untrusted`, and
+  `server_response_invalid`. All exit 2, and none is `retryable`, which is about
+  live reads.
+- **Comparisons:** remote and local output match once the fields `__schema`
+  publishes and the error object's `trace_id` are masked. The envelope is
+  version 2 in both.
 
 ### Goa changes
 

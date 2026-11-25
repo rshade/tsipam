@@ -43,9 +43,9 @@ registry and exporting again SHALL reproduce the first export byte for byte.
 
 ### Requirement: Export destination and output format
 
-Without `--output`, export SHALL write the document itself to stdout in text
-format, and in `--format json` an envelope whose `document` field holds the
-document text. With `--output <file>`, export SHALL write the document to
+Without `--output`, export SHALL write the document itself to stdout in human
+mode, and in JSON mode an envelope whose `document` field holds the document
+text. With `--output <file>`, export SHALL write the document to
 that file atomically with mode `0600` and print only a summary result.
 
 #### Scenario: JSON export embeds the document
@@ -89,8 +89,8 @@ is not valid UTF-8 or fails validation SHALL exit 2 with nothing written.
 
 #### Scenario: Import from stdin
 
-- **WHEN** an operator runs `tsipam registry export --tailnet a | tsipam
-  registry import - --tailnet b` and registry `b` is empty
+- **WHEN** an operator runs `tsipam registry export --tailnet a --format human
+  | tsipam registry import - --tailnet b` and registry `b` is empty
 - **THEN** registry `b` holds the same reservations as registry `a`
 
 ### Requirement: Import requires an empty target unless merging
@@ -171,7 +171,8 @@ conflict, or unknown top-level keys.
 - **WHEN** an operator runs `tsipam registry import snapshot.hujson --merge
   --plan --format json` and two source entries conflict
 - **THEN** stdout holds the full report with both entries marked `conflict`,
-  the command exits 1, and the target registry is unchanged
+  the command exits 1 with `error_code` `import_refused`, and the target
+  registry is unchanged
 
 ### Requirement: Import reports content it does not carry over
 

@@ -127,20 +127,23 @@ their stored value, matching the metadata spec.
 ### Exit-code mapping
 
 - An applied import that is refused arrives as goa error `import_refused`.
-  `exitCodeFor` maps it to 1, like `collision`. Stdout stays empty, and
-  stderr carries the refusal reason, the conflict count, and the first
-  conflicting entry.
+  `classify` in `cmd/tsipam/errors.go` gives it the new code `import_refused`,
+  which joins the verdict codes that exit 1. Stdout stays empty, and the error
+  object carries the refusal reason in its message and `refusal` and
+  `conflict_count` in its `context`.
 - `--plan` gets a normal result. When `refusal` is set, the CLI emits the
-  report, then returns a sentinel `errImportRefused`, mapped to 1 like
-  `errPolicyDrift`.
+  report, then returns a typed error with the same code, as `check-policy`
+  does for drift. A refused plan therefore leaves a result on stdout.
 - Source read, UTF-8, and validation failures, and a missing or invalid
   target registry on export, exit 2.
 
 ### Export output handling
 
-- Text format without `--output` writes the rendered document as the
-  result.
-- `--format json` wraps it in the envelope with `document` and `counts`.
+- Human mode without `--output` writes the rendered document as the result.
+- JSON mode wraps it in the envelope with `document` and `counts`.
+- A pipe or a redirect selects JSON, so a shell that wants the bare document
+  passes `--format human`, or `--output` for a file. The examples and the
+  `export | import -` scenario say so.
 - `--output` writes through a temporary file in the destination directory
   with mode `0600`, then renames it; stdout gets the summary envelope or
   message.
@@ -160,6 +163,21 @@ kinds.
 
 A sanitized export is intended for sharing, not for restoring. The
 existing stderr notice that sanitization is active makes that visible.
+
+### Meeting the runtime contracts
+
+`adopt-ax-go-runtime` landed first, so this change meets its contracts:
+
+- **Side-effect class:** `registry export` is `read-only` and `registry import`
+  is `mutate` in `leafContracts`. Import adds and updates, and never removes.
+- **Dry run:** `--dry-run` on `import` is the same run as `--plan`, with
+  `meta.dry_run` set. A pure plan needs no rehearsing transaction.
+- **Inputs:** `import` takes its source by position or by `--source`, through
+  `bindInputs`. `-` means stdin either way. In an MCP call there is no stdin, so
+  `-` reads nothing and fails as an empty document.
+- **MCP:** both commands join the pinned tool set. `import` carries the
+  destructive hint.
+- **Approval:** none. Import is additive.
 
 ## Risks / Trade-offs
 

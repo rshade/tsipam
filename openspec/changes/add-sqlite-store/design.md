@@ -223,6 +223,30 @@ keeps the store dumber, but every Ledger method would need a matching call,
 and forgetting one silently loses audit data. Recording at the mutation is
 structural.
 
+### Rehearsal
+
+`Store` rule 9 (from `adopt-ax-go-runtime`) applies: `Update` with `DryRun`
+validates, runs `fn`, discards everything, and creates nothing. A rolled-back
+`BEGIN IMMEDIATE` does not meet it. It takes the write lock, can create the
+database and its `-wal` and `-shm` files, and fails in a read-only directory. A
+rehearsal therefore uses a read path: it stats the file first, supplies an empty
+registry when the file or the `tailnets` row is absent and `CreateIfMissing` is
+set, loads the four maps, and runs `fn` on an in-memory transaction. It never
+migrates: a database with an older schema rehearses through the same queries
+when they still apply, and otherwise fails with the error that asks for a real
+command first. It records no event.
+
+An ordinary read-only WAL connection creates `-wal` and `-shm` and cannot open
+the database in a read-only directory, so the read path itself is an open
+question below.
+
+### Runtime contracts
+
+`registry history` is `read-only` in `leafContracts` and joins the pinned MCP
+tool set. Its `events` are read back from the database, so none of its fields
+varies between identical runs. Output comparisons between the backends mask the
+fields `__schema` publishes and the error object's `trace_id`.
+
 ### Reading history
 
 There is a new optional interface in `registry`:
@@ -308,7 +332,7 @@ directory, and the sanitizer setup reads `IdentitySource` from that store.
 This is additive and opt-in. Operators adopt it with:
 
 ```bash
-tsipam registry export --registry-dir . > snapshot.hujson
+tsipam registry export --registry-dir . --output snapshot.hujson
 tsipam registry import snapshot.hujson --registry sqlite://./tsipam.db
 ```
 
@@ -317,5 +341,11 @@ to HuJSON and unsetting `TSIPAM_REGISTRY`. No existing file changes.
 
 ## Open Questions
 
+- How does a rehearsal read a WAL database without creating `-wal` and `-shm`?
+  Opening it with `immutable=1` works in a read-only directory, but ignores
+  committed pages that are still in the WAL. Copying the database and its WAL to
+  a private temporary directory sees them, but races a checkpoint. If neither is
+  acceptable, this change modifies "Dry run rehearses without writing" in
+  `mutation-safety`. Decide before task 2.3, and record it here.
 - Should history accept `--action` or `--actor` filters? This is additive
   and can wait for `add-serve-tsnet`, when actors exist.

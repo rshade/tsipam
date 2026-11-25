@@ -14,12 +14,14 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 exceptions=$root/scripts/license-exceptions
 
 targets=(linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64)
+# The build tags in .goreleaser.yaml, so the inventory is what an archive links.
+tags=ax_no_grpc,ax_no_otlp
 sep='==============================================================================='
 
 modules() {
   local target
   for target in "${targets[@]}"; do
-    GOOS=${target%/*} GOARCH=${target#*/} go -C "$root" list -deps \
+    GOOS=${target%/*} GOARCH=${target#*/} go -C "$root" list -deps -tags "$tags" \
       -f '{{with .Module}}{{if not .Main}}{{with .Replace}}{{.Path}} {{.Version}} {{.Dir}}{{else}}{{.Path}} {{.Version}} {{.Dir}}{{end}}{{end}}{{end}}' \
       ./cmd/tsipam || exit 1
   done | sort -u

@@ -127,19 +127,28 @@
       redact `login` and `node` under sanitization; verify `cmd` tests for
       an identified caller with grants, one with none, `identified: false`,
       the missing-server exit 2, and a sanitized run
-- [ ] 6.6 Add an end-to-end `cmd` test that runs the goa server with a fake
+- [ ] 6.6 Meet the runtime contracts: exclude `serve` from MCP, declare `whoami`
+      `read-only` and add it to the pinned tool set, refuse a `server` input in a
+      tool call, give `forbidden` and the transport classes their error codes in
+      `classify`, and authorize `dry_run` as the real action with no audit event;
+      verify the tool-set and leaf-contract tests, the classification table, a
+      stdio MCP test for `TSIPAM_SERVER` and for a refused `server` input, and
+      server tests for a rehearsal by a reader and by a writer
+- [ ] 6.7 Add an end-to-end `cmd` test that runs the goa server with a fake
       identity middleware behind `httptest.NewTLSServer` and runs reserve,
       collision, list, release, allocate, and check-policy remotely; verify
       stdout, stderr, and exit codes match the same commands run locally
-      against an identical SQLite registry
+      against an identical SQLite registry, with the published run-varying fields
+      and the error object's `trace_id` masked, and that the server's spans
+      continue the client's trace
 
 ## 7. Schema and documentation
 
 - [ ] 7.1 Update the schema catalog (`serve` and its flags including
       `capability`, `whoami`, `server` on registry commands, exit-code 2
       text) and regenerate
-      `cmd/tsipam/testdata/schema.golden.json` with `-update`; verify the
-      golden diff contains only these additions
+      the three schema goldens in `cmd/tsipam/testdata/` with `-update`; verify
+      the golden diffs contain only these additions
 - [ ] 7.2 Add `docs/how-to/run-a-shared-server.md` (define `svc:tsipam` in
       the admin console first; policy snippet with `tagOwners`,
       `autoApprovers.services`, a network grant to `svc:tsipam` on
@@ -169,8 +178,8 @@
 ## 8. Integration verification
 
 - [ ] 8.1 Run `mise run test lint cross smoke`, and verify every task
-      passes and no existing golden or smoke fixture changed except
-      `schema.golden.json`
+      passes and no existing golden or smoke fixture changed except the three
+      schema goldens
 - [ ] 8.2 Deploy to a test tailnet with the documented manifest, and verify
       a user and a `tag:ci` node can each reserve, a denied caller exits 2,
       `tsipam whoami` reports each caller's grants, removing a grant denies

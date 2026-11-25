@@ -63,6 +63,7 @@ tailnet that knows who is calling.
 
 ### Modified Capabilities
 
+- `error-envelope`: remote failures get their own codes.
 - `plan-check`: in remote mode, the live tailnet and its credentials come
   from the server rather than the client's environment.
 - `metadata`: remote reserves record the caller as `owner` when the

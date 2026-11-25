@@ -18,8 +18,19 @@
   through `cmd/tsipam/target.go`. `cmd/tsipam/boundary_test.go` enforces this,
   lists the few exceptions, and gives each package a role; add new packages
   there.
+- `cmd/tsipam` runs on `github.com/rshade/ax-go`, which no other package may
+  import (`runtime_import_test.go`). `runtime.go` builds the tree and calls
+  `ax.Execute`; `errors.go` is the one place that decides a failure's code, exit
+  status, and redaction, from types and never from message text.
+- A new leaf command needs a row in `leafContracts` (`contracts.go`), which sets
+  its side-effect class, and with it rehearsal and approval. Its required inputs
+  go through `bindInputs` (`inputs.go`), so each has a flag. Tests then ask for a
+  dry-run case if it writes, an input case, and a decision in `pinnedTools`
+  (`mcp_test.go`) on whether it is an MCP tool.
 - `design/` is the goa DSL; `gen/` is its generated code. Never edit `gen/` by
   hand: change `design/`, run `mise run gen`, and commit both.
+- Error text can reach stderr, a span, and an audit line, so it goes through the
+  boundary first. Spans and logs hold no URL and no identity.
 - `smoke/` is the release smoke suite behind the `smoke` build tag.
 - `docs/` holds the guides. Tests sit beside the code as `*_test.go`; fixtures
   belong in `testdata/`.
@@ -59,8 +70,14 @@ belong on stdout and diagnostics on stderr; keep JSON parse-clean. Follow
 
 Use Go's `testing` package and descriptive `TestXxx` names. Add regression tests
 for behavior changes and run `mise run test ::: lint ::: cross` before review. Golden
-files are byte-exact: regenerate with `go test ./... -update`, then inspect every
-changed fixture. Preserve authentic bytes under `testdata/`.
+files are byte-exact: regenerate with
+`go test ./cmd/tsipam ./internal/planner ./internal/policycheck -update`, then
+inspect every changed fixture; one command change can touch all three schema
+goldens.
+Preserve authentic bytes under `testdata/`. A test that reads human output asks
+for it (`--format human` or `AGENT_MODE=human`), because a buffer is not a
+terminal. `ax.Execute` replaces process-wide OpenTelemetry globals, so a test of
+span output must not be parallel.
 
 The smoke suite asserts the README's examples byte for byte, so a README change
 and its smoke case move together. `TSIPAM_SMOKE_LIVE=1` gates its credentialed,
