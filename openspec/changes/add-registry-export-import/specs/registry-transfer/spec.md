@@ -41,6 +41,12 @@ registry and exporting again SHALL reproduce the first export byte for byte.
   registry B, and registry B is exported
 - **THEN** both exported documents are byte-identical
 
+#### Scenario: Round trip between backends
+
+- **WHEN** a HuJSON registry is exported, the document is imported into an
+  empty `sqlite://` registry, and that registry is exported
+- **THEN** both exported documents are byte-identical
+
 ### Requirement: Export destination and output format
 
 Without `--output`, export SHALL write the document itself to stdout in human
@@ -147,6 +153,18 @@ same registry.
   reserved for a different site
 - **THEN** import exits 1, stdout is empty, stderr names the conflicting
   entry and the number of conflicts, and none of the ten IDs is written
+
+### Requirement: Import records audit events
+
+An import into a SQLite registry SHALL record exactly one `import` event per
+added or updated reservation, in the same transaction as the change. A plan, a
+refused import, and an `unchanged` entry SHALL record none.
+
+#### Scenario: A merge records only what changed
+
+- **WHEN** a `--merge` import into a SQLite registry reports one `unchanged`
+  and one `add`
+- **THEN** the history gains one `import` event, for the added reservation
 
 ### Requirement: Import copies metadata verbatim
 

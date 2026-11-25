@@ -107,11 +107,11 @@
 - [ ] 4.2 Implement `ipamsvc.ListHistory`, mapping `ErrHistoryUnsupported`
       to `unsupported`; verify `go test ./internal/ipamsvc/` covers both
       backends
-- [ ] 4.3 Add `tsipam registry history` under the `registry` group (create
-      the group if `add-registry-export-import` has not landed it) with human
-      tab-separated output, the `events` JSON array, flag validation, and
-      sanitization. Declare it `read-only` in `leafContracts` and add it to the
-      pinned MCP tool set. Verify CLI tests for every scenario in
+- [ ] 4.3 Create the `registry` command group and add
+      `tsipam registry history` under it, with human tab-separated output, the
+      `events` JSON array, flag validation, and sanitization. Declare it
+      `read-only` in `leafContracts` and add it to the pinned MCP tool set.
+      Verify CLI tests for every scenario in
       `specs/registry-history/spec.md`, and the leaf-contract and tool-set tests
 - [ ] 4.4 Document the `events` array in `docs/reference/json-envelope.md`
       and the history command in the CLI reference; verify
@@ -128,10 +128,10 @@
 ## 6. Operator documentation and smoke
 
 - [ ] 6.1 Write `docs/how-to/run-a-sqlite-registry.md`: selecting the
-      backend, migrating with `registry export`/`import`, backups
-      (`sqlite3 .backup`, `VACUUM INTO`, or Litestream with WAL), local block
-      storage only (no NFS, SMB, or EFS), and a single writer process; link
-      it from `docs/README.md`; verify `mise run lint-md` and Vale-clean prose
+      backend, backups (`sqlite3 .backup`, `VACUUM INTO`, or Litestream with
+      WAL), local block storage only (no NFS, SMB, or EFS), a single writer
+      process, and a note that a SQLite registry starts empty because no
+      migration command exists yet; link it from `docs/README.md`; verify `mise run lint-md` and Vale-clean prose
 - [ ] 6.2 Add a non-live smoke case that reserves, lists, releases, and reads
       history against `sqlite://` in a temp dir using the release binary;
       verify `mise run smoke` passes
@@ -146,4 +146,4 @@
 ## Workflow follow-up
 
 - Commit as `feat(registry): add sqlite backend and registry history`.
-- Archive after merge, then continue with `add-serve-tsnet`.
+- Archive after merge, then continue with `add-registry-export-import`.

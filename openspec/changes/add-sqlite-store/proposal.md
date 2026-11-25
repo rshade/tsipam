@@ -29,8 +29,8 @@ not in the tailnet's data path. `refactor-registry-store` gives the rules a
   subnet pool overlapping a pool held by a different site.
 - Extend sanitization so database paths and identity values read from SQLite
   are redacted exactly as file-backed values are today.
-- Document the backend, its single-writer and local-disk requirements, and
-  migration from a HuJSON registry through `registry import`.
+- Document the backend and its single-writer and local-disk requirements.
+  Moving a HuJSON registry into it comes with `add-registry-export-import`.
 
 No existing behavior changes when `--registry` and `TSIPAM_REGISTRY` are
 unset: the file backend stays the default and its bytes, errors, and exit
@@ -60,10 +60,10 @@ codes are unchanged.
 - **Dependencies:** `modernc.org/sqlite` and its `modernc.org/*` runtime
   modules (BSD-3-Clause, already in the license allowlist).
 - **Depends on:** `refactor-registry-store` (the `Store` contract and
-  conformance suite), `refactor-client-server-boundary` (`target.go`), and
-  `add-registry-export-import` (the `registry` command group and `import`, used
-  for migration).
-- **Enables:** `add-serve-tsnet`, which runs the SQLite backend behind a
-  Tailscale Service and fills the audit actor from `WhoIs`.
-- **Out of scope:** Postgres, multiple writers or replicas, expiring
-  reservations, and `--server`.
+  conformance suite) and `refactor-client-server-boundary` (`target.go`).
+- **Enables:** `add-registry-export-import`, which adds `export` and `import`
+  to the `registry` command group this change creates and so provides the
+  migration path from HuJSON; and `add-serve-tsnet`, which runs the SQLite
+  backend behind a Tailscale Service and fills the audit actor from `WhoIs`.
+- **Out of scope:** moving reservations between backends, Postgres, multiple
+  writers or replicas, expiring reservations, and `--server`.

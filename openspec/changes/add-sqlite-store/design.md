@@ -11,8 +11,12 @@ See `proposal.md` for motivation. This change builds on:
   store. The contract's eight rules (not found, serialization, atomicity,
   read-your-writes, scoped validation, canonical keys, fail-closed deletes,
   commit errors) are what this backend must meet.
-- `add-registry-export-import`: the `tsipam registry` command group and
-  `registry import`, which is the migration path from HuJSON to SQLite.
+- `refactor-client-server-boundary`: `cmd/tsipam/target.go` is the one place
+  commands assemble a service, and an import test enforces it.
+
+`add-registry-export-import` lands after this change. This change creates the
+`tsipam registry` command group with `history` in it; that one adds `export`
+and `import`, and with them the migration path from HuJSON to SQLite.
 
 Current CLI wiring: `addRegistryFlags` (`cmd/tsipam/siteid.go`) defines
 `--registry-dir` (default `.`) and `--tailnet`, and every registry command
@@ -40,9 +44,8 @@ tree is BSD-3-Clause, MIT, and Apache-2.0, all within the
 **Non-Goals:**
 
 - Postgres, replicas, or more than one writer process.
-- Converting between backends at runtime. Migration is
-  `registry export` followed by `registry import` (owned by
-  `add-registry-export-import`).
+- Moving reservations between backends. `add-registry-export-import`, which
+  follows, owns `registry export` and `registry import`.
 - Expiring reservations, history pruning, or history export.
 - Running tsipam on a network filesystem. This is documented as unsupported
   rather than detected.
@@ -204,7 +207,8 @@ atomic with the schema change.
 The `Store` contract grows two small additions in `registry`:
 
 - `TxOptions.Action` (`reserve`, `allocate`, `release`, `import`). The
-  Ledger sets it on every `Update`.
+  Ledger sets it on every `Update`. Nothing sets `import` yet: it is in the
+  version 1 `CHECK` so `add-registry-export-import` needs no schema change.
 - `registry.WithActor(ctx, actor string)` and `registry.ActorFrom(ctx)`. The
   local CLI never sets an actor. `add-serve-tsnet` sets it from `WhoIs` in
   its HTTP middleware, so it reaches the store through the existing context
@@ -329,15 +333,13 @@ directory, and the sanitizer setup reads `IdentitySource` from that store.
 
 ## Migration Plan
 
-This is additive and opt-in. Operators adopt it with:
+This is additive and opt-in, and no existing file changes. Operators adopt it
+by selecting a `sqlite://` registry with `--registry` or `TSIPAM_REGISTRY`.
 
-```bash
-tsipam registry export --registry-dir . --output snapshot.hujson
-tsipam registry import snapshot.hujson --registry sqlite://./tsipam.db
-```
-
-Import records one `import` event per entry. Rollback means exporting back
-to HuJSON and unsetting `TSIPAM_REGISTRY`. No existing file changes.
+Until `add-registry-export-import` lands there is no command that moves a
+HuJSON registry into SQLite, so this change suits new registries. Rollback
+means unsetting `TSIPAM_REGISTRY`; reservations made in SQLite stay in the
+database until that change can export them.
 
 ## Open Questions
 

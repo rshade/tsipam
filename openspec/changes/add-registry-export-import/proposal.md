@@ -2,14 +2,16 @@
 
 ## Why
 
-A second storage backend (`add-sqlite-store`) and a shared server
+A second storage backend (`add-sqlite-store`) and the planned shared server
 (`add-serve-tsnet`) need a lossless way to move reservations between stores
 and to produce a reviewable HuJSON snapshot from a store that is not a file.
 Teams that run `check-policy` offline in CI also need a canonical registry
 document they can commit, wherever the reservations actually live.
 
-**Prerequisite:** `refactor-registry-store`. This change builds on its
-`Store` contract (atomic `Update`, read-your-writes) and its `Ledger` rules.
+**Prerequisites:** `refactor-registry-store`, for its `Store` contract (atomic
+`Update`, read-your-writes) and `Ledger` rules, and `add-sqlite-store`, for
+the `registry` command group, the `--registry` selector, and the audit events
+an import records.
 
 ## What Changes
 
@@ -28,12 +30,14 @@ document they can commit, wherever the reservations actually live.
 - Import reports the HuJSON-only content it does not carry over: comments
   and non-canonical key spellings are reported and dropped. Unknown
   top-level keys refuse the import unless `--drop-unknown` is given.
-- Both commands use the existing `--registry-dir`/`--tailnet` selection,
-  the JSON envelope, exit codes, and sanitization, and go through the goa
-  service like every registry command. The service exchanges structured
-  reservations, and the CLI renders and parses HuJSON, so the commands work
-  unchanged once `--registry` (`add-sqlite-store`) and `--server`
-  (`add-serve-tsnet`) exist.
+- Both commands use the existing `--registry`, `--registry-dir`, and
+  `--tailnet` selection, the JSON envelope, exit codes, and sanitization, and
+  go through the goa service like every registry command. The service
+  exchanges structured reservations, and the CLI renders and parses HuJSON, so
+  the commands work the same against every backend.
+- An import into a SQLite registry records one `import` audit event per
+  changed reservation.
+- Document moving an existing HuJSON registry into SQLite and back.
 - Extend `tsipam -schema` and the reference docs to cover both commands.
 
 ## Capabilities
@@ -54,13 +58,15 @@ document they can commit, wherever the reservations actually live.
 
 ## Impact
 
-- **CLI:** new `registry` command group in `cmd/tsipam`.
+- **CLI:** `export` and `import` join the `registry` command group in
+  `cmd/tsipam`.
 - **Service:** two new goa methods, `export_registry` and
   `import_registry`, in `design/`, with `gen/` regenerated.
 - **Code:** `registry.Ledger` gains export and atomic bulk-import
   operations. `hujsonstore` gains canonical document rendering and
   source-document parsing that reports dropped content.
 - **Docs:** `docs/reference/json-envelope.md`, `exit-codes.md`,
-  `registry-format.md`, plus a how-to for moving a registry between stores.
+  `registry-format.md`, a how-to for moving a registry between stores, and
+  the migration section of `docs/how-to/run-a-sqlite-registry.md`.
 - **Smoke:** README examples for export and import, with smoke cases.
 - **Dependencies:** none added.

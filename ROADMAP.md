@@ -15,7 +15,7 @@ Planning for this module lived in the `tailscale-utils` monorepo until the
 ## Immediate Focus
 
 No open issue holds this slot. `refactor-registry-store` is archived, which
-opens the server track below; its first feature is #22.
+opens the server track below; its first feature is `add-sqlite-store`.
 
 ## Near-Term Vision
 
@@ -30,16 +30,17 @@ OpenSpec change under `openspec/changes/`, listed in dependency order.
 - **`refactor-client-server-boundary`** `[M]`, no issue filed, archived:
   separated client code from server code with no behavior change.
   `add-sqlite-store` and `add-serve-tsnet` build on it.
+- **`add-sqlite-store`** `[L]`, no issue filed: the `sqlite://` backend,
+  `--registry` and `TSIPAM_REGISTRY`, append-only audit events, and the
+  `registry` command group with `registry history`. Its prerequisites are
+  done.
 - [ ] #22 `add-registry-export-import`: `registry export` and
       `registry import` (`--merge`, `--plan`), to move reservations between
-      stores losslessly. Its prerequisite, `refactor-registry-store`, is
-      done. [L]
+      stores losslessly, including HuJSON to SQLite. Needs
+      `add-sqlite-store`. [L]
 
 Not filed yet, in order after #22:
 
-- **`add-sqlite-store`** `[L]` — the `sqlite://` backend, `--registry` and
-  `TSIPAM_REGISTRY`, append-only audit events, and `registry history`. Its
-  migration guide uses `registry import`.
 - **`add-serve-tsnet`** `[L]` — `tsipam serve` runs the full goa `ipam`
   API as `svc:tsipam` on tsnet, with per-request `WhoIsForService`
   identity, grant-capability authorization, `whoami`, and `--server`
