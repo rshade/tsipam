@@ -6,5 +6,22 @@
   ],
   "postUpdateOptions": [
     "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "description": "commitlint caps subjects at 64 characters: drop the word 'dependency' from mise tool updates",
+      "matchManagers": ["mise"],
+      "commitMessageTopic": "{{{depName}}}"
+    },
+    {
+      "description": "commitlint caps subjects at 64 characters: name a Go module by its last path element, without any /vN suffix",
+      "matchDatasources": ["go"],
+      "commitMessageTopic": "{{{replace '^.*[/:]' '' (replace '/v[0-9]+$' '' depName)}}}"
+    },
+    {
+      "description": "gen/ records the goa version, so the module and the generator must move together; run mise run gen on the PR",
+      "matchPackageNames": ["goa.design/goa/v3", "goa.design/goa/v3/**"],
+      "groupName": "goa"
+    }
   ]
 }
