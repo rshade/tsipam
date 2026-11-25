@@ -102,7 +102,9 @@ SHALL be `[]`. Human output SHALL identify every row and conclude with the
 drift count and exclusion. Envelope status SHALL be `ok` or `drift` in both
 commands. A completed `plan` SHALL exit 0. `check` SHALL exit 1 on any drift
 and 0 otherwise. Collection/usage errors SHALL exit 2. Results SHALL be
-written before the check failure is returned.
+written before the check failure is returned. The check failure SHALL be an
+error object on stderr with `error_code` `drift_detected` and the drift count
+in its `context`.
 
 #### Scenario: Planned but unused allocation blocks check
 
@@ -114,6 +116,12 @@ written before the check failure is returned.
 - **WHEN** the three registry maps and both live lists are empty
 - **THEN** both commands exit 0 with zero drift and an empty entries array
 - **AND** UDP-port exclusion remains visible
+
+#### Scenario: The verdict is machine-readable
+
+- **WHEN** `check --format json` finds two drifting rows
+- **THEN** stdout holds the report, the error object's `context.drift_count` is
+  2, and the command exits 1
 
 ### Requirement: Comparison identities are sanitized
 
