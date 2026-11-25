@@ -52,12 +52,12 @@ func executePolicyCheck(
 	registerSweepValue(outputSanitizer, kindPath, policyPath)
 	policy, err := os.ReadFile(policyPath)
 	if err != nil {
-		return fmt.Errorf("reading policy: %w", err)
+		return &policyReadError{err: fmt.Errorf("reading policy: %w", err)}
 	}
 	// JSON string encoding repairs invalid UTF-8; reject it before transport
 	// so the service compares the actual authored policy, never repaired text.
 	if !utf8.Valid(policy) {
-		return errors.New("policy must contain valid UTF-8")
+		return &policyReadError{err: errors.New("policy must contain valid UTF-8")}
 	}
 	var report *ipam.PolicyComparison
 	err = state.registryTarget(registryDir).run(cmd.Context(),
@@ -88,7 +88,7 @@ func executePolicyCheck(
 		return err
 	}
 	if report.DriftCount > 0 {
-		return errPolicyDrift
+		return &driftError{sentinel: errPolicyDrift, count: report.DriftCount}
 	}
 	return nil
 }

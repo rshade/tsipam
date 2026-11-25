@@ -174,7 +174,7 @@ func TestUDPPortCollisionIsFailureWithCleanStdout(t *testing.T) {
 		t.Errorf("collision stdout = %q, want empty", stdout)
 	}
 	var serviceError *goa.ServiceError
-	if !errors.As(err, &serviceError) || serviceError.Name != collisionErrorName {
+	if !errors.As(err, &serviceError) || serviceError.Name != serviceErrorCollision {
 		t.Fatalf("collision error = %v, want named Goa collision", err)
 	}
 	if code := exitCodeFor(err); code != exitFailure {

@@ -170,8 +170,8 @@ func TestSubnetExitCodeDistinguishesCollisionFromUsageError(t *testing.T) {
 	}
 	_, _, collisionErr := runSubnet(t, dir, "reserve", "10.0.1.0/24", "branch-office")
 	var svcErr *goa.ServiceError
-	if !errors.As(collisionErr, &svcErr) || svcErr.Name != collisionErrorName {
-		t.Fatalf("overlap error = %v, want a %q *goa.ServiceError", collisionErr, collisionErrorName)
+	if !errors.As(collisionErr, &svcErr) || svcErr.Name != serviceErrorCollision {
+		t.Fatalf("overlap error = %v, want a %q *goa.ServiceError", collisionErr, serviceErrorCollision)
 	}
 	if got := exitCodeFor(collisionErr); got != exitFailure {
 		t.Errorf("exitCodeFor(collision) = %d, want %d", got, exitFailure)

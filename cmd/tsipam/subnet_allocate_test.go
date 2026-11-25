@@ -192,7 +192,7 @@ func TestSubnetAllocateValidatesBeforeCollectingDevices(t *testing.T) {
 			if code != exitUsage {
 				t.Errorf("exit = %d, want %d", code, exitUsage)
 			}
-			if !strings.Contains(errBuf.String(), tc.wantIn) {
+			if !strings.Contains(failureText(t, errBuf.String()), tc.wantIn) {
 				t.Errorf("stderr = %q, want it to contain %q", errBuf.String(), tc.wantIn)
 			}
 			if _, err := os.Stat(filepath.Join(dir, "local.ipam.hujson")); !errors.Is(err, os.ErrNotExist) {

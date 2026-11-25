@@ -158,9 +158,14 @@ func TestCollisionSiteNameSanitization(t *testing.T) {
 				fixedKeyGetenv, &stdout, &stderr, nil,
 			)
 			if code != exitFailure {
-				t.Fatalf("exit code = %d, want %d (collision); stderr: %s", code, exitFailure, stderr.String())
+				t.Fatalf(
+					"exit code = %d, want %d (collision); stderr: %s",
+					code,
+					exitFailure,
+					failureText(t, stderr.String()),
+				)
 			}
-			assertCollisionSanitized(t, stderr.String(), tc.existing, tc.wanted, tc.collidesWithFraming)
+			assertCollisionSanitized(t, failureText(t, stderr.String()), tc.existing, tc.wanted, tc.collidesWithFraming)
 		})
 	}
 }
@@ -272,9 +277,9 @@ func TestErrorSanitizationOmitsRegistryPathOnMissingDirectory(t *testing.T) {
 		fixedKeyGetenv, &stdout, &stderr, nil,
 	)
 	if code != exitUsage {
-		t.Fatalf("exit code = %d, want %d; stderr: %s", code, exitUsage, stderr.String())
+		t.Fatalf("exit code = %d, want %d; stderr: %s", code, exitUsage, failureText(t, stderr.String()))
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	if strings.Contains(stderrText, missingDir) || strings.Contains(stderrText, base) {
 		t.Errorf("stderr leaks the registry path: %s", stderrText)
 	}
@@ -305,7 +310,7 @@ func TestNonIdentityQuotedTextPassesThroughUnchanged(t *testing.T) {
 	if code == exitOK {
 		t.Fatalf("want an error for a near-miss top-level key, got success; stdout: %s", stdout.String())
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	// The error crosses the loopback transport as an undeclared ("fault")
 	// goa error, so it arrives JSON-embedded with backslash-escaped quotes
 	// rather than as a bare Go %q string; check for the key spellings
@@ -332,9 +337,9 @@ func TestSanitizeOffLeavesErrorTextUntouched(t *testing.T) {
 		fixedKeyGetenv, &stdout, &stderr, nil,
 	)
 	if code != exitFailure {
-		t.Fatalf("exit code = %d, want %d; stderr: %s", code, exitFailure, stderr.String())
+		t.Fatalf("exit code = %d, want %d; stderr: %s", code, exitFailure, failureText(t, stderr.String()))
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	// SiteIDCollisionError.Error() always %q-formats its two site names
 	// (registry.go), sanitized or not: with sanitization off, that %q
 	// rendering must appear completely untouched -- the same bytes a build
@@ -386,9 +391,9 @@ func runCollisionScenario(t *testing.T, level sanitize.Level, existing, wanted s
 		fixedKeyGetenv, &stdout, &stderr, nil,
 	)
 	if code != exitFailure {
-		t.Fatalf("exit code = %d, want %d; stderr: %s", code, exitFailure, stderr.String())
+		t.Fatalf("exit code = %d, want %d; stderr: %s", code, exitFailure, failureText(t, stderr.String()))
 	}
-	return stderr.String()
+	return failureText(t, stderr.String())
 }
 
 // helperMarkerUnexpectedSuccess is emitted by TestHelperTriggerRegistryWriteFailure
@@ -494,9 +499,9 @@ func TestSubnetPoolOverlapSanitizesRegistryReadCIDRsAndSites(t *testing.T) {
 	}, fixedKeyGetenv, &stdout, &stderr, nil)
 
 	if code == exitOK {
-		t.Fatalf("overlap error exit = %d, want non-zero; stderr: %s", code, stderr.String())
+		t.Fatalf("overlap error exit = %d, want non-zero; stderr: %s", code, failureText(t, stderr.String()))
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	for _, secret := range []string{"secret-hq-site", "secret-branch-site", "10.0.0.0/16", "10.0.1.0/24"} {
 		if strings.Contains(stderrText, secret) {
 			t.Errorf("sanitized overlap stderr leaks %q: %s", secret, stderrText)
@@ -522,9 +527,9 @@ func TestSubnetReserveInvalidCIDRSanitizesCliArg(t *testing.T) {
 	}, fixedKeyGetenv, &stdout, &stderr, nil)
 
 	if code == exitOK {
-		t.Fatalf("invalid CIDR exit = %d, want non-zero; stderr: %s", code, stderr.String())
+		t.Fatalf("invalid CIDR exit = %d, want non-zero; stderr: %s", code, failureText(t, stderr.String()))
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	if strings.Contains(stderrText, "10.20.30.45/24") {
 		t.Errorf("sanitized invalid CIDR stderr leaks the raw CIDR: %s", stderrText)
 	}
@@ -607,9 +612,9 @@ func testSubnetPoolCollision(t *testing.T, existingSite, wantedSite, existingCID
 	}, fixedKeyGetenv, &stdout, &stderr, nil)
 
 	if code != exitFailure {
-		t.Fatalf("collision exit = %d, want %d; stderr: %s", code, exitFailure, stderr.String())
+		t.Fatalf("collision exit = %d, want %d; stderr: %s", code, exitFailure, failureText(t, stderr.String()))
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 
 	if !strings.Contains(stderrText, "overlaps") || !strings.Contains(stderrText, "reserved for") {
 		t.Errorf("stderr = %q, want the collision message frame intact", stderrText)
@@ -645,7 +650,7 @@ func assertReserveMessageSanitized(t *testing.T, dir string, command []string, s
 	var stdout, stderr bytes.Buffer
 	code := runCLI(context.Background(), args, fixedKeyGetenv, &stdout, &stderr, nil)
 	if code != exitOK {
-		t.Fatalf("reserve exit = %d, want %d; stderr: %s", code, exitOK, stderr.String())
+		t.Fatalf("reserve exit = %d, want %d; stderr: %s", code, exitOK, failureText(t, stderr.String()))
 	}
 
 	var envelope outputEnvelope
@@ -764,9 +769,9 @@ func testSubnetPoolExactCollision(t *testing.T, existingSite, wantedSite string)
 		"--registry-dir", dir, "--sanitize", "identity",
 	}, fixedKeyGetenv, &stdout, &stderr, nil)
 	if code != exitFailure {
-		t.Fatalf("collision exit = %d, want %d; stderr: %s", code, exitFailure, stderr.String())
+		t.Fatalf("collision exit = %d, want %d; stderr: %s", code, exitFailure, failureText(t, stderr.String()))
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 
 	if !strings.Contains(stderrText, "is already reserved for") || !strings.Contains(stderrText, ", not ") {
 		t.Errorf("stderr = %q, want the exact-key collision message frame intact", stderrText)
@@ -881,7 +886,7 @@ func TestHelperTriggerServiceReserveWriteFailure(t *testing.T) {
 		fmt.Fprintln(os.Stdout, helperMarkerServiceUnexpectedSuccess)
 		os.Exit(1)
 	}
-	fmt.Fprint(os.Stdout, stderr.String())
+	fmt.Fprint(os.Stdout, failureText(t, stderr.String()))
 	os.Exit(1)
 }
 
@@ -905,7 +910,7 @@ func TestServiceAddressPaddedArgRegistersTrimmingSpelling(t *testing.T) {
 	if code == exitOK {
 		t.Fatalf("invalid address exit = %d, want non-zero", code)
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	if strings.Contains(stderrText, trimmedAddr) {
 		t.Errorf("stderr leaks trimmed address %q: %s", trimmedAddr, stderrText)
 	}
@@ -942,7 +947,7 @@ func TestServiceNamePaddedArgRegistersTrimmingSpelling(t *testing.T) {
 	if code == exitOK {
 		t.Fatalf("invalid service exit = %d, want non-zero", code)
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	if strings.Contains(stderrText, trimmedEscaped) {
 		t.Errorf("stderr leaks the %%q-escaped service name %q: %s", trimmedEscaped, stderrText)
 	}
@@ -977,7 +982,7 @@ func TestSubnetCIDRCanonicalSuggestionRegistersForErrorSweep(t *testing.T) {
 	if code == exitOK {
 		t.Fatalf("non-canonical CIDR exit = %d, want non-zero", code)
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	if strings.Contains(stderrText, canonicalSuggestion) {
 		t.Errorf("stderr leaks the canonical CIDR suggestion %q: %s", canonicalSuggestion, stderrText)
 	}
@@ -1015,7 +1020,7 @@ func TestOwnerMetadataRegistersForErrorPath(t *testing.T) {
 	if code == exitOK {
 		t.Fatalf("control-character owner exit = %d, want non-zero", code)
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty on error", stdout.String())
 	}
@@ -1048,7 +1053,7 @@ func TestServiceNameSvcSelectorNotOverRedacted(t *testing.T) {
 	if code == exitOK {
 		t.Fatalf("invalid service-name exit = %d, want non-zero", code)
 	}
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	if !strings.Contains(stderrText, "svc:") {
 		t.Errorf("stderr = %q, want literal 'svc:' in error message (not over-redacted)", stderrText)
 	}
@@ -1192,7 +1197,7 @@ func testDoubleEscapeSiteName(t *testing.T, dir, siteName string) {
 		t.Fatalf("want a subnet-pool overlap error, got exit code %d; stdout: %s", code, stdout.String())
 	}
 
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	assertNoLeak(t, stderrText, siteName)
 }
 
@@ -1231,6 +1236,6 @@ func testDoubleEscapeDeviceName(t *testing.T, dir, deviceName string) {
 		t.Fatalf("want a device-name control-character error, got exit code %d; stdout: %s", code, stdout.String())
 	}
 
-	stderrText := stderr.String()
+	stderrText := failureText(t, stderr.String())
 	assertNoLeak(t, stderrText, deviceName)
 }

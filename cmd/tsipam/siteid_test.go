@@ -165,9 +165,9 @@ func TestSiteIDExitCodeDistinguishesCollisionFromUsageError(t *testing.T) {
 
 	_, _, collisionErr := runSiteID(t, dir, "reserve", "1", "branch-office")
 	var svcErr *goa.ServiceError
-	if !errors.As(collisionErr, &svcErr) || svcErr.Name != collisionErrorName {
+	if !errors.As(collisionErr, &svcErr) || svcErr.Name != serviceErrorCollision {
 		t.Fatalf("reserving an id already held by a different site: error = %v, want a %q *goa.ServiceError",
-			collisionErr, collisionErrorName)
+			collisionErr, serviceErrorCollision)
 	}
 	if got := exitCodeFor(collisionErr); got != exitFailure {
 		t.Errorf("exitCodeFor(collision) = %d, want %d", got, exitFailure)
