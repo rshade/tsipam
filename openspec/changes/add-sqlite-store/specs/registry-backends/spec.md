@@ -159,7 +159,9 @@ outside tsipam cannot store a state tsipam would refuse.
 tsipam SHALL upgrade a database written by an older schema version in place
 before the command proceeds, inside one transaction. A database written by a
 newer schema version SHALL be refused with exit 2 and an error asking for a
-newer tsipam, without modifying the database.
+newer tsipam, and one another program created SHALL be refused with exit 2,
+whatever version it records. A refused database and its companions SHALL be
+left unchanged.
 
 #### Scenario: Newer schema is refused
 
@@ -168,6 +170,45 @@ newer tsipam, without modifying the database.
 - **WHEN** any registry command runs against it
 - **THEN** the command exits 2, stderr says a newer tsipam is required, and
   the database file is unchanged
+
+#### Scenario: Another program's database is refused
+
+- **GIVEN** another program's database with a schema version tsipam also uses
+- **WHEN** a reserve runs against it
+- **THEN** the command exits 2, and the database file, its journal mode, and its
+  write-ahead log are unchanged
+
+### Requirement: A SQLite rehearsal sees committed state and touches no file
+
+A reserve, allocate, or release with `--dry-run` on a SQLite registry SHALL
+decide from every change committed before it reads, including changes SQLite has
+not yet copied out of the write-ahead log, and SHALL NOT see uncommitted ones. It
+SHALL NOT wait for the write lock, record an event, upgrade the schema, or
+create, change, or remove the database or its `-wal` and `-shm` companions. When
+the database needs recovery after an interrupted write, it SHALL exit 2 and
+change nothing.
+
+#### Scenario: Rehearsing against an open database
+
+- **GIVEN** another process holds `./tsipam.db` open and committed ID 7 for
+  `hq-vpc`, and the change is still in the write-ahead log
+- **WHEN** `tsipam site-id reserve 7 branch --dry-run --registry sqlite://./tsipam.db`
+  runs
+- **THEN** it exits 1 with `error_code` `registry_collision` and the directory is
+  unchanged
+
+#### Scenario: Rehearsing an older schema
+
+- **GIVEN** a database whose schema is older than this `tsipam` knows
+- **WHEN** a reserve runs with `--dry-run`
+- **THEN** it reports the outcome a real run would have, and the database is not
+  upgraded
+
+#### Scenario: Rehearsing in a read-only directory
+
+- **GIVEN** a readable database in a directory the caller cannot write
+- **WHEN** a reserve runs with `--dry-run`
+- **THEN** it reports the outcome a real run would have
 
 ### Requirement: SQLite database files are private to their owner
 

@@ -199,7 +199,7 @@ func newUDPPortLeafCommand(
 	deviceArgIndex int,
 	call udpPortLeafCall,
 ) *cobra.Command {
-	var registryDir, tailnetFlag, site string
+	var tailnetFlag, site string
 	var bound inputs
 	cmd := &cobra.Command{
 		Use:           use,
@@ -235,7 +235,7 @@ func newUDPPortLeafCommand(
 			if err = state.approve(cmd, args, registry.NormalizePort); err != nil {
 				return err
 			}
-			return state.runRegistryCall(cmd, registryDir, outputSanitizer,
+			return state.runRegistryCall(cmd, outputSanitizer,
 				func(ctx context.Context, client *ipamclient.Client) (*outputEnvelope, error) {
 					return call(ctx, client, args, tailnet, site, siteSet)
 				})
@@ -246,6 +246,6 @@ func newUDPPortLeafCommand(
 	if siteRequired {
 		_ = cmd.MarkFlagRequired("site")
 	}
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	addRegistryFlags(cmd, &tailnetFlag)
 	return cmd
 }

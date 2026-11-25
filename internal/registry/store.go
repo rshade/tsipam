@@ -1,6 +1,9 @@
 package registry
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // MapKind names one registry map. Backends use it for TxOptions.Require.
 // The zero value is not a map.
@@ -28,6 +31,13 @@ type TxOptions struct {
 	// DryRun, for Update only, rehearses without committing (rule 9). View
 	// ignores it.
 	DryRun bool
+	// Action names the operation, for Update only. A backend that records
+	// audit events stores it; others ignore it.
+	Action Action
+	// Now is the clock for audit events. It is a function because the event
+	// time must be read after the backend holds its serialization, not when
+	// the caller started waiting for it. nil means [time.Now].
+	Now func() time.Time
 }
 
 // Counts is the diagnostic size of each map, including maps that only partly
@@ -77,6 +87,10 @@ type Allocations struct {
 //     does, then discards every mutation. It persists nothing, creates
 //     nothing (CreateIfMissing supplies an empty in-memory registry), does
 //     not run the WithAfterSuccess hook, and need not serialize.
+//
+// A backend that also implements HistoryReader records one event per Put or
+// effective Delete, in the same transaction as the mutation. Callers therefore
+// Put only a changed value.
 //
 // After fn succeeds and the commit is durable, and before the backend
 // releases serialization, Update calls the hook registered with

@@ -239,6 +239,144 @@ func DecodeCheckPolicyResponse(decoder func(*http.Response) goahttp.Decoder, res
 	}
 }
 
+// BuildListHistoryRequest instantiates a HTTP request object with method and
+// path set to call the "ipam" service "list_history" endpoint
+func (c *Client) BuildListHistoryRequest(ctx context.Context, v any) (*http.Request, error) {
+	var (
+		tailnet string
+	)
+	{
+		p, ok := v.(*ipam.ListHistoryPayload)
+		if !ok {
+			return nil, goahttp.ErrInvalidType("ipam", "list_history", "*ipam.ListHistoryPayload", v)
+		}
+		tailnet = p.Tailnet
+	}
+
+	rawPath := fmt.Sprintf("/tailnet/%v/ipam/history", url.PathEscape(fmt.Sprint(tailnet)))
+	u := &url.URL{Scheme: c.scheme, Host: c.host, Path: ListHistoryIpamPath(tailnet), RawPath: rawPath}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, goahttp.ErrInvalidURL("ipam", "list_history", u.String(), err)
+	}
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	return req, nil
+}
+
+// EncodeListHistoryRequest returns an encoder for requests sent to the ipam
+// list_history server.
+func EncodeListHistoryRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ListHistoryPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "list_history", "*ipam.ListHistoryPayload", v)
+		}
+		values := req.URL.Query()
+		if p.Kind != nil {
+			values.Add("kind", *p.Kind)
+		}
+		if p.Key != nil {
+			values.Add("key", *p.Key)
+		}
+		if p.Since != nil {
+			values.Add("since", *p.Since)
+		}
+		values.Add("limit", strconv.Itoa(p.Limit))
+		req.URL.RawQuery = values.Encode()
+		return nil
+	}
+}
+
+// DecodeListHistoryResponse returns a decoder for responses returned by the
+// ipam list_history endpoint. restoreBody controls whether the response body
+// should be restored after having been read.
+// DecodeListHistoryResponse may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): http.StatusBadRequest
+//   - "unsupported" (type *goa.ServiceError): http.StatusNotImplemented
+//   - error: internal error
+func DecodeListHistoryResponse(decoder func(*http.Response) goahttp.Decoder, restoreBody bool) func(*http.Response) (any, error) {
+	return func(resp *http.Response) (result any, decodeErr error) {
+		responseBody := resp.Body
+		if restoreBody {
+			b, readErr := io.ReadAll(responseBody)
+			closeErr := responseBody.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_history", err)
+			}
+			resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			defer func() {
+				resp.Body = io.NopCloser(bytes.NewBuffer(b))
+			}()
+		} else {
+			defer func() {
+				if err := responseBody.Close(); err != nil {
+					decodeErr = errors.Join(decodeErr, goahttp.ErrDecodingError("ipam", "list_history", err))
+				}
+			}()
+		}
+		switch resp.StatusCode {
+		case http.StatusOK:
+			var (
+				body []*RegistryEventResponse
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_history", err)
+			}
+			for _, e := range body {
+				if e != nil {
+					if err2 := validateRegistryEventResponse(e, "body[*]"); err2 != nil {
+						err = goa.MergeErrors(err, err2)
+					}
+				}
+			}
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "list_history", err)
+			}
+			res := NewListHistoryRegistryEventOK(body)
+			return res, nil
+		case http.StatusBadRequest:
+			var (
+				body ListHistoryInvalidInputResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_history", err)
+			}
+			err = ValidateListHistoryInvalidInputResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "list_history", err)
+			}
+			return nil, NewListHistoryInvalidInput(&body)
+		case http.StatusNotImplemented:
+			var (
+				body ListHistoryUnsupportedResponseBody
+				err  error
+			)
+			err = decoder(resp).Decode(&body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_history", err)
+			}
+			err = ValidateListHistoryUnsupportedResponseBody(&body)
+			if err != nil {
+				return nil, goahttp.ErrValidationError("ipam", "list_history", err)
+			}
+			return nil, NewListHistoryUnsupported(&body)
+		default:
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, goahttp.ErrDecodingError("ipam", "list_history", err)
+			}
+			return nil, goahttp.ErrInvalidResponse("ipam", "list_history", resp.StatusCode, string(body))
+		}
+	}
+}
+
 // BuildListSiteIdsRequest instantiates a HTTP request object with method and
 // path set to call the "ipam" service "list_site_ids" endpoint
 func (c *Client) BuildListSiteIdsRequest(ctx context.Context, v any) (*http.Request, error) {
@@ -1711,6 +1849,42 @@ func unmarshalPolicyReservedResponseBodyToIpamPolicyReserved(v *PolicyReservedRe
 	res.IPSets = make([]string, len(v.IPSets))
 	for i, val := range v.IPSets {
 		res.IPSets[i] = val
+	}
+
+	return res
+}
+
+// unmarshalRegistryEventResponseToIpamRegistryEvent builds a value of type
+// *ipam.RegistryEvent from a value of type *RegistryEventResponse.
+func unmarshalRegistryEventResponseToIpamRegistryEvent(v *RegistryEventResponse) *ipam.RegistryEvent {
+	res := &ipam.RegistryEvent{
+		At:     *v.At,
+		Action: *v.Action,
+		Kind:   *v.Kind,
+		Key:    *v.Key,
+		Site:   v.Site,
+		Actor:  v.Actor,
+	}
+	if v.Before != nil {
+		res.Before = unmarshalRegistryEventValueResponseToIpamRegistryEventValue(v.Before)
+	}
+	if v.After != nil {
+		res.After = unmarshalRegistryEventValueResponseToIpamRegistryEventValue(v.After)
+	}
+
+	return res
+}
+
+// unmarshalRegistryEventValueResponseToIpamRegistryEventValue builds a value
+// of type *ipam.RegistryEventValue from a value of type
+// *RegistryEventValueResponse.
+func unmarshalRegistryEventValueResponseToIpamRegistryEventValue(v *RegistryEventValueResponse) *ipam.RegistryEventValue {
+	res := &ipam.RegistryEventValue{
+		Target:      *v.Target,
+		Owner:       v.Owner,
+		Description: v.Description,
+		Ticket:      v.Ticket,
+		ReservedAt:  v.ReservedAt,
 	}
 
 	return res

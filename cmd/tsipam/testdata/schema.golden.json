@@ -85,6 +85,11 @@
           "default": "false"
         },
         {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -129,6 +134,11 @@
           "default": ""
         },
         {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -170,6 +180,11 @@
       "usage": "check",
       "flags": [
         {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -189,6 +204,11 @@
         {
           "name": "policy-file",
           "usage": "local HuJSON policy file (instead of \u003cacl-file\u003e)",
+          "default": ""
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
           "default": ""
         },
         {
@@ -231,6 +251,11 @@
       "usage": "plan",
       "flags": [
         {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -252,6 +277,11 @@
       "summary": "List UDP listen-port reservations, optionally filtered by site.",
       "usage": "port list",
       "flags": [
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
         {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
@@ -277,6 +307,11 @@
         {
           "name": "port",
           "usage": "UDP listen port, 1024-65535 (instead of \u003cport\u003e)",
+          "default": ""
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
           "default": ""
         },
         {
@@ -313,6 +348,11 @@
           "default": ""
         },
         {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -331,6 +371,53 @@
       ]
     },
     {
+      "name": "registry",
+      "summary": "Inspect the registry itself.",
+      "usage": "registry"
+    },
+    {
+      "name": "registry history",
+      "summary": "List the registry's audit events, newest first (requires the sqlite backend).",
+      "usage": "registry history",
+      "flags": [
+        {
+          "name": "key",
+          "usage": "keep only events of this canonical key",
+          "default": ""
+        },
+        {
+          "name": "kind",
+          "usage": "keep only one kind: site_id, subnet_pool, service_address, or udp_port",
+          "default": ""
+        },
+        {
+          "name": "limit",
+          "usage": "most events to list, at least 1",
+          "default": "100"
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
+          "name": "registry-dir",
+          "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
+          "default": "."
+        },
+        {
+          "name": "since",
+          "usage": "keep only events at or after this RFC 3339 time",
+          "default": ""
+        },
+        {
+          "name": "tailnet",
+          "usage": "routing/storage key for the registry (default: $TAILSCALE_TAILNET, or \"local\")",
+          "default": ""
+        }
+      ]
+    },
+    {
       "name": "service",
       "summary": "Manage per-service IPv4 address reservations.",
       "usage": "service"
@@ -340,6 +427,11 @@
       "summary": "List reserved service addresses.",
       "usage": "service list",
       "flags": [
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
         {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
@@ -360,6 +452,11 @@
         {
           "name": "address",
           "usage": "IPv4 host address or exact /32 (instead of \u003caddress\u003e)",
+          "default": ""
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
           "default": ""
         },
         {
@@ -392,6 +489,11 @@
         {
           "name": "owner",
           "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
           "default": ""
         },
         {
@@ -432,6 +534,11 @@
       "usage": "site-id list",
       "flags": [
         {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -451,6 +558,11 @@
         {
           "name": "id",
           "usage": "4via6 site ID (instead of \u003cid\u003e)",
+          "default": ""
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
           "default": ""
         },
         {
@@ -483,6 +595,11 @@
         {
           "name": "owner",
           "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
           "default": ""
         },
         {
@@ -538,6 +655,11 @@
           "default": ""
         },
         {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -576,6 +698,11 @@
       "usage": "subnet list",
       "flags": [
         {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
+          "default": ""
+        },
+        {
           "name": "registry-dir",
           "usage": "directory holding \u003ctailnet\u003e.ipam.hujson registry files",
           "default": "."
@@ -595,6 +722,11 @@
         {
           "name": "cidr",
           "usage": "CIDR prefix (instead of \u003ccidr\u003e)",
+          "default": ""
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
           "default": ""
         },
         {
@@ -627,6 +759,11 @@
         {
           "name": "owner",
           "usage": "operator or team that owns this reservation",
+          "default": ""
+        },
+        {
+          "name": "registry",
+          "usage": "registry URL: file://\u003cdirectory\u003e or sqlite://\u003cpath\u003e (default: $TSIPAM_REGISTRY, or \"file://.\"); mutually exclusive with --registry-dir",
           "default": ""
         },
         {

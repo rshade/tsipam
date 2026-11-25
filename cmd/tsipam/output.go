@@ -175,6 +175,7 @@ type outputEnvelope struct {
 	BlockInfo        *blockInfoOutput        `json:"block_info,omitempty"`
 	Comparison       *comparisonOutput       `json:"comparison,omitempty"`
 	PolicyComparison *policyComparisonOutput `json:"policy_comparison,omitempty"`
+	Events           *[]eventOutput          `json:"events,omitempty"`
 
 	// messageBuilder, when set, renders Message from this envelope's own
 	// exported fields at emit time instead of Message being pre-formatted
@@ -215,6 +216,9 @@ func renderHuman(writer io.Writer, result *outputEnvelope) error {
 	}
 	if result.PolicyComparison != nil {
 		return renderPolicyComparison(writer, result.Tailnet, result.PolicyComparison)
+	}
+	if result.Events != nil {
+		return renderEvents(writer, *result.Events)
 	}
 	if result.SubnetPools != nil {
 		return renderSubnetPools(writer, *result.SubnetPools)
@@ -452,6 +456,7 @@ func sanitizeOutput(input *outputEnvelope, output *sanitize.Sanitizer) *outputEn
 	result.BlockInfo = input.BlockInfo
 	result.Comparison = sanitizeComparison(input.Comparison, output)
 	result.PolicyComparison = sanitizePolicyComparison(input.PolicyComparison, output)
+	result.Events = sanitizeEvents(input.Events, output)
 	if input.FreeBlocks != nil {
 		blocks := make([]string, len(*input.FreeBlocks))
 		for index, block := range *input.FreeBlocks {
@@ -507,6 +512,7 @@ func registerOutputIdentities(input *outputEnvelope, output *sanitize.Sanitizer)
 			output.Value(kindHostname, entry.Device)
 		}
 	}
+	registerEvents(input.Events, output)
 	registerCIDRBlocks(input.FreeBlocks, output)
 	if input.supernetsFromRegistry {
 		registerCIDRBlocks(input.Supernets, output)

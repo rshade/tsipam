@@ -164,6 +164,121 @@ func EncodeCheckPolicyError(encoder func(context.Context, http.ResponseWriter) g
 	}
 }
 
+// EncodeListHistoryResponse returns an encoder for responses returned by the
+// ipam list_history endpoint.
+func EncodeListHistoryResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
+	return func(ctx context.Context, w http.ResponseWriter, v any) error {
+		res, _ := v.([]*ipam.RegistryEvent)
+		enc := encoder(ctx, w)
+		body := NewListHistoryResponseBody(res)
+		w.WriteHeader(http.StatusOK)
+		return enc.Encode(body)
+	}
+}
+
+// DecodeListHistoryRequest returns a decoder for requests sent to the ipam
+// list_history endpoint.
+func DecodeListHistoryRequest(mux goahttp.Muxer, decoder func(*http.Request) goahttp.Decoder) func(*http.Request) (*ipam.ListHistoryPayload, error) {
+	return func(r *http.Request) (*ipam.ListHistoryPayload, error) {
+		var payload *ipam.ListHistoryPayload
+		var (
+			tailnet string
+			kind    *string
+			key     *string
+			since   *string
+			limit   int
+			err     error
+
+			params = mux.Vars(r)
+		)
+		tailnet = params["tailnet"]
+		qp := r.URL.Query()
+		kindRaw := qp.Get("kind")
+		if kindRaw != "" {
+			kind = &kindRaw
+		}
+		if kind != nil {
+			if !(*kind == "site_id" || *kind == "subnet_pool" || *kind == "service_address" || *kind == "udp_port") {
+				err = goa.MergeErrors(err, goa.InvalidEnumValueError("kind", *kind, []any{"site_id", "subnet_pool", "service_address", "udp_port"}))
+			}
+		}
+		keyRaw := qp.Get("key")
+		if keyRaw != "" {
+			key = &keyRaw
+		}
+		sinceRaw := qp.Get("since")
+		if sinceRaw != "" {
+			since = &sinceRaw
+		}
+		if since != nil {
+			err = goa.MergeErrors(err, goa.ValidateFormat("since", *since, goa.FormatDateTime))
+		}
+		{
+			limitRaw := qp.Get("limit")
+			if limitRaw == "" {
+				limit = 100
+			} else {
+				v, err2 := strconv.ParseInt(limitRaw, 10, strconv.IntSize)
+				if err2 != nil {
+					err = goa.MergeErrors(err, goa.InvalidFieldTypeError("limit", limitRaw, "integer"))
+				}
+				limit = int(v)
+			}
+		}
+		if limit < 1 {
+			err = goa.MergeErrors(err, goa.InvalidRangeError("limit", limit, 1, true))
+		}
+		if err != nil {
+			return payload, err
+		}
+		payload = NewListHistoryPayload(tailnet, kind, key, since, limit)
+
+		return payload, nil
+	}
+}
+
+// EncodeListHistoryError returns an encoder for errors returned by the
+// list_history ipam endpoint.
+func EncodeListHistoryError(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder, formatter func(ctx context.Context, err error) goahttp.Statuser) func(context.Context, http.ResponseWriter, error) error {
+	encodeError := goahttp.ErrorEncoder(encoder, formatter)
+	return func(ctx context.Context, w http.ResponseWriter, v error) error {
+		var en goa.GoaErrorNamer
+		if !errors.As(v, &en) {
+			return encodeError(ctx, w, v)
+		}
+		switch en.GoaErrorName() {
+		case "invalid_input":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewListHistoryInvalidInputResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusBadRequest)
+			return enc.Encode(body)
+		case "unsupported":
+			var res *goa.ServiceError
+			errors.As(v, &res)
+			enc := encoder(ctx, w)
+			var body any
+			if formatter != nil {
+				body = formatter(ctx, res)
+			} else {
+				body = NewListHistoryUnsupportedResponseBody(res)
+			}
+			w.Header().Set("goa-error", res.GoaErrorName())
+			w.WriteHeader(http.StatusNotImplemented)
+			return enc.Encode(body)
+		default:
+			return encodeError(ctx, w, v)
+		}
+	}
+}
+
 // EncodeListSiteIdsResponse returns an encoder for responses returned by the
 // ipam list_site_ids endpoint.
 func EncodeListSiteIdsResponse(encoder func(context.Context, http.ResponseWriter) goahttp.Encoder) func(context.Context, http.ResponseWriter, any) error {
@@ -1150,6 +1265,42 @@ func marshalIpamPolicyReservedToPolicyReservedResponseBody(v *ipam.PolicyReserve
 		}
 	} else {
 		res.IPSets = []string{}
+	}
+
+	return res
+}
+
+// marshalIpamRegistryEventToRegistryEventResponse builds a value of type
+// *RegistryEventResponse from a value of type *ipam.RegistryEvent.
+func marshalIpamRegistryEventToRegistryEventResponse(v *ipam.RegistryEvent) *RegistryEventResponse {
+	res := &RegistryEventResponse{
+		At:     v.At,
+		Action: v.Action,
+		Kind:   v.Kind,
+		Key:    v.Key,
+		Site:   v.Site,
+		Actor:  v.Actor,
+	}
+	if v.Before != nil {
+		res.Before = marshalIpamRegistryEventValueToRegistryEventValueResponse(v.Before)
+	}
+	if v.After != nil {
+		res.After = marshalIpamRegistryEventValueToRegistryEventValueResponse(v.After)
+	}
+
+	return res
+}
+
+// marshalIpamRegistryEventValueToRegistryEventValueResponse builds a value of
+// type *RegistryEventValueResponse from a value of type
+// *ipam.RegistryEventValue.
+func marshalIpamRegistryEventValueToRegistryEventValueResponse(v *ipam.RegistryEventValue) *RegistryEventValueResponse {
+	res := &RegistryEventValueResponse{
+		Target:      v.Target,
+		Owner:       v.Owner,
+		Description: v.Description,
+		Ticket:      v.Ticket,
+		ReservedAt:  v.ReservedAt,
 	}
 
 	return res

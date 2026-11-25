@@ -38,7 +38,6 @@ import (
 
 	"github.com/rshade/tsipam/internal/diagnostics"
 	"github.com/rshade/tsipam/internal/registry"
-	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
 const (
@@ -215,9 +214,9 @@ func registerSweepValueWithCanonical(
 
 // registerKnownIdentityInventory registers the identity values this CLI
 // itself already knows from its own inputs -- the resolved tailnet, the
-// registry directory, the full computed registry file path, and that path's
-// bare filename -- so sanitizeErrorIfNeeded's free-text sweep can redact them
-// from an error's text wherever they appear verbatim. This closes registry
+// registry selection as given, and the filesystem names it resolves to -- so
+// sanitizeErrorIfNeeded's free-text sweep can redact them from an error's text
+// wherever they appear verbatim. This closes registry
 // path leaks that originate deep in tsacl policycore/hujsonedit's own error
 // strings (which this tool does not control the wording of) without any
 // quote-parsing: Sanitizer.Text finds and replaces a known value byte-for-byte
@@ -234,46 +233,53 @@ func registerKnownIdentityInventory(executed *cobra.Command, state *commandState
 	if flag := executed.Flags().Lookup("from-registry"); flag != nil && flag.Value.String() != "true" {
 		return
 	}
-	registryDirFlag := executed.Flags().Lookup("registry-dir")
-	if registryDirFlag == nil {
+	flags := executed.Flags()
+	if flags.Lookup(registryDirFlag) == nil {
 		return
 	}
-	registryDir := registryDirFlag.Value.String()
-	tailnetFlagValue := ""
-	if flag := executed.Flags().Lookup("tailnet"); flag != nil {
-		tailnetFlagValue = flag.Value.String()
-	}
-	tailnet := resolveTailnetWithEnv(tailnetFlagValue, state.getenv)
-
+	tailnet := resolveTailnetWithEnv(flagValue(flags, tailnetFlagName), state.getenv)
 	registerSweepValue(state.sanitizer, kindTailnet, tailnet)
-	registerSweepValue(state.sanitizer, kindPath, registryDir)
-	filename := hujsonstore.FileName(tailnet)
-	registryPath := hujsonstore.Path(registryDir, tailnet)
-	registerSweepValue(state.sanitizer, kindPath, registryPath)
-	registerSweepValue(state.sanitizer, kindPath, filename)
+	for _, selection := range []string{
+		flagValue(flags, registryFlag), flagValue(flags, registryDirFlag), state.getenv(registryEnv),
+	} {
+		registerSweepValue(state.sanitizer, kindPath, selection)
+	}
+	target, err := state.registryTarget(executed)
+	if err != nil {
+		return
+	}
+	for _, location := range target.locations(tailnet) {
+		registerSweepValue(state.sanitizer, kindPath, location)
+	}
+	rehearsing := contractFor(executed).writes() && ax.DryRunFromContext(executed.Context())
+	registerIdentities(state.sanitizer, target.identities(context.Background(), tailnet, rehearsing))
+}
 
-	siteIDs, subnetPools, serviceAddresses, owners := hujsonstore.RawEntries(registryPath)
-	for _, site := range siteIDs {
-		registerSweepValue(state.sanitizer, kindSite, site)
+// registerIdentities registers the identity values a registry stores. Keys,
+// service names, and labels may each be stored in a non-canonical spelling, so
+// the raw and canonical forms share one sweep domain.
+func registerIdentities(sanitizer *sanitize.Sanitizer, identities registry.Identities) {
+	for _, site := range identities.Sites {
+		registerSweepValueWithCanonical(sanitizer, kindSite, site, registry.NormalizeSiteName)
 	}
-	for cidr, site := range subnetPools {
-		registerSweepValueWithCanonical(state.sanitizer, kindCIDR, cidr, registry.NormalizeSubnetCIDR)
-		registerCanonicalCIDRSuggestion(state.sanitizer, cidr)
-		registerSweepValue(state.sanitizer, kindSite, site)
+	for _, cidr := range identities.CIDRs {
+		registerSweepValueWithCanonical(sanitizer, kindCIDR, cidr, registry.NormalizeSubnetCIDR)
+		registerCanonicalCIDRSuggestion(sanitizer, cidr)
 	}
-	for _, owner := range owners {
-		registerSweepValue(state.sanitizer, kindOwner, owner)
+	for _, address := range identities.Addresses {
+		registerSweepValueWithCanonical(sanitizer, kindIP, address, registry.NormalizeServiceAddress)
 	}
-	for address, service := range serviceAddresses {
-		// Service-address keys and identities each have two legal spellings
-		// (bare vs /32 alias, bare name vs svc: selector), so both the raw and
-		// canonical forms share one sweep domain.
-		registerSweepValueWithCanonical(state.sanitizer, kindIP, address, registry.NormalizeServiceAddress)
-		registerSweepValueWithCanonical(state.sanitizer, kindService, service, registry.NormalizeServiceName)
+	for _, service := range identities.Services {
+		registerSweepValueWithCanonical(sanitizer, kindService, service, registry.NormalizeServiceName)
 	}
-	for _, entry := range hujsonstore.RawUDPPorts(registryPath) {
-		registerSweepValueWithCanonical(state.sanitizer, kindSite, entry.Site, registry.NormalizeSiteName)
-		registerSweepValueWithCanonical(state.sanitizer, kindHostname, entry.Device, registry.NormalizeDeviceName)
+	for _, device := range identities.Devices {
+		registerSweepValueWithCanonical(sanitizer, kindHostname, device, registry.NormalizeDeviceName)
+	}
+	for _, owner := range identities.Owners {
+		registerSweepValue(sanitizer, kindOwner, owner)
+	}
+	for _, actor := range identities.Actors {
+		registerSweepValue(sanitizer, kindOwner, actor)
 	}
 }
 
@@ -579,7 +585,8 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 			"Results go to stdout: human text on a terminal, one JSON document otherwise.\n" +
 			"--format or AGENT_MODE selects the format. A failure is one JSON error object\n" +
 			"on stderr, with operational diagnostics. Registry commands use a\n" +
-			"comment-preserving HuJSON file selected by --registry-dir and --tailnet.\n\n" +
+			"comment-preserving HuJSON file or a SQLite database, selected by --registry\n" +
+			"and --tailnet.\n\n" +
 			"Exit codes:\n" +
 			"  0  success\n" +
 			"  1  a valid operation was refused (for example, a registry collision or\n" +
@@ -662,6 +669,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	root.AddCommand(newPlanningCommand(state, commandPlan, deps.collectLive))
 	root.AddCommand(newPlanningCommand(state, commandCheck, deps.collectLive))
 	root.AddCommand(newPolicyCheckCommand(state))
+	root.AddCommand(newRegistryCommand(state))
 	root.InitDefaultHelpFlag()
 	return root
 }

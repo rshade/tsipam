@@ -1,5 +1,8 @@
 # Registry format
 
+This is the format of the default `file://` backend. See
+[Registry backends](registry-backends.md) for the SQLite one and how to choose.
+
 The registry is one HuJSON file per tailnet routing key, named
 `<tailnet>.ipam.hujson` in `--registry-dir` (default `.`). The key resolves
 from `--tailnet`, then `TAILSCALE_TAILNET`, then `local`. It may be an alias

@@ -15,15 +15,15 @@ import (
 
 func newCalcAggregateCommand(state *commandState) *cobra.Command {
 	var fromRegistry bool
-	var registryDir, tailnetFlag string
+	var tailnetFlag string
 	var cidrFlags []string
 	cmd := &cobra.Command{
 		Use:   "aggregate [cidr...]",
 		Short: "Summarize supplied or reserved CIDRs into their minimal covering set.",
 		Long: "Summarize supplied CIDRs, or use --from-registry to read subnet-pool reservations.\n" +
 			"Supplied CIDRs and --from-registry are mutually exclusive. Give CIDRs by position or\n" +
-			"with a repeated --cidr, not both. Registry selectors --registry-dir and --tailnet\n" +
-			"apply only with --from-registry; no live routes are read.",
+			"with a repeated --cidr, not both. Registry selectors --registry, --registry-dir, and\n" +
+			"--tailnet apply only with --from-registry; no live routes are read.",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -42,7 +42,7 @@ func newCalcAggregateCommand(state *commandState) *cobra.Command {
 			}
 
 			if fromRegistry {
-				cidrs, err = aggregateRegistryCIDRs(cmd.Context(), state, registryDir, tailnet)
+				cidrs, err = aggregateRegistryCIDRs(cmd, state, tailnet)
 				if err != nil {
 					return err
 				}
@@ -59,22 +59,26 @@ func newCalcAggregateCommand(state *commandState) *cobra.Command {
 		"CIDR prefix to aggregate; repeat for each one (instead of [cidr...])")
 	cmd.Flags().BoolVar(&fromRegistry, "from-registry", false,
 		"aggregate subnet-pool reservations instead of positional CIDRs")
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	addRegistryFlags(cmd, &tailnetFlag)
 	return cmd
 }
 
 // aggregateSource returns the supplied CIDRs, or none in registry mode, after
 // refusing any combination of sources that contradicts itself.
 func aggregateSource(cmd *cobra.Command, args, cidrFlags []string, fromRegistry bool) ([]string, error) {
-	byFlag := cmd.Flags().Changed(flagCIDR)
+	flags := cmd.Flags()
+	byFlag := flags.Changed(flagCIDR)
 	if fromRegistry {
 		if len(args) != 0 || byFlag {
 			return nil, invalidInput(errors.New("--from-registry and supplied CIDRs cannot be used together"))
 		}
 		return nil, nil
 	}
-	if cmd.Flags().Changed("registry-dir") || cmd.Flags().Changed("tailnet") {
+	if flags.Changed(registryDirFlag) || flags.Changed(tailnetFlagName) {
 		return nil, invalidInput(errors.New("--registry-dir and --tailnet require --from-registry"))
+	}
+	if flags.Changed(registryFlag) {
+		return nil, invalidInput(errors.New("--registry requires --from-registry"))
 	}
 	if len(args) != 0 {
 		if byFlag {
@@ -89,10 +93,14 @@ func aggregateSource(cmd *cobra.Command, args, cidrFlags []string, fromRegistry 
 }
 
 func aggregateRegistryCIDRs(
-	ctx context.Context, state *commandState, registryDir, tailnet string,
+	cmd *cobra.Command, state *commandState, tailnet string,
 ) ([]string, error) {
+	target, err := state.registryTarget(cmd)
+	if err != nil {
+		return nil, err
+	}
 	var cidrs []string
-	err := state.registryTarget(registryDir).run(ctx,
+	err = target.run(cmd.Context(),
 		func(callCtx context.Context, client *ipamclient.Client) error {
 			reservations, listErr := listSubnetPoolReservations(callCtx, client, tailnet)
 			if listErr != nil {

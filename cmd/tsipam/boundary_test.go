@@ -40,7 +40,9 @@ func packageRoles() map[string]string {
 		"internal/ipamsvc":              roleServer,
 		"internal/planner":              roleServer,
 		"internal/policycheck":          roleServer,
+		"internal/registry/backend":     roleServer,
 		"internal/registry/hujsonstore": roleServer,
+		"internal/registry/sqlitestore": roleServer,
 		"internal/registry/storetest":   roleServer,
 	}
 }
@@ -54,12 +56,10 @@ func commandExceptions() map[string][]string {
 			"internal/ipamhttp",
 			"internal/ipamsvc",
 			"internal/loopback",
-			"internal/registry/hujsonstore",
+			"internal/registry/backend",
 		},
 		// devices list reads the Tailscale API from the caller's machine.
 		"devices.go": {"internal/devices"},
-		// The sanitizer reads identities from the registry file.
-		"main.go": {"internal/registry/hujsonstore"},
 	}
 }
 

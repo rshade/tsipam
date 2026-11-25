@@ -17,6 +17,7 @@ import (
 type Endpoints struct {
 	Plan                  goa.Endpoint
 	CheckPolicy           goa.Endpoint
+	ListHistory           goa.Endpoint
 	ListSiteIds           goa.Endpoint
 	ReserveSiteID         goa.Endpoint
 	ReleaseSiteID         goa.Endpoint
@@ -37,6 +38,7 @@ func NewEndpoints(s Service) *Endpoints {
 	return &Endpoints{
 		Plan:                  NewPlanEndpoint(s),
 		CheckPolicy:           NewCheckPolicyEndpoint(s),
+		ListHistory:           NewListHistoryEndpoint(s),
 		ListSiteIds:           NewListSiteIdsEndpoint(s),
 		ReserveSiteID:         NewReserveSiteIDEndpoint(s),
 		ReleaseSiteID:         NewReleaseSiteIDEndpoint(s),
@@ -57,6 +59,7 @@ func NewEndpoints(s Service) *Endpoints {
 func (e *Endpoints) Use(m func(goa.Endpoint) goa.Endpoint) {
 	e.Plan = m(e.Plan)
 	e.CheckPolicy = m(e.CheckPolicy)
+	e.ListHistory = m(e.ListHistory)
 	e.ListSiteIds = m(e.ListSiteIds)
 	e.ReserveSiteID = m(e.ReserveSiteID)
 	e.ReleaseSiteID = m(e.ReleaseSiteID)
@@ -87,6 +90,15 @@ func NewCheckPolicyEndpoint(s Service) goa.Endpoint {
 	return func(ctx context.Context, req any) (any, error) {
 		p := req.(*CheckPolicyPayload)
 		return s.CheckPolicy(ctx, p)
+	}
+}
+
+// NewListHistoryEndpoint returns an endpoint function that calls the method
+// "list_history" of service "ipam".
+func NewListHistoryEndpoint(s Service) goa.Endpoint {
+	return func(ctx context.Context, req any) (any, error) {
+		p := req.(*ListHistoryPayload)
+		return s.ListHistory(ctx, p)
 	}
 }
 

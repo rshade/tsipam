@@ -23,7 +23,7 @@ import (
 //	command (subcommand1|subcommand2|...)
 func UsageCommands() []string {
 	return []string{
-		"ipam (plan|check-policy|list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|allocate-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
+		"ipam (plan|check-policy|list-history|list-site-ids|reserve-site-id|release-site-id|list-subnet-pools|reserve-subnet-pool|allocate-subnet-pool|release-subnet-pool|list-service-addresses|reserve-service-address|release-service-address|list-udp-ports|reserve-udp-port|release-udp-port)",
 	}
 }
 
@@ -71,6 +71,13 @@ func ParseEndpoint(
 		ipamCheckPolicyFlags       = flag.NewFlagSet("check-policy", flag.ExitOnError)
 		ipamCheckPolicyBodyFlag    = new(cliStringFlag)
 		ipamCheckPolicyTailnetFlag = new(cliStringFlag)
+
+		ipamListHistoryFlags       = flag.NewFlagSet("list-history", flag.ExitOnError)
+		ipamListHistoryTailnetFlag = new(cliStringFlag)
+		ipamListHistoryKindFlag    = new(cliStringFlag)
+		ipamListHistoryKeyFlag     = new(cliStringFlag)
+		ipamListHistorySinceFlag   = new(cliStringFlag)
+		ipamListHistoryLimitFlag   = ipamListHistoryFlags.String("limit", "100", "")
 
 		ipamListSiteIdsFlags       = flag.NewFlagSet("list-site-ids", flag.ExitOnError)
 		ipamListSiteIdsTailnetFlag = new(cliStringFlag)
@@ -130,6 +137,10 @@ func ParseEndpoint(
 	ipamPlanFlags.Var(ipamPlanLiveTailnetFlag, "live-tailnet", "")
 	ipamCheckPolicyFlags.Var(ipamCheckPolicyBodyFlag, "body", "")
 	ipamCheckPolicyFlags.Var(ipamCheckPolicyTailnetFlag, "tailnet", "Routing/storage key for the registry.")
+	ipamListHistoryFlags.Var(ipamListHistoryTailnetFlag, "tailnet", "Routing/storage key for the registry.")
+	ipamListHistoryFlags.Var(ipamListHistoryKindFlag, "kind", "")
+	ipamListHistoryFlags.Var(ipamListHistoryKeyFlag, "key", "")
+	ipamListHistoryFlags.Var(ipamListHistorySinceFlag, "since", "")
 	ipamListSiteIdsFlags.Var(ipamListSiteIdsTailnetFlag, "tailnet", "Routing/storage key for the registry. May be a synthetic alias, not necessarily the live Tailscale tailnet name.")
 	ipamReserveSiteIDFlags.Var(ipamReserveSiteIDBodyFlag, "body", "")
 	ipamReserveSiteIDFlags.Var(ipamReserveSiteIDTailnetFlag, "tailnet", "Routing/storage key for the registry.")
@@ -158,6 +169,7 @@ func ParseEndpoint(
 	ipamFlags.Usage = ipamUsage
 	ipamPlanFlags.Usage = ipamPlanUsage
 	ipamCheckPolicyFlags.Usage = ipamCheckPolicyUsage
+	ipamListHistoryFlags.Usage = ipamListHistoryUsage
 	ipamListSiteIdsFlags.Usage = ipamListSiteIdsUsage
 	ipamReserveSiteIDFlags.Usage = ipamReserveSiteIDUsage
 	ipamReleaseSiteIDFlags.Usage = ipamReleaseSiteIDUsage
@@ -211,6 +223,9 @@ func ParseEndpoint(
 
 			case "check-policy":
 				epf = ipamCheckPolicyFlags
+
+			case "list-history":
+				epf = ipamListHistoryFlags
 
 			case "list-site-ids":
 				epf = ipamListSiteIdsFlags
@@ -282,6 +297,9 @@ func ParseEndpoint(
 			case "check-policy":
 				endpoint = c.CheckPolicy()
 				data, err = ipamc.BuildCheckPolicyPayload(ipamCheckPolicyBodyFlag.value, ipamCheckPolicyTailnetFlag.value)
+			case "list-history":
+				endpoint = c.ListHistory()
+				data, err = ipamc.BuildListHistoryPayload(ipamListHistoryTailnetFlag.value, ipamListHistoryKindFlag.value, ipamListHistoryKeyFlag.value, ipamListHistorySinceFlag.value, *ipamListHistoryLimitFlag)
 			case "list-site-ids":
 				endpoint = c.ListSiteIds()
 				data, err = ipamc.BuildListSiteIdsPayload(ipamListSiteIdsTailnetFlag.value)
@@ -338,6 +356,7 @@ func ipamUsage() {
 	fmt.Fprintln(os.Stderr, "COMMAND:")
 	fmt.Fprintln(os.Stderr, `    plan: Compare declared allocations with live control-plane state without modifying either.`)
 	fmt.Fprintln(os.Stderr, `    check-policy: Compare static ipset definitions with subnet reservations without modifying either.`)
+	fmt.Fprintln(os.Stderr, `    list-history: List the audit events of one tailnet's registry, newest first.`)
 	fmt.Fprintln(os.Stderr, `    list-site-ids: ListSiteIds implements list_site_ids.`)
 	fmt.Fprintln(os.Stderr, `    reserve-site-id: ReserveSiteID implements reserve_site_id.`)
 	fmt.Fprintln(os.Stderr, `    release-site-id: ReleaseSiteID implements release_site_id.`)
@@ -393,6 +412,32 @@ func ipamCheckPolicyUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Example:")
 	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam check-policy --body '{\n      \"policy\": \"Tempore distinctio aliquid cupiditate autem aspernatur.\"\n   }' --tailnet \"Nihil molestiae et.\"")
+}
+
+func ipamListHistoryUsage() {
+	// Header with flags
+	fmt.Fprintf(os.Stderr, "%s [flags] ipam list-history", os.Args[0])
+	fmt.Fprint(os.Stderr, " -tailnet STRING")
+	fmt.Fprint(os.Stderr, " -kind STRING")
+	fmt.Fprint(os.Stderr, " -key STRING")
+	fmt.Fprint(os.Stderr, " -since STRING")
+	fmt.Fprint(os.Stderr, " -limit INT")
+	fmt.Fprintln(os.Stderr)
+
+	// Description
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, `List the audit events of one tailnet's registry, newest first.`)
+
+	// Flags list
+	fmt.Fprintln(os.Stderr, `    -tailnet STRING: Routing/storage key for the registry.`)
+	fmt.Fprintln(os.Stderr, `    -kind STRING: `)
+	fmt.Fprintln(os.Stderr, `    -key STRING: `)
+	fmt.Fprintln(os.Stderr, `    -since STRING: `)
+	fmt.Fprintln(os.Stderr, `    -limit INT: `)
+
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Example:")
+	fmt.Fprintf(os.Stderr, "    %s %s\n", os.Args[0], "ipam list-history --tailnet \"Repellendus eos ad harum qui occaecati.\" --kind \"site_id\" --key \"Id magni harum porro autem veniam unde.\" --since \"1988-09-08T14:10:44Z\" --limit 8394326019436510354")
 }
 
 func ipamListSiteIdsUsage() {

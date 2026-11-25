@@ -46,6 +46,7 @@ space before it is advertised and compares those reservations with live use.
     - [`calc aggregate`](#calc-aggregate)
     - [`calc next-free`](#calc-next-free)
     - [`calc info`](#calc-info)
+    - [`registry history`](#registry-history)
   - [Inputs by position or by flag](#inputs-by-position-or-by-flag)
   - [Preview, approve, and retry](#preview-approve-and-retry)
   - [Registry format](#registry-format)
@@ -72,6 +73,8 @@ help with; this README stays the command and flag reference.
     merge or on a schedule.
   - [Redact output for sharing](./docs/how-to/redact-output-for-sharing.md):
     sanitize a report before it leaves the team.
+  - [Run a SQLite registry](./docs/how-to/run-a-sqlite-registry.md): share one
+    registry between concurrent writers and keep an audit history.
   - [Use tsipam from an MCP client](./docs/how-to/use-from-an-mcp-client.md):
     serve the commands to an agent as tools, over stdio.
   - [Smoke-test a release](./docs/how-to/release-smoke.md): exercise a built
@@ -79,6 +82,8 @@ help with; this README stays the command and flag reference.
 - Reference
   - [Exit codes and error objects](./docs/reference/exit-codes.md): the three
     exit codes, the JSON error object, and every error code.
+  - [Registry backends](./docs/reference/registry-backends.md): choosing
+    between HuJSON files and SQLite, and what each guarantees.
   - [Registry format](./docs/reference/registry-format.md): the
     `<tailnet>.ipam.hujson` shape, metadata fields, and validation rules.
   - [JSON envelope](./docs/reference/json-envelope.md): how the output format
@@ -759,6 +764,24 @@ IPv4 first, exactly as `calc split` does, so
 `10.0.0.0/24`. Shorter 4-in-6-like prefixes cannot be exclusively IPv4-mapped
 and are treated as native IPv6.
 
+#### `registry history`
+
+Lists the audit events of a SQLite registry, newest first. Every reserve,
+allocate, and release that changes something records one event with its value
+before and after. `--kind`, `--key`, and `--since` filter the events, and
+`--limit` caps them (default 100). Human output is tab-separated (time, action,
+kind, key, site, before, after, actor), with `-` for a column that has no value;
+JSON output carries an `events` array.
+
+```bash
+tsipam registry history --registry sqlite://./tsipam.db
+tsipam registry history --kind subnet_pool --since 2026-01-01T00:00:00Z \
+  --registry sqlite://./tsipam.db --format json
+```
+
+A file registry keeps no history here, so the command exits 2 on one: its
+history lives in version control.
+
 ### Inputs by position or by flag
 
 Every required positional argument also has a flag, so a command can be called
@@ -818,6 +841,10 @@ carries a `--ticket`. `--idempotency-key` is different: it is echoed in
 neither stored nor used to replay anything.
 
 ### Registry format
+
+Every registry command also accepts `--registry <url>`, or a URL in
+`TSIPAM_REGISTRY`, to use a SQLite database instead of the files described
+here. See [Registry backends](./docs/reference/registry-backends.md).
 
 The registry is a comment-preserving HuJSON file named
 `<tailnet>.ipam.hujson` under `--registry-dir` (default `.`). The routing/storage

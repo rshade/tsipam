@@ -79,7 +79,7 @@ Crossing one of these is a bug, not a trade-off.
 
 | Data | Source | Owner |
 | --- | --- | --- |
-| Declared intent | `<registry-dir>/<tailnet>.ipam.hujson`, comment-preserving HuJSON (the default), or a SQLite database (`sqlite://<path>`, planned) | `tsipam` (`internal/registry`) |
+| Declared intent | `<registry-dir>/<tailnet>.ipam.hujson`, comment-preserving HuJSON (the default), or a SQLite database (`sqlite://<path>`) | `tsipam` (`internal/registry`) |
 | Live use | Tailscale API device and Service listings, read through `tscli` | The tailnet |
 | Policy membership | The tailnet policy file passed to `check-policy` | The operator |
 | Caller identity and permissions (`serve` only) | `WhoIsForService` and grant app capabilities | The tailnet policy |

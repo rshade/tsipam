@@ -17,6 +17,7 @@ import (
 type Client struct {
 	PlanEndpoint                  goa.Endpoint
 	CheckPolicyEndpoint           goa.Endpoint
+	ListHistoryEndpoint           goa.Endpoint
 	ListSiteIdsEndpoint           goa.Endpoint
 	ReserveSiteIDEndpoint         goa.Endpoint
 	ReleaseSiteIDEndpoint         goa.Endpoint
@@ -33,10 +34,11 @@ type Client struct {
 }
 
 // NewClient initializes a "ipam" service client given the endpoints.
-func NewClient(plan, checkPolicy, listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, allocateSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
+func NewClient(plan, checkPolicy, listHistory, listSiteIds, reserveSiteID, releaseSiteID, listSubnetPools, reserveSubnetPool, allocateSubnetPool, releaseSubnetPool, listServiceAddresses, reserveServiceAddress, releaseServiceAddress, listUDPPorts, reserveUDPPort, releaseUDPPort goa.Endpoint) *Client {
 	return &Client{
 		PlanEndpoint:                  plan,
 		CheckPolicyEndpoint:           checkPolicy,
+		ListHistoryEndpoint:           listHistory,
 		ListSiteIdsEndpoint:           listSiteIds,
 		ReserveSiteIDEndpoint:         reserveSiteID,
 		ReleaseSiteIDEndpoint:         releaseSiteID,
@@ -77,6 +79,20 @@ func (c *Client) CheckPolicy(ctx context.Context, p *CheckPolicyPayload) (res *P
 		return
 	}
 	return ires.(*PolicyComparison), nil
+}
+
+// ListHistory calls the "list_history" endpoint of the "ipam" service.
+// ListHistory may return the following errors:
+//   - "invalid_input" (type *goa.ServiceError): A filter is invalid.
+//   - "unsupported" (type *goa.ServiceError): The selected registry backend keeps no history.
+//   - error: internal error
+func (c *Client) ListHistory(ctx context.Context, p *ListHistoryPayload) (res []*RegistryEvent, err error) {
+	var ires any
+	ires, err = c.ListHistoryEndpoint(ctx, p)
+	if err != nil {
+		return
+	}
+	return ires.([]*RegistryEvent), nil
 }
 
 // ListSiteIds calls the "list_site_ids" endpoint of the "ipam" service.

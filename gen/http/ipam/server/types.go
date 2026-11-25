@@ -138,6 +138,10 @@ type CheckPolicyResponseBody struct {
 	Reserved []*PolicyReservedResponseBody `form:"reserved" json:"reserved" xml:"reserved"`
 }
 
+// ListHistoryResponseBody is the type of the "ipam" service "list_history"
+// endpoint HTTP response body.
+type ListHistoryResponseBody []*RegistryEventResponse
+
 // ListSiteIdsResponseBody is the type of the "ipam" service "list_site_ids"
 // endpoint HTTP response body.
 type ListSiteIdsResponseBody []*SiteIDReservationResponse
@@ -304,6 +308,42 @@ type PlanComparisonFailedResponseBody struct {
 // "check_policy" endpoint HTTP response body for the "policy_check_failed"
 // error.
 type CheckPolicyPolicyCheckFailedResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// ListHistoryInvalidInputResponseBody is the type of the "ipam" service
+// "list_history" endpoint HTTP response body for the "invalid_input" error.
+type ListHistoryInvalidInputResponseBody struct {
+	// Name is the name of this class of errors.
+	Name string `form:"name" json:"name" xml:"name"`
+	// ID is a unique identifier for this particular occurrence of the problem.
+	ID string `form:"id" json:"id" xml:"id"`
+	// Message is a human-readable explanation specific to this occurrence of the
+	// problem.
+	Message string `form:"message" json:"message" xml:"message"`
+	// Is the error temporary?
+	Temporary bool `form:"temporary" json:"temporary" xml:"temporary"`
+	// Is the error a timeout?
+	Timeout bool `form:"timeout" json:"timeout" xml:"timeout"`
+	// Is the error a server-side fault?
+	Fault bool `form:"fault" json:"fault" xml:"fault"`
+}
+
+// ListHistoryUnsupportedResponseBody is the type of the "ipam" service
+// "list_history" endpoint HTTP response body for the "unsupported" error.
+type ListHistoryUnsupportedResponseBody struct {
 	// Name is the name of this class of errors.
 	Name string `form:"name" json:"name" xml:"name"`
 	// ID is a unique identifier for this particular occurrence of the problem.
@@ -635,6 +675,41 @@ type PolicyReservedResponseBody struct {
 	IPSets []string `form:"ipsets" json:"ipsets" xml:"ipsets"`
 }
 
+// RegistryEventResponse is used to define fields on response body types.
+type RegistryEventResponse struct {
+	// RFC 3339 UTC time of the change.
+	At string `form:"at" json:"at" xml:"at"`
+	// Operation that made the change.
+	Action string `form:"action" json:"action" xml:"action"`
+	// Registry map that changed.
+	Kind string `form:"kind" json:"kind" xml:"kind"`
+	// Canonical key of the reservation.
+	Key string `form:"key" json:"key" xml:"key"`
+	// Site that scopes a UDP-port key; absent for other kinds.
+	Site *string `form:"site,omitempty" json:"site,omitempty" xml:"site,omitempty"`
+	// Stored value before the change; absent when the key was not reserved.
+	Before *RegistryEventValueResponse `form:"before,omitempty" json:"before,omitempty" xml:"before,omitempty"`
+	// Stored value after the change; absent when the key was released.
+	After *RegistryEventValueResponse `form:"after,omitempty" json:"after,omitempty" xml:"after,omitempty"`
+	// Authenticated caller that made the change; absent for a local command.
+	Actor *string `form:"actor,omitempty" json:"actor,omitempty" xml:"actor,omitempty"`
+}
+
+// RegistryEventValueResponse is used to define fields on response body types.
+type RegistryEventValueResponse struct {
+	// Site of a site ID or subnet pool, service of an address, or device of a UDP
+	// port.
+	Target string `form:"target" json:"target" xml:"target"`
+	// Operator or team that owns this reservation.
+	Owner *string `form:"owner,omitempty" json:"owner,omitempty" xml:"owner,omitempty"`
+	// Free-text description of why this address space is reserved.
+	Description *string `form:"description,omitempty" json:"description,omitempty" xml:"description,omitempty"`
+	// Tracking ticket or issue reference for this reservation.
+	Ticket *string `form:"ticket,omitempty" json:"ticket,omitempty" xml:"ticket,omitempty"`
+	// RFC 3339 timestamp this reservation's metadata was recorded.
+	ReservedAt *string `form:"reserved_at,omitempty" json:"reserved_at,omitempty" xml:"reserved_at,omitempty"`
+}
+
 // SiteIDReservationResponse is used to define fields on response body types.
 type SiteIDReservationResponse struct {
 	// Canonical site ID: a decimal integer, 0-65535.
@@ -754,6 +829,20 @@ func NewCheckPolicyResponseBody(res *ipam.PolicyComparison) *CheckPolicyResponse
 		}
 	} else {
 		body.Reserved = []*PolicyReservedResponseBody{}
+	}
+	return body
+}
+
+// NewListHistoryResponseBody builds the HTTP response body from the result of
+// the "list_history" endpoint of the "ipam" service.
+func NewListHistoryResponseBody(res []*ipam.RegistryEvent) []*RegistryEventResponse {
+	body := make([]*RegistryEventResponse, len(res))
+	for i, val := range res {
+		if val == nil {
+			body[i] = nil
+			continue
+		}
+		body[i] = marshalIpamRegistryEventToRegistryEventResponse(val)
 	}
 	return body
 }
@@ -945,6 +1034,34 @@ func NewPlanComparisonFailedResponseBody(res *goa.ServiceError) *PlanComparisonF
 // from the result of the "check_policy" endpoint of the "ipam" service.
 func NewCheckPolicyPolicyCheckFailedResponseBody(res *goa.ServiceError) *CheckPolicyPolicyCheckFailedResponseBody {
 	body := &CheckPolicyPolicyCheckFailedResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewListHistoryInvalidInputResponseBody builds the HTTP response body from
+// the result of the "list_history" endpoint of the "ipam" service.
+func NewListHistoryInvalidInputResponseBody(res *goa.ServiceError) *ListHistoryInvalidInputResponseBody {
+	body := &ListHistoryInvalidInputResponseBody{
+		Name:      res.Name,
+		ID:        res.ID,
+		Message:   res.Message,
+		Temporary: res.Temporary,
+		Timeout:   res.Timeout,
+		Fault:     res.Fault,
+	}
+	return body
+}
+
+// NewListHistoryUnsupportedResponseBody builds the HTTP response body from the
+// result of the "list_history" endpoint of the "ipam" service.
+func NewListHistoryUnsupportedResponseBody(res *goa.ServiceError) *ListHistoryUnsupportedResponseBody {
+	body := &ListHistoryUnsupportedResponseBody{
 		Name:      res.Name,
 		ID:        res.ID,
 		Message:   res.Message,
@@ -1183,6 +1300,18 @@ func NewCheckPolicyPayload(body *CheckPolicyRequestBody, tailnet string) *ipam.C
 		Policy: *body.Policy,
 	}
 	v.Tailnet = tailnet
+
+	return v
+}
+
+// NewListHistoryPayload builds a ipam service list_history endpoint payload.
+func NewListHistoryPayload(tailnet string, kind *string, key *string, since *string, limit int) *ipam.ListHistoryPayload {
+	v := &ipam.ListHistoryPayload{}
+	v.Tailnet = tailnet
+	v.Kind = kind
+	v.Key = key
+	v.Since = since
+	v.Limit = limit
 
 	return v
 }

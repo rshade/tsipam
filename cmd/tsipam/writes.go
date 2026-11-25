@@ -21,18 +21,21 @@ type registryCall func(context.Context, *ipamclient.Client) (*outputEnvelope, er
 // runRegistryCall makes call and renders its result. A command whose contract
 // says it writes runs as an audited effect that --dry-run rehearses.
 func (s *commandState) runRegistryCall(
-	cmd *cobra.Command, registryDir string, outputSanitizer *sanitize.Sanitizer, call registryCall,
+	cmd *cobra.Command, outputSanitizer *sanitize.Sanitizer, call registryCall,
 ) error {
+	target, err := s.registryTarget(cmd)
+	if err != nil {
+		return err
+	}
 	var output *outputEnvelope
 	run := func(ctx context.Context) error {
-		return s.registryTarget(registryDir).run(ctx, func(ctx context.Context, client *ipamclient.Client) error {
-			result, err := call(ctx, client)
+		return target.run(ctx, func(ctx context.Context, client *ipamclient.Client) error {
+			result, callErr := call(ctx, client)
 			output = result
-			return err
+			return callErr
 		})
 	}
-	err := s.perform(cmd, run)
-	if err != nil {
+	if err = s.perform(cmd, run); err != nil {
 		return err
 	}
 	return emitOutput(cmd, output, outputSanitizer)
@@ -54,7 +57,8 @@ func (s *commandState) perform(cmd *cobra.Command, run func(context.Context) err
 
 // approve returns nil when cmd may remove a reservation: the caller passed
 // --yes, the run is a rehearsal, or a person at a terminal agrees. normalize
-// validates the key in args first, so a typo is not hidden behind the question.
+// validates the key in args first, and the registry selection is resolved, so a
+// typo in either is not hidden behind the question.
 func (s *commandState) approve(
 	cmd *cobra.Command, args []string, normalize func(string) (string, error),
 ) error {
@@ -63,6 +67,9 @@ func (s *commandState) approve(
 		return nil
 	}
 	if _, err := normalize(args[0]); err != nil {
+		return err
+	}
+	if _, err := s.registryTarget(cmd); err != nil {
 		return err
 	}
 	subject := commandName(cmd) + " removes a reservation"

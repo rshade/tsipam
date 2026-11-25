@@ -36,7 +36,7 @@ func newCalcCommand(state *commandState, listDevices devicesListFunc) *cobra.Com
 }
 
 func newCalcNextFreeCommand(state *commandState, listDevices devicesListFunc) *cobra.Command {
-	var registryDir, tailnetFlag string
+	var tailnetFlag string
 	var size, count int
 	var all bool
 	var bound inputs
@@ -52,7 +52,7 @@ func newCalcNextFreeCommand(state *commandState, listDevices devicesListFunc) *c
 				return err
 			}
 			return executeCalcNextFree(
-				cmd, state, listDevices, args[0], registryDir, tailnetFlag, size, count, all,
+				cmd, state, listDevices, args[0], tailnetFlag, size, count, all,
 				cmd.Flags().Changed("count"),
 			)
 		},
@@ -62,7 +62,7 @@ func newCalcNextFreeCommand(state *commandState, listDevices devicesListFunc) *c
 	cmd.Flags().IntVar(&size, "size", 0, "target prefix length (number of bits in each suggested child subnet)")
 	cmd.Flags().IntVarP(&count, "count", "n", 1, "number of suggestions to return")
 	cmd.Flags().BoolVar(&all, "all", false, "return every available child subnet")
-	addRegistryFlags(cmd, &registryDir, &tailnetFlag)
+	addRegistryFlags(cmd, &tailnetFlag)
 	_ = cmd.MarkFlagRequired("size")
 
 	return cmd
@@ -72,7 +72,7 @@ func executeCalcNextFree(
 	cmd *cobra.Command,
 	state *commandState,
 	listDevices devicesListFunc,
-	poolArg, registryDir, tailnetFlag string,
+	poolArg, tailnetFlag string,
 	size, count int,
 	all, countChanged bool,
 ) error {
@@ -95,8 +95,12 @@ func executeCalcNextFree(
 	// register, so register the canonical pool before rendering either form.
 	registerSweepValue(outputSanitizer, kindCIDR, pool.String())
 
+	target, err := state.registryTarget(cmd)
+	if err != nil {
+		return err
+	}
 	var result *outputEnvelope
-	err = state.registryTarget(registryDir).run(cmd.Context(),
+	err = target.run(cmd.Context(),
 		func(ctx context.Context, client *ipamclient.Client) error {
 			output, outputErr := nextFreeOutput(ctx, client, tailnet, listDevices, state.logger, pool, size, count, all)
 			if outputErr != nil {

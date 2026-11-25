@@ -1,6 +1,7 @@
 package hujsonstore
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"strings"
@@ -24,6 +25,30 @@ func RawEntries(path string) (map[string]string, map[string]string, map[string]s
 	owners = append(owners, subnetOwners...)
 	owners = append(owners, serviceOwners...)
 	return siteIDs, subnetPools, serviceAddresses, owners
+}
+
+// IdentityValues returns the raw identity spellings in tailnet's file. The
+// file may be invalid: the loader error about to be rendered echoes them.
+func (s *Store) IdentityValues(_ context.Context, tailnet string, _ bool) registry.Identities {
+	path := Path(s.dir, tailnet)
+	siteIDs, subnetPools, serviceAddresses, owners := RawEntries(path)
+	out := registry.Identities{Owners: owners}
+	for _, site := range siteIDs {
+		out.Sites = append(out.Sites, site)
+	}
+	for cidr, site := range subnetPools {
+		out.CIDRs = append(out.CIDRs, cidr)
+		out.Sites = append(out.Sites, site)
+	}
+	for address, service := range serviceAddresses {
+		out.Addresses = append(out.Addresses, address)
+		out.Services = append(out.Services, service)
+	}
+	for _, entry := range RawUDPPorts(path) {
+		out.Sites = append(out.Sites, entry.Site)
+		out.Devices = append(out.Devices, entry.Device)
+	}
+	return out
 }
 
 // RawUDPPorts returns best-effort site, port, and device spellings from path.
