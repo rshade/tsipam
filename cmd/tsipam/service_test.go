@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	goa "goa.design/goa/v3/pkg"
-
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
 
 	"github.com/rshade/tsipam/internal/registry"
@@ -190,9 +188,8 @@ func TestServiceReserveRejectsInvalidAddressesWithParseCleanStdout(t *testing.T)
 			if err == nil {
 				t.Fatalf("reserve %q: error = nil, want invalid_input", address)
 			}
-			var serviceError *goa.ServiceError
-			if !errors.As(err, &serviceError) || serviceError.Name != "invalid_input" {
-				t.Fatalf("reserve %q error = %v, want invalid_input ServiceError", address, err)
+			if failureCode(err) != codeValidationError {
+				t.Fatalf("reserve %q error = %v, want %s", address, err, codeValidationError)
 			}
 			if exitCodeFor(err) != exitUsage {
 				t.Errorf("exitCodeFor(%q error) = %d, want %d", address, exitCodeFor(err), exitUsage)
@@ -298,9 +295,8 @@ func TestServiceCollisionIsRefusalWithEmptyStdout(t *testing.T) {
 		t.Fatalf("seed reserve: %v", err)
 	}
 	stdout, _, err := runService(t, dir, "reserve", "100.100.100.8/32", "metrics")
-	var serviceError *goa.ServiceError
-	if !errors.As(err, &serviceError) || serviceError.Name != serviceErrorCollision {
-		t.Fatalf("collision error = %v, want named collision ServiceError", err)
+	if err == nil || failureCode(err) != codeRegistryCollision {
+		t.Fatalf("collision error = %v, want %s", err, codeRegistryCollision)
 	}
 	if exitCodeFor(err) != exitFailure {
 		t.Errorf("exitCodeFor(collision) = %d, want %d", exitCodeFor(err), exitFailure)
@@ -612,7 +608,7 @@ func testServiceCanonicalT1ReleaseArg(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	code := runCLI(context.Background(), []string{
-		commandService, "release", "100.100.100.9/32",
+		commandService, "release", "100.100.100.9/32", "--yes",
 		"--registry-dir", dir, "--sanitize", string(sanitize.Identity),
 	}, fixedKeyGetenv, &stdout, &stderr, nil)
 	if code != exitUsage {
@@ -674,7 +670,7 @@ func testServiceCanonicalControlBareSpelling(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	code := runCLI(context.Background(), []string{
-		commandService, "release", "100.100.100.9",
+		commandService, "release", "100.100.100.9", "--yes",
 		"--registry-dir", dir, "--sanitize", string(sanitize.Identity),
 	}, fixedKeyGetenv, &stdout, &stderr, nil)
 	if code != exitUsage {

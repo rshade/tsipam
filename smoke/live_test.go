@@ -351,7 +351,7 @@ func TestLiveMatchingRules(t *testing.T) {
 		t.Errorf("after reserving %s: states = %v, want it matched and %s absorbed", supernet, states, route)
 	}
 
-	expect(t, run(t, nil, reg.args("subnet", "release", supernet.String())...), exitOK)
+	expect(t, run(t, nil, reg.args("subnet", "release", supernet.String(), "--yes")...), exitOK)
 	expect(t, run(t, nil, reg.args("subnet", "reserve", narrower.String(), "half")...), exitOK)
 	states := poolStates(t, env, reg)
 	if states[route.String()] != "unreserved_but_live" || states[narrower.String()] != "reserved_but_unadvertised" {

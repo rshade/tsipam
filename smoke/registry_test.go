@@ -106,7 +106,7 @@ func assertListsOneEntry(t *testing.T, reg registry, kind allocationKind) {
 // a no-op, and that an empty list is still a JSON array.
 func assertReleaseRoundTrip(t *testing.T, reg registry, kind allocationKind) {
 	t.Helper()
-	release := append([]string{kind.group, "release"}, kind.release...)
+	release := append([]string{kind.group, "release", "--yes"}, kind.release...)
 	expect(t, run(t, nil, reg.args(release...)...), exitOK)
 	res := run(t, nil, reg.args(append(release, flagFormat, formatJSON)...)...)
 	expect(t, res, exitOK)
@@ -178,7 +178,7 @@ func TestRegistryFile(t *testing.T) {
 		expect(t, run(t, nil, reg.args("subnet", "reserve", "10.1.0.0/24", "a")...), exitOK)
 		reg.write(t, strings.Replace(reg.contents(t), "{", "{\n\t// operator note: keep me\n", 1))
 		expect(t, run(t, nil, reg.args("subnet", "reserve", "10.2.0.0/24", "b")...), exitOK)
-		expect(t, run(t, nil, reg.args("subnet", "release", "10.2.0.0/24")...), exitOK)
+		expect(t, run(t, nil, reg.args("subnet", "release", "10.2.0.0/24", "--yes")...), exitOK)
 		containsAll(t, reg.contents(t), "operator note: keep me", "10.1.0.0/24")
 	})
 	t.Run("corrupt registry exits 2 with the decode reason", func(t *testing.T) {
@@ -194,7 +194,7 @@ func TestRegistryFile(t *testing.T) {
 		t.Parallel()
 		reg := newRegistry(t)
 		for _, command := range [][]string{
-			{"subnet", "list"}, {"site-id", "release", "1"}, {"calc", "aggregate", "--from-registry"},
+			{"subnet", "list"}, {"site-id", "release", "1", "--yes"}, {"calc", "aggregate", "--from-registry"},
 		} {
 			res := run(t, nil, reg.args(command...)...)
 			expect(t, res, exitInvalid)
@@ -203,5 +203,54 @@ func TestRegistryFile(t *testing.T) {
 		if reg.exists() {
 			t.Error("a read-only command created the registry")
 		}
+	})
+}
+
+// TestWriteSafety covers the README's preview, approval, and key examples.
+func TestWriteSafety(t *testing.T) {
+	t.Parallel()
+	t.Run("dry run writes nothing", func(t *testing.T) {
+		t.Parallel()
+		reg := newRegistry(t)
+		res := run(t, nil, reg.args("site-id", "reserve", "1", "hq-vpc", "--dry-run")...)
+		expect(t, res, exitOK)
+		if want := "dry run: would reserve site ID 1 for \"hq-vpc\"\n"; res.stdout != want {
+			t.Errorf("stdout = %q, want %q", res.stdout, want)
+		}
+		if reg.exists() {
+			t.Error("the rehearsal created the registry")
+		}
+	})
+	t.Run("release needs approval", func(t *testing.T) {
+		t.Parallel()
+		reg := newRegistry(t)
+		expect(t, run(t, nil, reg.args("site-id", "reserve", "1", "hq-vpc")...), exitOK)
+		before := reg.contents(t)
+		for _, extra := range [][]string{nil, {flagFormat, formatJSON}} {
+			res := run(t, nil, reg.args(append([]string{"site-id", "release", "1"}, extra...)...)...)
+			expect(t, res, exitInvalid)
+			if got := decodeFailure(t, res.stderr); got.ErrorCode != "confirmation_required" || res.stdout != "" {
+				t.Errorf("failure = %+v, stdout = %q", got, res.stdout)
+			}
+			containsNone(t, res.stderr, "Continue?")
+		}
+		expect(t, run(t, nil, reg.args("site-id", "release", "1", "--dry-run")...), exitOK)
+		if reg.contents(t) != before {
+			t.Error("an unapproved or rehearsed release changed the registry")
+		}
+		res := run(t, nil, reg.args("site-id", "release", "1", "--yes")...)
+		expect(t, res, exitOK)
+		if res.stdout != "released site ID 1\n" {
+			t.Errorf("stdout = %q", res.stdout)
+		}
+	})
+	t.Run("idempotency key is echoed, not stored", func(t *testing.T) {
+		t.Parallel()
+		reg := newRegistry(t)
+		res := run(t, nil, reg.args(
+			"site-id", "reserve", "1", "hq-vpc", "--idempotency-key", "job-42", flagFormat, formatJSON)...)
+		expect(t, res, exitOK)
+		containsAll(t, res.stdout, `"idempotency_key":"job-42"`)
+		containsNone(t, reg.contents(t), "job-42")
 	})
 }

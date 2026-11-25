@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rshade/ax-go"
 	"github.com/spf13/cobra"
 
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
@@ -22,17 +23,15 @@ const (
 // closing over the raw API result means a builder invoked after
 // sanitizeOutput sees the already-redacted placeholder.
 func siteIDReserveMessage(o *outputEnvelope) string {
-	if o.Changed != nil && *o.Changed {
-		return fmt.Sprintf("reserved site ID %s for %q", o.ID, o.Site)
-	}
-	return fmt.Sprintf("site ID %s already reserved for %q", o.ID, o.Site)
+	return outcomeMessage(o, "reserved", "reserve",
+		fmt.Sprintf("site ID %s for %q", o.ID, o.Site),
+		fmt.Sprintf("site ID %s already reserved for %q", o.ID, o.Site))
 }
 
 func siteIDReleaseMessage(o *outputEnvelope) string {
-	if o.Changed != nil && *o.Changed {
-		return fmt.Sprintf("released site ID %s", o.ID)
-	}
-	return fmt.Sprintf("site ID %s was not reserved", o.ID)
+	return outcomeMessage(o, "released", "release",
+		fmt.Sprintf("site ID %s", o.ID),
+		fmt.Sprintf("site ID %s was not reserved", o.ID))
 }
 
 // resolveTailnetWithEnv implements the {tailnet} routing/storage key's
@@ -84,7 +83,7 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			res, err := client.ReserveSiteID()(ctx, &ipam.ReserveSiteIDPayload{
-				Tailnet: tailnet, ID: args[0], Site: args[1],
+				DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet, ID: args[0], Site: args[1],
 				Owner: owner, Description: description, Ticket: ticket, ReservedAt: reservedAt,
 			})
 			if err != nil {
@@ -110,12 +109,13 @@ func newSiteIDReserveCommand(state *commandState) *cobra.Command {
 	return cmd
 }
 
+//nolint:dupl // mirrors newSubnetReleaseCommand (subnet.go) by design; unifying needs a generic beyond this file's scope
 func newSiteIDReleaseCommand(state *commandState) *cobra.Command {
 	return newSiteIDLeafCommand(
 		state, "release <id>", "Release a reserved 4via6 site ID.", []inputSpec{idInput()}, 0, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ReleaseSiteID()(
-				ctx, &ipam.ReleaseSiteIDPayload{Tailnet: tailnet, ID: args[0]},
+				ctx, &ipam.ReleaseSiteIDPayload{DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet, ID: args[0]},
 			)
 			if err != nil {
 				return nil, err
@@ -238,16 +238,13 @@ func newSiteIDLeafCommand(
 			if metadataFlags != nil && metadataFlags.owner != "" {
 				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)
 			}
-			return state.registryTarget(registryDir).run(
-				cmd.Context(),
-				func(ctx context.Context, client *ipamclient.Client) error {
-					output, callErr := call(ctx, client, args, tailnet)
-					if callErr != nil {
-						return callErr
-					}
-					return emitOutput(cmd, output, outputSanitizer)
-				},
-			)
+			if err = state.approve(cmd, args, registry.NormalizeSiteID); err != nil {
+				return err
+			}
+			return state.runRegistryCall(cmd, registryDir, outputSanitizer,
+				func(ctx context.Context, client *ipamclient.Client) (*outputEnvelope, error) {
+					return call(ctx, client, args, tailnet)
+				})
 		},
 	}
 	bound = bindInputs(cmd, specs...)

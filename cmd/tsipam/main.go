@@ -72,6 +72,8 @@ type commandState struct {
 	argv []string
 	// stdout is the run's own stdout, for the root command.
 	stdout io.Writer
+	// stdinIsTTY is true when a person can answer a prompt.
+	stdinIsTTY bool
 }
 
 // reset drops what one command run leaves behind. An MCP server runs many on
@@ -676,9 +678,6 @@ func refuseEmptyFormat(cmd *cobra.Command) error {
 // validateRequiredFlags repeats Cobra's own flag checks, which run after every
 // hook, so their failures reach the error boundary. Cobra's then pass.
 func validateRequiredFlags(cmd *cobra.Command) error {
-	if err := refuseDryRun(cmd); err != nil {
-		return err
-	}
 	if err := cmd.ValidateRequiredFlags(); err != nil {
 		return invalidInput(err)
 	}

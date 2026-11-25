@@ -19,35 +19,44 @@ type steadyResult struct{}
 // leafContract is what __schema publishes about a leaf command beyond its
 // flags.
 type leafContract struct {
+	// class is the command's side effect. It also decides whether the command
+	// runs as a rehearsable write and whether it needs approval.
+	class ax.Capability
 	// stamps is true when the command can stamp reserved_at.
 	stamps bool
 }
+
+func (c leafContract) writes() bool { return c.class != "" && c.class != ax.CapabilityReadOnly }
+
+func (c leafContract) removes() bool { return c.class == ax.CapabilityDelete }
+
+func contractFor(cmd *cobra.Command) leafContract { return leafContracts()[commandName(cmd)] }
 
 // leafContracts holds every leaf command's contract, keyed by its path without
 // the tool name. A leaf command missing here fails TestEveryLeafHasAContract.
 func leafContracts() map[string]leafContract {
 	return map[string]leafContract{
-		commandDevicesList:    {},
-		commandSiteIDList:     {},
-		commandSiteIDReserve:  {stamps: true},
-		commandSiteIDRelease:  {},
-		commandSubnetList:     {},
-		commandSubnetReserve:  {stamps: true},
-		commandSubnetAllocate: {stamps: true},
-		commandSubnetRelease:  {},
-		commandServiceList:    {},
-		commandServiceReserve: {stamps: true},
-		commandServiceRelease: {},
-		commandPortList:       {},
-		commandPortReserve:    {},
-		commandPortRelease:    {},
-		commandCalcSplit:      {},
-		commandCalcInfo:       {},
-		commandCalcAggregate:  {},
-		commandCalcNextFree:   {},
-		commandPlan:           {},
-		commandCheck:          {},
-		commandCheckPolicy:    {},
+		commandDevicesList:    {class: ax.CapabilityReadOnly},
+		commandSiteIDList:     {class: ax.CapabilityReadOnly},
+		commandSiteIDReserve:  {class: ax.CapabilityMutate, stamps: true},
+		commandSiteIDRelease:  {class: ax.CapabilityDelete},
+		commandSubnetList:     {class: ax.CapabilityReadOnly},
+		commandSubnetReserve:  {class: ax.CapabilityMutate, stamps: true},
+		commandSubnetAllocate: {class: ax.CapabilityCreate, stamps: true},
+		commandSubnetRelease:  {class: ax.CapabilityDelete},
+		commandServiceList:    {class: ax.CapabilityReadOnly},
+		commandServiceReserve: {class: ax.CapabilityMutate, stamps: true},
+		commandServiceRelease: {class: ax.CapabilityDelete},
+		commandPortList:       {class: ax.CapabilityReadOnly},
+		commandPortReserve:    {class: ax.CapabilityMutate},
+		commandPortRelease:    {class: ax.CapabilityDelete},
+		commandCalcSplit:      {class: ax.CapabilityReadOnly},
+		commandCalcInfo:       {class: ax.CapabilityReadOnly},
+		commandCalcAggregate:  {class: ax.CapabilityReadOnly},
+		commandCalcNextFree:   {class: ax.CapabilityReadOnly},
+		commandPlan:           {class: ax.CapabilityReadOnly},
+		commandCheck:          {class: ax.CapabilityReadOnly},
+		commandCheckPolicy:    {class: ax.CapabilityReadOnly},
 	}
 }
 
@@ -59,6 +68,7 @@ func declareContracts(root *cobra.Command) {
 		if !ok {
 			return
 		}
+		mustDeclare(ax.DeclareCapability(cmd, contract.class, ""))
 		if contract.stamps {
 			ax.WithNonDeterministicFields[stampedResult](cmd)
 			return

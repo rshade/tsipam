@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rshade/ax-go"
 	"github.com/spf13/cobra"
 
 	ipamclient "github.com/rshade/tsipam/gen/http/ipam/client"
@@ -15,17 +16,15 @@ import (
 // from the output envelope after sanitization, keeping message and structured
 // fields synchronized.
 func serviceReserveMessage(output *outputEnvelope) string {
-	if output.Changed != nil && *output.Changed {
-		return fmt.Sprintf("reserved service address %s for %q", output.Address, output.Service)
-	}
-	return fmt.Sprintf("service address %s already reserved for %q", output.Address, output.Service)
+	return outcomeMessage(output, "reserved", "reserve",
+		fmt.Sprintf("service address %s for %q", output.Address, output.Service),
+		fmt.Sprintf("service address %s already reserved for %q", output.Address, output.Service))
 }
 
 func serviceReleaseMessage(output *outputEnvelope) string {
-	if output.Changed != nil && *output.Changed {
-		return fmt.Sprintf("released service address %s", output.Address)
-	}
-	return fmt.Sprintf("service address %s was not reserved", output.Address)
+	return outcomeMessage(output, "released", "release",
+		fmt.Sprintf("service address %s", output.Address),
+		fmt.Sprintf("service address %s was not reserved", output.Address))
 }
 
 // newServiceCommand groups the per-service IPv4 address reservations. Every
@@ -51,7 +50,7 @@ func newServiceReserveCommand(state *commandState) *cobra.Command {
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			response, err := client.ReserveServiceAddress()(ctx, &ipam.ReserveServiceAddressPayload{
-				Tailnet: tailnet, Address: args[0], Service: args[1],
+				DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet, Address: args[0], Service: args[1],
 				Owner: owner, Description: description, Ticket: ticket, ReservedAt: reservedAt,
 			})
 			if err != nil {
@@ -81,7 +80,7 @@ func newServiceReleaseCommand(state *commandState) *cobra.Command {
 		state, "release <address>", "Release a reserved service address.", []inputSpec{addressInput()}, 0, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			response, err := client.ReleaseServiceAddress()(ctx, &ipam.ReleaseServiceAddressPayload{
-				Tailnet: tailnet, Address: args[0],
+				DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet, Address: args[0],
 			})
 			if err != nil {
 				return nil, err
@@ -180,16 +179,13 @@ func newServiceLeafCommand(
 			if metadataFlags != nil && metadataFlags.owner != "" {
 				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)
 			}
-			return state.registryTarget(registryDir).run(
-				cmd.Context(),
-				func(ctx context.Context, client *ipamclient.Client) error {
-					output, callErr := call(ctx, client, args, tailnet)
-					if callErr != nil {
-						return callErr
-					}
-					return emitOutput(cmd, output, outputSanitizer)
-				},
-			)
+			if err = state.approve(cmd, args, registry.NormalizeServiceAddress); err != nil {
+				return err
+			}
+			return state.runRegistryCall(cmd, registryDir, outputSanitizer,
+				func(ctx context.Context, client *ipamclient.Client) (*outputEnvelope, error) {
+					return call(ctx, client, args, tailnet)
+				})
 		},
 	}
 	bound = bindInputs(cmd, specs...)

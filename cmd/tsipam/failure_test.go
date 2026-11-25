@@ -2,9 +2,29 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/rshade/ax-go"
 )
+
+// exitCodeFor is the exit code a command error leads to, whether or not the
+// error boundary has converted it.
+func exitCodeFor(err error) int {
+	if converted, ok := errors.AsType[*ax.Error](err); ok {
+		return converted.ExitCode()
+	}
+	return classify(err).exitCode()
+}
+
+// failureCode is the error code a command error leads to.
+func failureCode(err error) string {
+	if converted, ok := errors.AsType[*ax.Error](err); ok {
+		return converted.ErrorCode
+	}
+	return classify(err).code
+}
 
 // errorObject is the JSON failure document, as a consumer reads it.
 type errorObject struct {

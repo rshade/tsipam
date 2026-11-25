@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"io"
 	"os"
 
@@ -45,7 +44,7 @@ func runCLI(
 }
 
 func (inv invocation) run(ctx context.Context) int {
-	state := &commandState{}
+	state := &commandState{stdinIsTTY: inv.stdinIsTTY}
 	root := inv.commandTree(state)
 	state.argv = cliflags.Normalize(root, completeArgs(inv.args))
 	root.SetArgs(state.argv)
@@ -177,15 +176,6 @@ func (s *commandState) restoreStdout(cmd *cobra.Command) {
 		return
 	}
 	cmd.SetOut(s.stdout)
-}
-
-// refuseDryRun keeps --dry-run from looking honored before the commands that
-// write can rehearse.
-func refuseDryRun(cmd *cobra.Command) error {
-	if dryRun, err := cmd.Flags().GetBool("dry-run"); err == nil && dryRun {
-		return invalidInput(errors.New("--dry-run is not supported yet"))
-	}
-	return nil
 }
 
 // stdoutWriter marks a failed write to stdout, whichever command made it.
