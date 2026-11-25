@@ -41,39 +41,39 @@
 
 ## 4. Runtime, error boundary, and logging
 
-- [ ] 4.1 Add `github.com/rshade/ax-go v0.10.0`, imported by `cmd/tsipam`, and
+- [x] 4.1 Add `github.com/rshade/ax-go v0.10.0`, imported by `cmd/tsipam`, and
       a license exception file for `github.com/segmentio/asm` (adjusting the
       `license-check` comment); verify `go mod tidy` leaves no diff,
       `go mod verify` passes, and `mise run license-check govulncheck` and
       `scripts/notice.sh` succeed
-- [ ] 4.2 Add an import test that allows `ax-go` only in `cmd/tsipam` and
+- [x] 4.2 Add an import test that allows `ax-go` only in `cmd/tsipam` and
       `axtest` only in tests; verify it fails when an `internal/` package
       imports `ax-go`
-- [ ] 4.3 Add `toAxError` and the typed `output_failed`, exhaustion,
+- [x] 4.3 Add `toAxError` and the typed `output_failed`, exhaustion,
       credential, and collection errors, converting `internal/devices` errors
       in `devices.go` and `target.go`; verify the boundary import test still
       passes with no new entry, and a table test of every row in D4 for code,
       exit status, `actionable_fix`, `retryable`, and sanitized message
-- [ ] 4.4 Rewrite `runCLI` per D3, except `mcp-server` (8.2), with the
+- [x] 4.4 Rewrite `runCLI` per D3, except `mcp-server` (8.2), with the
       tree-walk boundary, required-flag validation in `PersistentPreRunE`, and
       state reset, and regenerate `schema.golden.json`; verify its diff adds
       only the four root flags and `__schema`, and a test that drives every
       command through an unknown flag, extra argument, and
       missing input and finds no `internal_error` and no exit 1, 3, or 4
-- [ ] 4.5 Sanitize failures raised before the command body; verify new
+- [x] 4.5 Sanitize failures raised before the command body; verify new
       `error_sanitize_test.go` cases for stray arguments, unknown commands, and
       flag values under `TAILSCALE_SANITIZE=identity`, and that an
       `AX_OTEL_DEBUG=1` dump at that level holds no site, service, CIDR, owner,
       path, or tailnet value
-- [ ] 4.6 Replace the slog logger with an `ax.NewLogger` adapter for
+- [x] 4.6 Replace the slog logger with an `ax.NewLogger` adapter for
       `diagnostics.Logger`, flushed on exit; verify the existing verbose-event
       tests pass on decoded JSON lines and default runs leave stderr empty
-- [ ] 4.7 Hide the OTLP endpoint (D10) and restore stdout under `--strict`
+- [x] 4.7 Hide the OTLP endpoint (D10) and restore stdout under `--strict`
       (D11); verify a listener receives nothing, and drift and full-device
       tests pass with and without `--strict`
-- [ ] 4.8 Resolve the version per D12; verify tests for injected, module,
+- [x] 4.8 Resolve the version per D12; verify tests for injected, module,
       revision-only, and unstamped builds
-- [ ] 4.9 Update existing stderr assertions to decoded error objects and
+- [x] 4.9 Update existing stderr assertions to decoded error objects and
       rewrite `docs/reference/exit-codes.md` with the code table; verify
       `mise run test lint-md` passes
 

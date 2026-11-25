@@ -78,7 +78,7 @@ func normalizeDeviceTag(tag string) (string, error) {
 		tag = "tag:" + tag
 	}
 	if tag == "tag:" {
-		return "", errors.New("tag name is empty")
+		return "", invalidInput(errors.New("tag name is empty"))
 	}
 	return tag, nil
 }
@@ -102,7 +102,7 @@ func collectDevices(
 ) ([]deviceRecord, error) {
 	collected, err := devices.List(ctx, getenv, logger)
 	if err != nil {
-		return nil, err
+		return nil, describeCollection(err)
 	}
 	records := make([]deviceRecord, len(collected))
 	for index, device := range collected {
@@ -120,4 +120,16 @@ func collectDevices(
 		}
 	}
 	return records, nil
+}
+
+// describeCollection turns a collector's error into the one the error boundary
+// classifies, so only this file and target.go know the collector's types.
+func describeCollection(err error) error {
+	if credentials, ok := errors.AsType[*devices.CredentialsError](err); ok {
+		return &credentialsError{err: credentials}
+	}
+	if collection, ok := errors.AsType[*devices.CollectionError](err); ok {
+		return &collectionError{err: collection, retryable: collection.Timeout || collection.Temporary}
+	}
+	return err
 }

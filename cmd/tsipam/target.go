@@ -53,3 +53,12 @@ func liveCollector(getenv func(string) string) liveSnapshotFunc {
 		return devices.CollectSnapshot(ctx, sourceEnv, logger)
 	}
 }
+
+// checkLiveCredentials reports, without contacting anything, whether a live
+// read can be attempted.
+func checkLiveCredentials(getenv func(string) string) error {
+	if err := devices.CheckCredentials(getenv); err != nil {
+		return &credentialsError{err: err}
+	}
+	return nil
+}

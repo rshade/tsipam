@@ -130,10 +130,11 @@ fi
 '''
 
 # go-licenses cannot classify a module that ships no license file, such as
-# jaxxstorm/vers (a tscli dependency, Apache-2.0 per its README). Each one is
-# listed as scripts/license-exceptions/<module path>.txt, which also supplies the
-# text scripts/notice.sh ships for it; delete the file once upstream adds a
-# license.
+# jaxxstorm/vers (a tscli dependency, Apache-2.0 per its README), or one whose
+# license it does not know, such as segmentio/asm (MIT-0). Each one is listed as
+# scripts/license-exceptions/<module path>.txt. For a module with no license file
+# it also supplies the text scripts/notice.sh ships; delete the file once upstream
+# adds a license or go-licenses learns it.
 [tasks.license-check]
 description = "Fail on a dependency outside the license allowlist"
 shell = "bash -euo pipefail -c"

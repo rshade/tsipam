@@ -309,8 +309,7 @@ func assertSanitizedDevicesFormat(
 				format, leaked, stdout.String(), stderr.String())
 		}
 	}
-	if !strings.Contains(stderr.String(), "level=DEBUG") ||
-		!strings.Contains(stderr.String(), "device fixture collected") {
+	if !hasLogEvent(logEvents(t, stderr.String()), "debug", "device fixture collected") {
 		t.Errorf("verbose stderr = %q, want structured debug collection detail", stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "overrides --sanitize=off") {
@@ -349,7 +348,7 @@ func TestSiteIDVerboseRegistryDiagnosticsStayOffJSONStdout(t *testing.T) {
 		"registry lock acquired",
 		"registry created",
 	} {
-		if !strings.Contains(stderr, "level=DEBUG") || !strings.Contains(stderr, event) {
+		if !hasLogEvent(logEvents(t, stderr), "debug", event) {
 			t.Errorf("verbose stderr = %q, want structured event %q", stderr, event)
 		}
 		if strings.Contains(stdout, event) {

@@ -55,9 +55,14 @@ func executePlanning(
 	}
 	registerSweepValue(outputSanitizer, kindTailnet, liveTailnet)
 	if liveTailnet == "" {
-		return errors.New("TAILSCALE_TAILNET is required")
+		return &credentialsError{err: errors.New("TAILSCALE_TAILNET is required")}
 	}
 	if collect == nil {
+		// Collection runs behind the loopback, which keeps no Go types, so a
+		// missing credential is reported before the call.
+		if err = checkLiveCredentials(state.getenv); err != nil {
+			return err
+		}
 		collect = liveCollector(state.getenv)
 	}
 	target := state.registryTarget(registryDir)
@@ -83,7 +88,7 @@ func executePlanning(
 		return err
 	}
 	if cmd.Name() == commandCheck && report.DriftCount > 0 {
-		return errRegistryDrift
+		return &driftError{sentinel: errRegistryDrift, count: report.DriftCount}
 	}
 	return nil
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"maps"
 	"net/http"
@@ -117,6 +116,9 @@ func newDevicesAPIServer(t *testing.T) *httptest.Server {
 			http.Error(writer, "unexpected request path", http.StatusNotFound)
 			t.Errorf("request path = %q, want one of the configured device-list paths", request.URL.Path)
 			return
+		}
+		if request.Header.Get("Traceparent") != "" {
+			t.Errorf("request to %s carries a trace header", request.URL.Path)
 		}
 		if request.Method != http.MethodGet {
 			http.Error(writer, "unexpected request method", http.StatusMethodNotAllowed)
@@ -284,9 +286,11 @@ func testDevicesCredentialValidation(t *testing.T) {
 			t.Parallel()
 			code, stdout, stderr := executeDevicesList(devicesEnv(testCase.env))
 			assertUsageFailure(t, code, stdout)
-			wantStderr := fmt.Sprintf("%s: %s\n", toolName, testCase.wantErr)
-			if stderr != wantStderr {
-				t.Errorf("stderr = %q, want %q", stderr, wantStderr)
+			failure := decodeFailure(t, stderr)
+			if failure.ErrorCode != codeCredentialsMissing || failure.Message != testCase.wantErr ||
+				failure.ActionableFix == "" {
+				t.Errorf("failure = %+v, want %s with message %q and a fix",
+					failure, codeCredentialsMissing, testCase.wantErr)
 			}
 		})
 	}
@@ -299,6 +303,7 @@ func testDevicesSuccessfulRoundTrip(t *testing.T) {
 		code, stdout, stderr := executeDevicesList(devicesEnv(map[string]string{
 			"TAILSCALE_TAILNET": "success.example.com",
 			"TAILSCALE_API_KEY": "success-key",
+			"TRACEPARENT":       testTraceParent,
 		}))
 		want := "router-1\t[100.64.0.1 fd7a:115c:a1e0::1]\troutes=[10.0.0.0/24 10.1.0.0/24]\t" +
 			"enabled=[10.0.0.0/24]\tpending=[10.1.0.0/24]\ttags=[tag:subnet]\t" +

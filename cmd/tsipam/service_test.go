@@ -299,7 +299,7 @@ func TestServiceCollisionIsRefusalWithEmptyStdout(t *testing.T) {
 	}
 	stdout, _, err := runService(t, dir, "reserve", "100.100.100.8/32", "metrics")
 	var serviceError *goa.ServiceError
-	if !errors.As(err, &serviceError) || serviceError.Name != collisionErrorName {
+	if !errors.As(err, &serviceError) || serviceError.Name != serviceErrorCollision {
 		t.Fatalf("collision error = %v, want named collision ServiceError", err)
 	}
 	if exitCodeFor(err) != exitFailure {

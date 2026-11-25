@@ -107,7 +107,7 @@ func executeCalcNextFree(
 	// returns before anything reaches stdout, so the message lands on
 	// stderr alone and downstream pipe consumers see empty input.
 	if result.Status == statusExhausted {
-		return errors.New(result.Message)
+		return &exhaustedError{message: result.Message}
 	}
 	return emitOutput(cmd.OutOrStdout(), state.format, result, outputSanitizer)
 }
@@ -115,7 +115,7 @@ func executeCalcNextFree(
 func nextFreePool(arg string) (netip.Prefix, error) {
 	pool, err := netip.ParsePrefix(arg)
 	if err != nil {
-		return netip.Prefix{}, fmt.Errorf("invalid pool CIDR %q: %w", arg, err)
+		return netip.Prefix{}, invalidInput(fmt.Errorf("invalid pool CIDR %q: %w", arg, err))
 	}
 	if normalized, ok := ipcalc.Unmap4In6(pool); ok {
 		pool = normalized
@@ -130,15 +130,15 @@ func validateNextFreeOptions(
 	listDevices devicesListFunc,
 ) error {
 	if size < pool.Bits() || size > pool.Addr().BitLen() {
-		return fmt.Errorf(
+		return invalidInput(fmt.Errorf(
 			"target prefix length /%d must be between pool /%d and address length /%d",
-			size, pool.Bits(), pool.Addr().BitLen())
+			size, pool.Bits(), pool.Addr().BitLen()))
 	}
 	if count < 1 {
-		return fmt.Errorf("count must be positive, got %d", count)
+		return invalidInput(fmt.Errorf("count must be positive, got %d", count))
 	}
 	if all && countChanged {
-		return errors.New("--all and --count cannot be used together")
+		return invalidInput(errors.New("--all and --count cannot be used together"))
 	}
 	if listDevices == nil {
 		return errNoDeviceCollector
@@ -252,7 +252,7 @@ func newCalcInfoCommand(state *commandState) *cobra.Command {
 
 			prefix, err := netip.ParsePrefix(cidrArg)
 			if err != nil {
-				return fmt.Errorf("invalid CIDR %q: %w", cidrArg, err)
+				return invalidInput(fmt.Errorf("invalid CIDR %q: %w", cidrArg, err))
 			}
 
 			if normalized, ok := ipcalc.Unmap4In6(prefix); ok {
@@ -263,7 +263,7 @@ func newCalcInfoCommand(state *commandState) *cobra.Command {
 
 			info, err := ipcalc.Info(prefix)
 			if err != nil {
-				return err
+				return invalidInput(err)
 			}
 
 			blockInfo := &blockInfoOutput{
@@ -306,7 +306,7 @@ func newCalcSplitCommand(state *commandState) *cobra.Command {
 
 			prefix, err := netip.ParsePrefix(cidrArg)
 			if err != nil {
-				return fmt.Errorf("invalid CIDR %q: %w", cidrArg, err)
+				return invalidInput(fmt.Errorf("invalid CIDR %q: %w", cidrArg, err))
 			}
 
 			var normalizedFrom4In6 bool
@@ -329,7 +329,7 @@ func newCalcSplitCommand(state *commandState) *cobra.Command {
 			}
 
 			if err != nil {
-				return wrapSplitError(cidrArg, prefix, normalizedFrom4In6, err)
+				return invalidInput(wrapSplitError(cidrArg, prefix, normalizedFrom4In6, err))
 			}
 
 			subnets := make([]string, len(children))

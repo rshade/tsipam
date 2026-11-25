@@ -24,7 +24,7 @@ func runRegistryCommand(t *testing.T, env map[string]string, args ...string) (in
 		func(context.Context, diagnostics.Logger) ([]deviceRecord, error) {
 			return nil, errors.New("registry failure must surface before live collection")
 		})
-	return code, stdout.String(), stderr.String()
+	return code, stdout.String(), failureText(t, stderr.String())
 }
 
 // registryCommandCases enumerates every command that reads an existing
@@ -50,7 +50,7 @@ func registryCommandCases(t *testing.T, dir string) map[string][]string {
 
 func TestMissingRegistryErrorNamesTailnetAndDirectory(t *testing.T) {
 	t.Parallel()
-	env := map[string]string{"TAILSCALE_TAILNET": "unused"}
+	env := map[string]string{"TAILSCALE_TAILNET": "unused", "TAILSCALE_API_KEY": "unused"}
 	for name, base := range registryCommandCases(t, t.TempDir()) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

@@ -91,7 +91,7 @@ func aggregateOutput(cidrs []string, tailnet string) (*outputEnvelope, error) {
 	for i, cidr := range cidrs {
 		prefix, err := netip.ParsePrefix(cidr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid CIDR %q: %w", cidr, err)
+			return nil, invalidInput(fmt.Errorf("invalid CIDR %q: %w", cidr, err))
 		}
 		if normalized, ok := ipcalc.Unmap4In6(prefix); ok {
 			prefix = normalized

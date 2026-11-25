@@ -22,21 +22,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/signal"
 	"regexp"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/rshade/ax-go"
 	"github.com/spf13/cobra"
 	goahttp "goa.design/goa/v3/http"
-	goa "goa.design/goa/v3/pkg"
 
-	"github.com/rshade/tsacl/pkg/ipcalc"
-	"github.com/rshade/tsacl/pkg/policycore/cliflags"
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
 
 	"github.com/rshade/tsipam/internal/diagnostics"
@@ -44,20 +40,12 @@ import (
 	"github.com/rshade/tsipam/internal/registry/hujsonstore"
 )
 
-// devVersion is the release string of a build that injects no version.
-const devVersion = "dev"
-
-// version is overridden at build time via -ldflags "-X main.version=X.Y.Z";
-// goreleaser injects the tag without its leading v.
-var version = devVersion
-
 const (
 	toolName            = "tsipam"
 	outputSchemaVersion = "1"
 	toolSchemaVersion   = "1"
 	formatHuman         = "human"
 	formatJSON          = "json"
-	shortRevisionLength = 12
 )
 
 // Exit codes, matching the AX scheme documented in ../../docs/reference/exit-codes.md:
@@ -79,6 +67,19 @@ type commandState struct {
 	logger             diagnostics.Logger
 	getenv             func(string) string
 	sanitizer          *sanitize.Sanitizer
+	// argv is the normalized command line, for failures raised before the
+	// command that would register its own identities runs.
+	argv []string
+	// stdout is the run's own stdout, for the root command.
+	stdout io.Writer
+}
+
+// reset drops what one command run leaves behind. An MCP server runs many on
+// one tree, and no run may see another's redaction.
+func (s *commandState) reset() {
+	s.sanitizer = nil
+	s.sanitizeResolution = sanitize.Resolution{}
+	s.logger = nil
 }
 
 func (s *commandState) outputSanitizer(tailnet string) (*sanitize.Sanitizer, error) {
@@ -218,8 +219,7 @@ func registerSweepValueWithCanonical(
 // quote-parsing: Sanitizer.Text finds and replaces a known value byte-for-byte
 // regardless of where in the error text it surfaces.
 //
-// executed is the *cobra.Command runCLI actually ran, as returned by
-// ExecuteContextC. A command with no "registry-dir" flag (for example
+// executed is the *cobra.Command that failed. A command with no "registry-dir" flag (for example
 // "devices list") has nothing to add here.
 func registerKnownIdentityInventory(executed *cobra.Command, state *commandState) {
 	if state.sanitizer == nil || executed == nil {
@@ -286,42 +286,6 @@ func realMain() int {
 	defer stop()
 
 	return runCLI(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr, nil)
-}
-
-func runCLI(
-	ctx context.Context,
-	args []string,
-	getenv func(string) string,
-	stdout, stderr io.Writer,
-	listDevices devicesListFunc,
-) int {
-	if getenv == nil {
-		getenv = func(string) string { return "" }
-	}
-	if listDevices == nil {
-		listDevices = func(ctx context.Context, logger diagnostics.Logger) ([]deviceRecord, error) {
-			return collectDevices(ctx, getenv, logger)
-		}
-	}
-	state := &commandState{}
-	root := newRootCommandWithDependencies(state, commandDependencies{getenv: getenv, listDevices: listDevices})
-	root.SetArgs(cliflags.Normalize(root, args))
-	root.SetOut(stdout)
-	root.SetErr(stderr)
-	executed, err := root.ExecuteContextC(ctx)
-	if err != nil {
-		// SilenceErrors on every command hands printing to the caller so
-		// cobra never writes to stdout on failure; this is that print.
-		// The drift sentinel contains no identities and the report is already
-		// rendered. Avoid reopening registry data for this completed comparison.
-		if !errors.Is(err, errRegistryDrift) && !errors.Is(err, errPolicyDrift) {
-			registerKnownIdentityInventory(executed, state)
-		}
-		err = describeTransportFault(err)
-		_, _ = fmt.Fprintf(stderr, "%s: %v\n", toolName, sanitizeErrorIfNeeded(err, state.sanitizer))
-		return exitCodeFor(err)
-	}
-	return exitOK
 }
 
 // collisionErrorPattern is anchored to SiteIDCollisionError.Error()'s exact
@@ -595,48 +559,6 @@ func describeTransportFault(err error) error {
 	return &transportFaultError{message: fault.Message, cause: err}
 }
 
-// collisionErrorName must match design.Error("collision", ...) in
-// ../../design/design.go: it is how a *goa.ServiceError decoded off the wire
-// is told apart from every other error the generated HTTP client can return.
-const collisionErrorName = "collision"
-
-// exitCodeFor maps a command error to this tool's exit-code scheme (see
-// newRootCommand's Long text): a site-ID collision and a calc-split refusal
-// are both decidable refusals of a well-formed request, not usage problems,
-// so they get their own code rather than being indistinguishable from a bad
-// flag or an unreadable registry file.
-//
-// Registry commands run through the loopback goa HTTP client (see
-// internal/loopback), so a collision normally arrives as a *goa.ServiceError
-// decoded from the 409 response, not the original registry collision type --
-// that concrete Go type does not cross the wire. Both domain checks stay for
-// in-process callers.
-func exitCodeFor(err error) int {
-	if errors.Is(err, errRegistryDrift) || errors.Is(err, errPolicyDrift) {
-		return exitFailure
-	}
-	var svcErr *goa.ServiceError
-	if errors.As(err, &svcErr) && svcErr.Name == collisionErrorName {
-		return exitFailure
-	}
-	if _, ok := errors.AsType[*registry.SiteIDCollisionError](err); ok {
-		return exitFailure
-	}
-	if _, ok := errors.AsType[*registry.SubnetPoolCollisionError](err); ok {
-		return exitFailure
-	}
-	if _, ok := errors.AsType[*registry.ServiceAddressCollisionError](err); ok {
-		return exitFailure
-	}
-	if _, ok := errors.AsType[*registry.UDPPortCollisionError](err); ok {
-		return exitFailure
-	}
-	if errors.Is(err, ipcalc.ErrTooManyChildren) {
-		return exitFailure
-	}
-	return exitUsage
-}
-
 func newRootCommandWithDependencies(state *commandState, deps commandDependencies) *cobra.Command {
 	if deps.getenv == nil {
 		deps.getenv = func(string) string { return "" }
@@ -671,13 +593,14 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 			if state.showSchema {
 				return printSchema(cmd.OutOrStdout(), cmd.Root())
 			}
-			return errors.New("a command is required; run \"tsipam --help\" for usage")
+			return invalidInput(errors.New("a command is required; run \"tsipam --help\" for usage"))
 		},
 	}
 	root.SetVersionTemplate("{{.Version}}\n")
 
 	flags := root.PersistentFlags()
 	flags.StringVar(&state.format, "format", formatHuman, "output format: human|json")
+	mustDeclare(ax.DeclareFlagEnum(root, "format", formatHuman, formatJSON))
 	flags.StringVar(&state.sanitizeLevel, "sanitize", string(sanitize.Off),
 		"output sanitization level: off|identity|strict (a non-off TAILSCALE_SANITIZE value overrides this flag)")
 	flags.BoolVar(&state.verbose, "verbose", false, "log operational details to stderr")
@@ -688,16 +611,18 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 		"print the machine-readable tool schema (JSON) and exit")
 
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
-		state.logger = newLogger(cmd.ErrOrStderr(), state.verbose)
+		state.reset()
+		state.restoreStdout(cmd)
+		state.logger = newLogger(cmd, state.verbose)
 		if state.format != formatHuman && state.format != formatJSON {
-			return fmt.Errorf("unknown -format %q; want human or json", state.format)
+			return invalidInput(fmt.Errorf("unknown -format %q; want human or json", state.format))
 		}
 		resolution, err := sanitize.Resolve(
 			deps.getenv(sanitize.LevelEnv), state.sanitizeLevel,
 			root.PersistentFlags().Changed("sanitize"),
 		)
 		if err != nil {
-			return err
+			return invalidInput(err)
 		}
 		// -schema reports static tool-catalog data unaffected by -format or
 		// -sanitize; validate them above so a typo isn't silently accepted,
@@ -718,7 +643,7 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 				return err
 			}
 		}
-		return nil
+		return validateRequiredFlags(cmd)
 	}
 
 	root.AddCommand(newDevicesCommand(state, deps.listDevices))
@@ -734,52 +659,14 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	return root
 }
 
-func newLogger(writer io.Writer, verbose bool) *slog.Logger {
-	level := slog.LevelWarn
-	if verbose {
-		level = slog.LevelDebug
+// validateRequiredFlags repeats Cobra's own flag checks, which run after every
+// hook, so their failures reach the error boundary. Cobra's then pass.
+func validateRequiredFlags(cmd *cobra.Command) error {
+	if err := refuseDryRun(cmd); err != nil {
+		return err
 	}
-	return slog.New(slog.NewTextHandler(writer, &slog.HandlerOptions{Level: level}))
-}
-
-// buildVersion combines the release string (injected by ldflags, or the module
-// version for `go install module@version`) with the embedded VCS revision so
-// --version reports exact provenance for an auditable binary.
-func buildVersion() string {
-	if info, ok := debug.ReadBuildInfo(); ok {
-		return buildVersionWithSettings(moduleVersion(version, info.Main.Version), info.Settings)
+	if err := cmd.ValidateRequiredFlags(); err != nil {
+		return invalidInput(err)
 	}
-	return buildVersionWithSettings(version, nil)
-}
-
-// moduleVersion prefers the module version Go recorded for `go install
-// module@version` over the dev placeholder, without its leading v so both
-// install paths print the same release string. A working-tree build records
-// "(devel)" and keeps dev. An injected release string always wins.
-func moduleVersion(injected, module string) string {
-	if injected != devVersion || module == "" || module == "(devel)" {
-		return injected
-	}
-	return strings.TrimPrefix(module, "v")
-}
-
-func buildVersionWithSettings(value string, settings []debug.BuildSetting) string {
-	var revision, dirty string
-	for _, setting := range settings {
-		switch setting.Key {
-		case "vcs.revision":
-			revision = setting.Value
-		case "vcs.modified":
-			if setting.Value == "true" {
-				dirty = "+dirty"
-			}
-		}
-	}
-	if len(revision) > shortRevisionLength {
-		revision = revision[:shortRevisionLength]
-	}
-	if revision != "" {
-		value = fmt.Sprintf("%s (%s%s)", value, revision, dirty)
-	}
-	return toolName + " " + value
+	return invalidInput(cmd.ValidateFlagGroups())
 }

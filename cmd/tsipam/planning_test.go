@@ -24,8 +24,10 @@ func TestPlanningInvalidInvocation(t *testing.T) {
 		{"missing credentials", `{}`, "TAILSCALE_API_KEY", map[string]string{"TAILSCALE_TAILNET": "unused"}, nil},
 		{"incomplete OAuth", `{}`, "TAILSCALE_API_KEY", map[string]string{
 			"TAILSCALE_TAILNET": "unused", "TAILSCALE_OAUTH_CLIENT_ID": "unused"}, nil},
-		{"missing registry", "", "no such file", map[string]string{"TAILSCALE_TAILNET": "unused"}, nil},
-		{"invalid registry", `{"siteIDs":false}`, "siteIDs", map[string]string{"TAILSCALE_TAILNET": "unused"}, nil},
+		{"missing registry", "", "no such file", map[string]string{
+			"TAILSCALE_TAILNET": "unused", "TAILSCALE_API_KEY": "unused"}, nil},
+		{"invalid registry", `{"siteIDs":false}`, "siteIDs", map[string]string{
+			"TAILSCALE_TAILNET": "unused", "TAILSCALE_API_KEY": "unused"}, nil},
 		{"unexpected argument", `{}`, "unknown command", nil, []string{"extra"}},
 		{"invalid format", `{}`, "format", nil, []string{"--format", "invalid"}},
 	}
