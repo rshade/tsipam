@@ -11,9 +11,10 @@
 // "plan" and "check" compare the registry with live allocation evidence.
 // See ../../README.md.
 //
-// Output contract (AX conventions, see ../../docs/reference/json-envelope.md): command results
-// are written to stdout as human text by default or a versioned envelope with
-// -format json; structured logs and final errors are written to stderr.
+// Output contract (AX conventions, see ../../docs/reference/json-envelope.md):
+// command results are written to stdout, as human text on a terminal and as one
+// JSON document otherwise; structured logs and the error object are written to
+// stderr.
 package main
 
 import (
@@ -42,7 +43,7 @@ import (
 
 const (
 	toolName            = "tsipam"
-	outputSchemaVersion = "1"
+	outputSchemaVersion = "2"
 	toolSchemaVersion   = "1"
 	formatHuman         = "human"
 	formatJSON          = "json"
@@ -59,7 +60,6 @@ const (
 )
 
 type commandState struct {
-	format             string
 	verbose            bool
 	showSchema         bool
 	sanitizeLevel      string
@@ -563,7 +563,6 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	if deps.getenv == nil {
 		deps.getenv = func(string) string { return "" }
 	}
-	state.format = formatHuman
 	state.sanitizeLevel = string(sanitize.Off)
 	state.getenv = deps.getenv
 	root := &cobra.Command{
@@ -571,8 +570,9 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 		Short:   "Allocate and plan Tailscale address space.",
 		Version: buildVersion(),
 		Long: "Allocate and plan Tailscale address space.\n\n" +
-			"Results go to stdout as human text by default or a versioned JSON envelope.\n" +
-			"Structured operational diagnostics go to stderr. Registry commands use a\n" +
+			"Results go to stdout: human text on a terminal, one JSON document otherwise.\n" +
+			"--format or AGENT_MODE selects the format. A failure is one JSON error object\n" +
+			"on stderr, with operational diagnostics. Registry commands use a\n" +
 			"comment-preserving HuJSON file selected by --registry-dir and --tailnet.\n\n" +
 			"Exit codes:\n" +
 			"  0  success\n" +
@@ -599,7 +599,8 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	root.SetVersionTemplate("{{.Version}}\n")
 
 	flags := root.PersistentFlags()
-	flags.StringVar(&state.format, "format", formatHuman, "output format: human|json")
+	flags.String("format", "",
+		"output format: human|json (default: AGENT_MODE, else human on a terminal and json otherwise)")
 	mustDeclare(ax.DeclareFlagEnum(root, "format", formatHuman, formatJSON))
 	flags.StringVar(&state.sanitizeLevel, "sanitize", string(sanitize.Off),
 		"output sanitization level: off|identity|strict (a non-off TAILSCALE_SANITIZE value overrides this flag)")
@@ -614,8 +615,8 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 		state.reset()
 		state.restoreStdout(cmd)
 		state.logger = newLogger(cmd, state.verbose)
-		if state.format != formatHuman && state.format != formatJSON {
-			return invalidInput(fmt.Errorf("unknown -format %q; want human or json", state.format))
+		if err := refuseEmptyFormat(cmd); err != nil {
+			return err
 		}
 		resolution, err := sanitize.Resolve(
 			deps.getenv(sanitize.LevelEnv), state.sanitizeLevel,
@@ -657,6 +658,17 @@ func newRootCommandWithDependencies(state *commandState, deps commandDependencie
 	root.AddCommand(newPolicyCheckCommand(state))
 	root.InitDefaultHelpFlag()
 	return root
+}
+
+// refuseEmptyFormat refuses --format "", which the declared values accept
+// because it is the flag's default. A script that passes an unset variable meant
+// to choose a format.
+func refuseEmptyFormat(cmd *cobra.Command) error {
+	flag := cmd.Flags().Lookup("format")
+	if flag != nil && flag.Changed && flag.Value.String() == "" {
+		return invalidInput(errors.New("--format must be human or json"))
+	}
+	return nil
 }
 
 // validateRequiredFlags repeats Cobra's own flag checks, which run after every

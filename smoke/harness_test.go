@@ -45,6 +45,8 @@ const (
 	envBinary = "TSIPAM_SMOKE_BINARY"
 	envDist   = "TSIPAM_SMOKE_DIST"
 	envLive   = "TSIPAM_SMOKE_LIVE"
+
+	envAgentMode = "AGENT_MODE"
 )
 
 // TestMain resolves the binary under test once, before the parallel phase,
@@ -131,21 +133,30 @@ func run(t *testing.T, env map[string]string, args ...string) result {
 	return result{code: code, stdout: stdout.String(), stderr: stderr.String()}
 }
 
-// scrubbedEnv keeps the inherited environment (PATH, HOME, TLS roots) but
-// drops every TAILSCALE_* variable unless env sets it explicitly.
+// scrubbedEnv keeps the inherited environment (PATH, HOME, TLS roots) but drops
+// every variable tsipam reads unless env sets it explicitly. AGENT_MODE=human
+// makes a README example print what it prints at a terminal.
 func scrubbedEnv(env map[string]string) []string {
 	out := []string{}
 	for _, kv := range os.Environ() {
 		key, _, _ := strings.Cut(kv, "=")
-		if strings.HasPrefix(key, "TAILSCALE_") {
+		if strings.HasPrefix(key, "TAILSCALE_") || slices.Contains(runtimeVariables(), key) {
 			continue
 		}
 		out = append(out, kv)
+	}
+	if _, set := env[envAgentMode]; !set {
+		out = append(out, envAgentMode+"=human")
 	}
 	for _, key := range slices.Sorted(maps.Keys(env)) {
 		out = append(out, key+"="+env[key])
 	}
 	return out
+}
+
+// runtimeVariables are the variables the CLI runtime reads.
+func runtimeVariables() []string {
+	return []string{envAgentMode, "TRACEPARENT", "TRACESTATE", "AX_OTEL_DEBUG", "OTEL_EXPORTER_OTLP_ENDPOINT"}
 }
 
 // envelope is the versioned JSON contract every successful command emits.
@@ -161,21 +172,64 @@ type envelope struct {
 	raw map[string]json.RawMessage
 }
 
-// decodeEnvelope fails the test unless stdout is exactly one JSON document
-// carrying the six envelope fields.
+// decodeEnvelope fails the test unless stdout is exactly one line, holding the
+// result under data and the run's metadata under meta.
 func decodeEnvelope(t *testing.T, stdout string) envelope {
 	t.Helper()
-	var env envelope
-	if err := json.Unmarshal([]byte(stdout), &env); err != nil {
+	if strings.Count(stdout, "\n") != 1 || !strings.HasSuffix(stdout, "\n") {
+		t.Fatalf("stdout is not one line:\n%s", stdout)
+	}
+	var document struct {
+		Data json.RawMessage `json:"data"`
+		Meta struct {
+			TraceID        string `json:"trace_id"`
+			SpanID         string `json:"span_id"`
+			IdempotencyKey string `json:"idempotency_key"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &document); err != nil {
 		t.Fatalf("stdout is not JSON: %v\n%s", err, stdout)
 	}
-	if err := json.Unmarshal([]byte(stdout), &env.raw); err != nil {
-		t.Fatalf("stdout is not a JSON object: %v", err)
+	if document.Meta.TraceID == "" || document.Meta.SpanID == "" || document.Meta.IdempotencyKey == "" {
+		t.Fatalf("metadata incomplete: %s", stdout)
 	}
-	if env.SchemaVersion != "1" || env.Tool != "tsipam" || env.Command == "" || env.Status == "" {
+	var env envelope
+	if err := json.Unmarshal(document.Data, &env); err != nil {
+		t.Fatalf("data is not a result: %v", err)
+	}
+	if err := json.Unmarshal(document.Data, &env.raw); err != nil {
+		t.Fatalf("data is not a JSON object: %v", err)
+	}
+	if env.SchemaVersion != "2" || env.Tool != "tsipam" || env.Command == "" || env.Status == "" {
 		t.Fatalf("envelope header incomplete: %+v", env)
 	}
 	return env
+}
+
+// failure is the error object a failed command writes to stderr.
+type failure struct {
+	ErrorCode     string         `json:"error_code"`
+	Message       string         `json:"message"`
+	TraceID       string         `json:"trace_id"`
+	Version       string         `json:"version"`
+	ActionableFix string         `json:"actionable_fix"`
+	Context       map[string]any `json:"context"`
+}
+
+// decodeFailure fails the test unless stderr holds exactly one error object.
+func decodeFailure(t *testing.T, stderr string) failure {
+	t.Helper()
+	var found []failure
+	for line := range strings.Lines(stderr) {
+		var object failure
+		if json.Unmarshal([]byte(line), &object) == nil && object.ErrorCode != "" {
+			found = append(found, object)
+		}
+	}
+	if len(found) != 1 || found[0].Message == "" || found[0].TraceID == "" || found[0].Version == "" {
+		t.Fatalf("stderr does not hold one complete error object:\n%s", stderr)
+	}
+	return found[0]
 }
 
 // field decodes one command-specific payload member into out.

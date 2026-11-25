@@ -79,12 +79,7 @@ func executePolicyCheck(
 	if err != nil {
 		return err
 	}
-	if err = emitOutput(
-		cmd.OutOrStdout(),
-		state.format,
-		policyComparisonEnvelope(tailnet, report),
-		outputSanitizer,
-	); err != nil {
+	if err = emitOutput(cmd, policyComparisonEnvelope(tailnet, report), outputSanitizer); err != nil {
 		return err
 	}
 	if report.DriftCount > 0 {

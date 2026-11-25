@@ -9,9 +9,9 @@ explicit future-growth direction, not initial scope.
 
 > **Module** `github.com/rshade/tsipam`. Conforms to the AX
 > conventions in [`docs/reference/ax-conventions.md`](docs/reference/ax-conventions.md):
-> command results are written to **stdout** as human text by default or a
-> versioned JSON envelope with `-format json`; structured logs and errors go
-> to **stderr**. Task-oriented guides, reference pages, and a tutorial live
+> command results are written to **stdout**, as human text on a terminal and
+> as one JSON document otherwise (`--format` or `AGENT_MODE` selects either);
+> structured logs and a JSON error object go to **stderr**. Task-oriented guides, reference pages, and a tutorial live
 > under [`docs/`](./docs/README.md).
 
 `tsipam` complements, and does not duplicate, two existing tools: `tail-acl`'s
@@ -73,12 +73,12 @@ help with; this README stays the command and flag reference.
   - [Smoke-test a release](./docs/how-to/release-smoke.md): exercise a built
     binary and the release archives before merging a release PR.
 - Reference
-  - [Exit codes](./docs/reference/exit-codes.md): the three exit codes and
-    what each leaves on stdout.
+  - [Exit codes and error objects](./docs/reference/exit-codes.md): the three
+    exit codes, the JSON error object, and every error code.
   - [Registry format](./docs/reference/registry-format.md): the
     `<tailnet>.ipam.hujson` shape, metadata fields, and validation rules.
-  - [JSON envelope](./docs/reference/json-envelope.md): the `--format json`
-    contract and the fields each command adds.
+  - [JSON envelope](./docs/reference/json-envelope.md): how the output format
+    is chosen, the JSON document, and the fields each command adds.
 - Explanation
   - [Registry and live state](./docs/explanation/registry-and-live-state.md):
     why the registry exists, what a comparison can and cannot conclude, and
@@ -177,33 +177,39 @@ service reservations. Empty lists from both endpoints are valid observations.
 Each API request has a 30-second timeout and honors command cancellation.
 
 Human output is tab-separated with quoted evidence and a final drift count.
-JSON adds a `comparison` object to the versioned envelope:
+JSON adds a `comparison` object to `data` in the versioned envelope (spread out
+here; `meta` is shown [below](#machine-readable-and-diagnostic-output)):
 
 ```json
 {
-  "schema_version": "1",
-  "tool": "tsipam",
-  "command": "check",
-  "status": "drift",
-  "message": "found 1 allocation drift(s)",
-  "tailnet": "production",
-  "comparison": {
-    "live_tailnet": "myorg",
-    "drift_count": 1,
-    "entries": [
-      {
-        "kind": "subnet_pool",
-        "state": "reserved_but_unadvertised",
-        "key": "10.20.0.0/16",
-        "expected": "branch-office",
-        "observed": [],
-        "routes": []
-      }
-    ],
-    "excluded": ["udp_port"]
+  "data": {
+    "schema_version": "2",
+    "tool": "tsipam",
+    "command": "check",
+    "status": "drift",
+    "message": "found 1 allocation drift(s)",
+    "tailnet": "production",
+    "comparison": {
+      "live_tailnet": "myorg",
+      "drift_count": 1,
+      "entries": [
+        {
+          "kind": "subnet_pool",
+          "state": "reserved_but_unadvertised",
+          "key": "10.20.0.0/16",
+          "expected": "branch-office",
+          "observed": [],
+          "routes": []
+        }
+      ],
+      "excluded": ["udp_port"]
+    }
   }
 }
 ```
+
+On drift `check` also writes an error object to stderr, with `error_code`
+`drift_detected` and the count in `context.drift_count`.
 
 Entries are ordered by kind (site IDs, subnet pools, service addresses), then
 numeric ID or network address and prefix length. Evidence is sorted and
@@ -264,7 +270,7 @@ by ACLs or grants. This command does not validate unrelated policy fields,
 assess grant reachability, or compare site IDs, service addresses, or UDP ports.
 
 Both output formats include matched and drifting rows. JSON adds
-`policy_comparison` to the standard envelope:
+`policy_comparison` to `data` in the standard envelope:
 
 - `authored`: rows with `ipset`, `cidr`, `state`, and containing `pools`.
   States are `matched` or `authored_but_unreserved`.
@@ -382,7 +388,7 @@ has no offline mode.
 tsipam subnet allocate 10.20.0.0/16 --size 24 branch-office \
   --registry-dir /etc/tsipam --tailnet production
 tsipam subnet allocate 2001:db8::/32 --size 48 branch-office --ticket NET-412
-tsipam subnet allocate 10.20.0.0/16 --size 24 branch-office --format json | jq -r .cidr
+tsipam subnet allocate 10.20.0.0/16 --size 24 branch-office --format json | jq -r .data.cidr
 ```
 
 Human output is one message line in the shape `subnet reserve` prints,
@@ -553,17 +559,16 @@ narrower parent or shorter target on stderr:
 
 ```bash
 tsipam calc split 2001:db8::/32 --prefix 64
-# stderr: tsipam: splitting 2001:db8::/32 into /64 blocks would produce
-# 4294967296 subnets; too many to list (max 65536); use a shorter target or
-# narrower parent: ipcalc: split would produce too many children to
-# materialize
+# stderr: an error object with "error_code":"split_too_large" and the message
+# splitting 2001:db8::/32 into /64 blocks would produce 4294967296 subnets; too
+# many to list (max 65536); use a shorter target or narrower parent: ipcalc:
+# split would produce too many children to materialize
 # exit code: 1
 ```
 
-This refusal carries no structured envelope, in either format — `-format
-json` changes how a successful split is rendered, not how a refusal is
-reported. Human output for a successful split is one CIDR per line; `-format
-json` emits all subnets in the versioned envelope.
+The refusal is the same error object in either format. Human output for a
+successful split is one CIDR per line; `-format json` emits all subnets in the
+versioned envelope.
 
 IPv4-mapped (4-in-6) prefixes with a length of `/96` or longer are converted to
 their equivalent plain IPv4 form before splitting, so `--prefix` then specifies
@@ -640,7 +645,7 @@ directory defaults to `.`, and the tailnet resolves from `--tailnet`, then
 `--from-registry` cannot be combined with positional CIDRs. Explicit
 `--registry-dir` and `--tailnet` flags require registry mode. An existing
 registry with no subnet reservations succeeds with empty human output or
-`"supernets": []` in JSON. A missing or invalid registry is an error (exit 2),
+`"supernets":[]` in JSON. A missing or invalid registry is an error (exit 2),
 with no result on stdout. Registry JSON includes the selected `tailnet`;
 registry-derived supernets and the tailnet are redacted when sanitization
 is active. Positional aggregation retains its unredacted output.
@@ -657,14 +662,15 @@ free child does not enumerate every possible child of a large pool.
 ```bash
 tsipam calc next-free 10.20.0.0/16 --size 24 \
   --registry-dir /etc/tsipam --tailnet production
-tsipam subnet reserve "$(tsipam calc next-free 10.20.0.0/16 --size 24)" branch-office
+tsipam subnet reserve "$(tsipam calc next-free 10.20.0.0/16 --size 24 --format human)" branch-office
 tsipam calc next-free 2001:db8::/32 --size 48 --count 3 \
   --registry-dir /etc/tsipam --tailnet production
-tsipam subnet reserve "$(tsipam calc next-free 2001:db8::/48 --size 64)" branch-office
+tsipam subnet reserve "$(tsipam calc next-free 2001:db8::/48 --size 64 --format human)" branch-office
 ```
 
 One result is exactly one bare CIDR followed by a newline, which makes the
-second command safe to compose through shell substitution. That composition
+second command safe to compose through shell substitution. `--format human` is
+needed there because a substitution is not a terminal. That composition
 picks outside the registry lock, so two concurrent callers can be handed the
 same suggestion; `subnet allocate` performs the same pick inside the lock
 when the block is going to be reserved. Use `--count` (or
@@ -739,7 +745,7 @@ tsipam calc info 2001:db8:1::42/64
 envelope. `usable_hosts` is an exact decimal **string**, not a JSON number.
 No scientific or `2^k` notation cutoff is used: even the full IPv6 address
 space (`2^128`) is only 39 decimal digits, so every count is precise and
-uniformly parseable. Use `jq -r '.block_info.usable_hosts | tonumber'` where
+uniformly parseable. Use `jq -r '.data.block_info.usable_hosts | tonumber'` where
 a number is required.
 
 IPv4-mapped (4-in-6) prefixes of `/96` or longer are normalized to plain
@@ -862,26 +868,38 @@ other entries, are preserved.
 
 ### Machine-readable and diagnostic output
 
-Every successful command supports `-format human|json`. See also the
-[JSON envelope](./docs/reference/json-envelope.md) and
-[exit codes](./docs/reference/exit-codes.md) references, and
-[Redact output for sharing](./docs/how-to/redact-output-for-sharing.md). JSON
-uses the same top-level contract as the repository's other action-oriented CLI
-output:
+Results are human text on a terminal and JSON everywhere else. `--format
+human|json` decides first, then `AGENT_MODE`, then where stdout goes. A script
+that reads human output needs `--format human`, or `AGENT_MODE=human` for the
+whole script. See also the [JSON envelope](./docs/reference/json-envelope.md)
+and [exit codes](./docs/reference/exit-codes.md) references, and
+[Redact output for sharing](./docs/how-to/redact-output-for-sharing.md).
+
+A JSON result is one line. Spread out, it reads:
 
 ```json
 {
-  "schema_version": "1",
-  "tool": "tsipam",
-  "command": "site-id reserve",
-  "status": "ok",
-  "message": "reserved site ID 1 for \"hq-vpc\"",
-  "tailnet": "local",
-  "changed": true,
-  "id": "1",
-  "site": "hq-vpc"
+  "data": {
+    "schema_version": "2",
+    "tool": "tsipam",
+    "command": "site-id reserve",
+    "status": "ok",
+    "message": "reserved site ID 1 for \"hq-vpc\"",
+    "tailnet": "local",
+    "changed": true,
+    "id": "1",
+    "site": "hq-vpc"
+  },
+  "meta": {
+    "trace_id": "0af7651916cd43dd8448eb211c80319c",
+    "span_id": "b7ad6b7169203331",
+    "idempotency_key": "00000000-0000-4000-8000-000000000000"
+  }
 }
 ```
+
+`meta` identifies the run; its trace ID continues a valid `TRACEPARENT`. The
+fields below are inside `data`.
 
 `site-id list` carries `site_ids`, `subnet list` carries `subnet_pools`,
 `service list` carries `service_addresses`, `port list` carries `udp_ports`,
@@ -901,9 +919,15 @@ and exit-code catalog. Run `tsipam --help` for examples and the human-facing
 exit-code description. `tsipam --version` includes the embedded VCS revision
 and marks a modified working-tree build as dirty.
 
-`-verbose` enables structured `slog` diagnostics for collection, loopback
-transport, registry loading/creation, and lock acquisition. Diagnostics stay
-on stderr, so stdout remains parse-clean under `-format json`.
+`-verbose` logs collection, loopback transport, registry loading and creation,
+and lock acquisition as JSON lines that carry the run's trace ID. Diagnostics
+stay on stderr, so stdout remains parse-clean.
+
+`TRACEPARENT` continues a caller's W3C trace: results, error objects, and log
+lines report its trace ID. `AX_OTEL_DEBUG=1` prints the run's spans to stderr,
+one for each service call and Tailscale API read. Spans and logs hold no
+identities when sanitization is active, spans never hold a URL, and no telemetry
+leaves the machine: `OTEL_EXPORTER_OTLP_ENDPOINT` is ignored.
 
 `TAILSCALE_SANITIZE=identity` or `strict` replaces device names, addresses,
 routes, tailnet routing keys, site names, service identities, reservation

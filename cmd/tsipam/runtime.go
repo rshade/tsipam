@@ -85,6 +85,7 @@ func (inv invocation) commandTree(state *commandState) *cobra.Command {
 	root.SetOut(state.stdout)
 	root.InitDefaultHelpCmd()
 	root.InitDefaultCompletionCmd()
+	declareContracts(root)
 	installBoundary(root, state)
 	return root
 }

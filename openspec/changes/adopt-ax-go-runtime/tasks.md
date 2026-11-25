@@ -79,15 +79,15 @@
 
 ## 5. Output mode and envelope
 
-- [ ] 5.1 Default `--format` to empty, read the mode from the context, and
+- [x] 5.1 Default `--format` to empty, read the mode from the context, and
       declare its enum; verify tests for every row of flag, `AGENT_MODE`, and
       terminal, using `axtest` and `runCLI`
-- [ ] 5.2 Emit the envelope with `schema_version` `"2"` and publish
+- [x] 5.2 Emit the envelope with `schema_version` `"2"` and publish
       non-deterministic fields per leaf; verify regenerated goldens, reviewed
       one by one, masked with the published list, and `TRACEPARENT` echo tests
-- [ ] 5.3 Set `AGENT_MODE=human` in the smoke harness, add one case without
+- [x] 5.3 Set `AGENT_MODE=human` in the smoke harness, add one case without
       it, and update JSON cases; verify `mise run smoke` passes
-- [ ] 5.4 Rewrite `docs/reference/json-envelope.md`, the AX conventions page,
+- [x] 5.4 Rewrite `docs/reference/json-envelope.md`, the AX conventions page,
       `adopt-existing-tailnet.md`, `gate-address-space-in-ci.md`, the tutorial,
       and README examples (`.data.*`, `--format human` in substitutions, error
       objects on stderr); verify the smoke cases that pin them and

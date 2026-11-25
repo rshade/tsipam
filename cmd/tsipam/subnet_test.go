@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -20,7 +19,7 @@ import (
 func runSubnet(t *testing.T, registryDir string, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -47,7 +46,7 @@ func TestSubnetReserveWithMetadataFlagsThenList(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	var listed outputEnvelope
-	if err = json.Unmarshal([]byte(out), &listed); err != nil {
+	if err = decodeData([]byte(out), &listed); err != nil {
 		t.Fatalf("decode list JSON: %v", err)
 	}
 	if listed.SubnetPools == nil || len(*listed.SubnetPools) != 1 {
@@ -111,7 +110,7 @@ func TestSubnetJSONEnvelopes(t *testing.T) {
 		t.Errorf("reserve stderr = %q, want empty", stderr)
 	}
 	var reserved outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &reserved); err != nil {
+	if err = decodeData([]byte(stdout), &reserved); err != nil {
 		t.Fatalf("decode reserve JSON: %v", err)
 	}
 	if reserved.SchemaVersion != outputSchemaVersion || reserved.Command != commandSubnetReserve ||
@@ -128,7 +127,7 @@ func TestSubnetJSONEnvelopes(t *testing.T) {
 		t.Errorf("list stderr = %q, want empty", stderr)
 	}
 	var listed outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &listed); err != nil {
+	if err = decodeData([]byte(stdout), &listed); err != nil {
 		t.Fatalf("decode list JSON: %v", err)
 	}
 	if listed.Command != commandSubnetList || listed.SubnetPools == nil || len(*listed.SubnetPools) != 1 ||
@@ -226,7 +225,7 @@ func TestSubnetListSanitizesCIDRsAndSites(t *testing.T) {
 		t.Errorf("sanitized subnet list leaked CIDR or site: %s", stdout.String())
 	}
 	var envelope outputEnvelope
-	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+	if err := decodeData(stdout.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode sanitized JSON: %v", err)
 	}
 	if envelope.Sanitization == nil || envelope.SubnetPools == nil || len(*envelope.SubnetPools) != 1 {

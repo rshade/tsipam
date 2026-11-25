@@ -64,7 +64,7 @@ func TestPlanningOutputFailureOverridesDrift(t *testing.T) {
 			dir := t.TempDir()
 			writeAggregateRegistry(t, dir, "alias", `{"siteIDs":{"1":"branch"}}`)
 			state := &commandState{}
-			root := newRootCommandWithDependencies(state, commandDependencies{
+			root := newTestRoot(state, commandDependencies{
 				getenv: devicesEnv(map[string]string{"TAILSCALE_TAILNET": "live"}),
 				collectLive: func(context.Context, string, diagnostics.Logger) (devices.Snapshot, error) {
 					return devices.Snapshot{}, nil

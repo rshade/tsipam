@@ -1,36 +1,80 @@
 # JSON envelope
 
-Every command accepts `--format json`. Successful results are one JSON
-object on stdout; diagnostics stay on stderr. Field names and meanings are a
-compatibility surface, and `schema_version` changes before any breaking
-change to them.
+A successful command in JSON mode writes one minified JSON line to stdout;
+diagnostics stay on stderr. Field names and meanings are a compatibility
+surface, and `schema_version` changes before any breaking change to them.
 
-## Common fields
+## Choosing the format
+
+The first of these that is set decides:
+
+1. `--format human` or `--format json`
+2. `AGENT_MODE`: `1`, `true`, `yes`, `on`, `json`, `agent`, or `machine` for
+   JSON; `0`, `false`, `no`, `off`, `human`, or `text` for human text
+3. Where stdout goes: human text on a terminal, JSON anywhere else
+
+A script that reads human output from a pipe or `$(...)` therefore needs
+`--format human`, or `AGENT_MODE=human` for the whole script.
+
+## The document
+
+The examples on this page are spread out for reading.
 
 ```json
 {
-  "schema_version": "1",
-  "tool": "tsipam",
-  "command": "subnet reserve",
-  "status": "ok",
-  "message": "reserved subnet CIDR 10.20.0.0/24 for \"hq-vpc\"",
-  "tailnet": "production"
+  "data": {
+    "schema_version": "2",
+    "tool": "tsipam",
+    "command": "subnet reserve",
+    "status": "ok",
+    "message": "reserved subnet CIDR 10.20.0.0/24 for \"hq-vpc\"",
+    "tailnet": "production",
+    "changed": true,
+    "cidr": "10.20.0.0/24",
+    "site": "hq-vpc"
+  },
+  "meta": {
+    "trace_id": "0af7651916cd43dd8448eb211c80319c",
+    "span_id": "b7ad6b7169203331",
+    "idempotency_key": "00000000-0000-4000-8000-000000000000"
+  }
 }
 ```
 
+`data` holds the command's result. `meta` holds the run:
+
+| `meta` field | Contents |
+| --- | --- |
+| `trace_id`, `span_id` | The run's W3C trace and span IDs. `TRACEPARENT`, when valid, supplies the trace ID. |
+| `idempotency_key` | The `--idempotency-key` value, or a fresh key. It is echoed, never stored. |
+| `dry_run` | `true` for a `--dry-run` rehearsal; absent otherwise. |
+
+The three `meta` IDs differ on every run. `data.reserved_at` also does on the
+commands that can stamp it: `subnet allocate`, and `site-id`, `subnet`, and
+`service` `reserve`. `tsipam __schema` lists these per command as
+`non_deterministic_fields`; mask them to compare two runs.
+
+## Common fields of `data`
+
 | Field | Values |
 | --- | --- |
-| `schema_version` | `"1"` |
+| `schema_version` | `"2"` |
 | `tool` | `"tsipam"` |
 | `command` | The subcommand path, for example `"site-id list"` or `"check-policy"` |
 | `status` | `"ok"`; `"no_changes"` for a reserve or release that changed nothing; `"drift"` for a check that found drift |
 | `message` | Human summary of the result |
 | `tailnet` | The registry alias for registry commands, the live tailnet for `devices list` |
 
-Failures write nothing to stdout in either format; see
+Failures write one error object to stderr and nothing to stdout, except that
+`check` and `check-policy` write their report before failing on drift; see
 [Exit codes](exit-codes.md).
 
+`-schema`, `__schema`, `--version`, `--help`, and `completion` keep their own
+output forms and are never wrapped.
+
 ## Payload by command
+
+Every field below is inside `data`.
 
 | Command | Field | Contents |
 | --- | --- | --- |
@@ -56,9 +100,9 @@ omitted rather than emitted as empty strings.
 
 `block_info.usable_hosts` is a decimal **string**, never a JSON number, so
 IPv6 counts survive parsers that store numbers as doubles. Use
-`jq -r '.block_info.usable_hosts | tonumber'` where a number is required.
+`jq -r '.data.block_info.usable_hosts | tonumber'` where a number is required.
 
-## `comparison`
+## `data.comparison`
 
 ```json
 {
@@ -91,7 +135,7 @@ IPv6 counts survive parsers that store numbers as doubles. Use
 
 Entries sort by kind, then numeric ID or network address and prefix length.
 
-## `policy_comparison`
+## `data.policy_comparison`
 
 ```json
 {
@@ -122,3 +166,12 @@ replaced by placeholders and `tailnet` is redacted. Numeric site IDs, ports,
 states, counts, and field names are unchanged, so a consumer can still parse
 and classify a redacted document. See
 [Redact output for sharing](../how-to/redact-output-for-sharing.md).
+
+## Migrating from version 1
+
+| Version 1 | Version 2 |
+| --- | --- |
+| `.cidr`, `.site_ids`, `.comparison`, … | `.data.cidr`, `.data.site_ids`, `.data.comparison`, … |
+| Indented over several lines | One minified line |
+| Human text unless `--format json` | Human text on a terminal, JSON otherwise |
+| `tsipam: <message>` on stderr | One [error object](exit-codes.md) on stderr |

@@ -115,7 +115,7 @@ func assertPolicyJSONContract(t *testing.T, out string, tc policyContractCase) {
 		Changed          json.RawMessage `json:"changed"`
 		PolicyComparison json.RawMessage `json:"policy_comparison"`
 	}
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	if err := decodeData([]byte(out), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Command != commandCheckPolicy || result.Tailnet != "alias" || result.PolicyComparison == nil {
@@ -223,12 +223,12 @@ func checkPolicySanitization(t *testing.T, format, level string) {
 		}
 	}
 	_, again, _ := runPolicyCommand(t, env, args...)
-	if out != again {
+	if maskRun(t, out) != maskRun(t, again) {
 		t.Fatal("fixed-key sanitization changed across invocations")
 	}
 	if format == formatJSON {
 		var result outputEnvelope
-		if err := json.Unmarshal([]byte(out), &result); err != nil {
+		if err := decodeData([]byte(out), &result); err != nil {
 			t.Fatal(err)
 		}
 		report := result.PolicyComparison

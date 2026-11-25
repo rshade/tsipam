@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"os"
 	"reflect"
@@ -138,7 +137,7 @@ func assertPlanningReport(t *testing.T, command, format, prefix string) {
 func assertPlanningJSON(t *testing.T, command, out string) {
 	t.Helper()
 	var result outputEnvelope
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	if err := decodeData([]byte(out), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Command != command || result.Status != statusDrift || result.Tailnet != "registry-alias" ||
@@ -164,7 +163,7 @@ func testPlanningEmpty(t *testing.T) {
 				t.Fatalf("empty comparison: exit %d, stderr %s", code, errOut)
 			}
 			var result outputEnvelope
-			if err := json.Unmarshal([]byte(out), &result); err != nil {
+			if err := decodeData([]byte(out), &result); err != nil {
 				t.Fatal(err)
 			}
 			if result.Status != statusOK || result.Comparison == nil || result.Comparison.DriftCount != 0 ||
@@ -192,7 +191,7 @@ func testPlanningMatched(t *testing.T) {
 			t.Fatalf("matched comparison: exit %d, stderr %s", code, errOut)
 		}
 		var result outputEnvelope
-		if err := json.Unmarshal([]byte(out), &result); err != nil {
+		if err := decodeData([]byte(out), &result); err != nil {
 			t.Fatal(err)
 		}
 		if result.Status != statusOK || result.Comparison == nil || result.Comparison.DriftCount != 0 ||
@@ -278,12 +277,12 @@ func assertPlanningSanitized(t *testing.T, level, format string) {
 		}
 	}
 	_, again, _ := runPlanning(t.Context(), env, args...)
-	if out != again {
+	if maskRun(t, out) != maskRun(t, again) {
 		t.Errorf("keyed report changed across repeated observations: %s vs %s", out, again)
 	}
 	if format == formatJSON {
 		var result outputEnvelope
-		if err := json.Unmarshal([]byte(out), &result); err != nil {
+		if err := decodeData([]byte(out), &result); err != nil {
 			t.Fatal(err)
 		}
 		if result.Comparison == nil || result.Comparison.DriftCount != 3 || result.Comparison.Entries[0].Key != "2" {

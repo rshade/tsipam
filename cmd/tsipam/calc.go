@@ -109,7 +109,7 @@ func executeCalcNextFree(
 	if result.Status == statusExhausted {
 		return &exhaustedError{message: result.Message}
 	}
-	return emitOutput(cmd.OutOrStdout(), state.format, result, outputSanitizer)
+	return emitOutput(cmd, result, outputSanitizer)
 }
 
 func nextFreePool(arg string) (netip.Prefix, error) {
@@ -281,7 +281,7 @@ func newCalcInfoCommand(state *commandState) *cobra.Command {
 			output := newOutput(commandCalcInfo, statusOK, message, "")
 			output.BlockInfo = blockInfo
 
-			return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
+			return emitOutput(cmd, output, outputSanitizer)
 		},
 	}
 	return cmd
@@ -341,7 +341,7 @@ func newCalcSplitCommand(state *commandState) *cobra.Command {
 			output := newOutput(commandCalcSplit, statusOK, message, "")
 			output.Subnets = &subnets
 
-			return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
+			return emitOutput(cmd, output, outputSanitizer)
 		},
 	}
 

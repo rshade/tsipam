@@ -21,7 +21,7 @@ import (
 func runUDPPort(t *testing.T, registryDir string, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var stdout, stderr bytes.Buffer
@@ -56,7 +56,7 @@ func TestUDPPortReserveRepeatAndCrossSiteReuse(t *testing.T) {
 		t.Fatalf("repeat reserve stdout/stderr = %q/%q, want parse-clean JSON/empty", stdout, stderr)
 	}
 	var repeated outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &repeated); err != nil {
+	if err = decodeData([]byte(stdout), &repeated); err != nil {
 		t.Fatal(err)
 	}
 	if repeated.Command != commandPortReserve || repeated.Status != statusNoChanges ||
@@ -108,7 +108,7 @@ func TestUDPPortListSortsAndFiltersInHumanAndJSON(t *testing.T) {
 		t.Fatalf("filtered list stdout/stderr = %q/%q, want parse-clean JSON/empty", stdout, stderr)
 	}
 	var listed outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &listed); err != nil {
+	if err = decodeData([]byte(stdout), &listed); err != nil {
 		t.Fatal(err)
 	}
 	if listed.Command != commandPortList || listed.UDPPorts == nil || len(*listed.UDPPorts) != 2 {
@@ -122,7 +122,7 @@ func TestUDPPortListSortsAndFiltersInHumanAndJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unknown-site JSON list: %v", err)
 	}
-	if stderr != "" || !strings.Contains(stdout, `"udp_ports": []`) {
+	if stderr != "" || !strings.Contains(stdout, `"udp_ports":[]`) {
 		t.Errorf("unknown-site list stdout/stderr = %q/%q, want udp_ports:[]/empty", stdout, stderr)
 	}
 }
@@ -153,7 +153,7 @@ func TestUDPPortReleaseAndAbsentRelease(t *testing.T) {
 		t.Fatalf("absent release stdout/stderr = %q/%q, want parse-clean JSON/empty", stdout, stderr)
 	}
 	var result outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &result); err != nil {
+	if err = decodeData([]byte(stdout), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Command != commandPortRelease || result.Status != statusNoChanges ||
@@ -281,7 +281,7 @@ func TestUDPPortCommandsAppearInSchemaWithSiteRequirements(t *testing.T) {
 	t.Parallel()
 
 	dependencies := commandDependencies{getenv: func(string) string { return "" }}
-	root := newRootCommandWithDependencies(&commandState{}, dependencies)
+	root := newTestRoot(&commandState{}, dependencies)
 	commands := commandSchema(root)
 	found := make(map[string]schemaCommand)
 	for _, command := range commands {
@@ -328,7 +328,7 @@ func TestUDPPortSanitizedReserveAndListOutput(t *testing.T) {
 		t.Fatalf("sanitized reserve exit = %d, want %d; stderr: %s", code, exitOK, stderr.String())
 	}
 	var reserved outputEnvelope
-	if err := json.Unmarshal(stdout.Bytes(), &reserved); err != nil {
+	if err := decodeData(stdout.Bytes(), &reserved); err != nil {
 		t.Fatalf("decode sanitized reserve: %v; stdout: %s", err, stdout.String())
 	}
 	if reserved.Port != "41642" {
@@ -358,7 +358,7 @@ func TestUDPPortSanitizedReserveAndListOutput(t *testing.T) {
 		t.Fatalf("sanitized list exit = %d, want %d; stderr: %s", code, exitOK, stderr.String())
 	}
 	var listed outputEnvelope
-	if err := json.Unmarshal(stdout.Bytes(), &listed); err != nil {
+	if err := decodeData(stdout.Bytes(), &listed); err != nil {
 		t.Fatalf("decode sanitized list: %v; stdout: %s", err, stdout.String())
 	}
 	if listed.UDPPorts == nil || len(*listed.UDPPorts) != 1 {

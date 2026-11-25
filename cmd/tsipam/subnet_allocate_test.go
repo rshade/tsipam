@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -27,7 +26,7 @@ func runSubnetAllocateCLI(
 	code := runCLI(
 		context.Background(),
 		append([]string{commandSubnet, "allocate"}, append(args, "--registry-dir", registryDir)...),
-		fixedKeyGetenv, &outBuf, &errBuf, listDevices,
+		humanByDefault(fixedKeyGetenv), &outBuf, &errBuf, listDevices,
 	)
 	return code, outBuf.String(), errBuf.String()
 }
@@ -70,7 +69,7 @@ func TestSubnetAllocateJSONEnvelopeAndTicketReplay(t *testing.T) {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
 	var allocated outputEnvelope
-	if err := json.Unmarshal([]byte(stdout), &allocated); err != nil {
+	if err := decodeData([]byte(stdout), &allocated); err != nil {
 		t.Fatalf("decode allocate JSON: %v", err)
 	}
 	if allocated.Command != commandSubnetAllocate || allocated.Status != statusOK ||
@@ -90,7 +89,7 @@ func TestSubnetAllocateJSONEnvelopeAndTicketReplay(t *testing.T) {
 		t.Fatalf("replay exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
 	var replayed outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &replayed); err != nil {
+	if err = decodeData([]byte(stdout), &replayed); err != nil {
 		t.Fatalf("decode replay JSON: %v", err)
 	}
 	if replayed.Status != statusNoChanges || replayed.Changed == nil || *replayed.Changed ||
@@ -241,7 +240,7 @@ func TestSubnetAllocateConcurrentRunsReceiveDistinctBlocks(t *testing.T) {
 			continue
 		}
 		var envelope outputEnvelope
-		if err := json.Unmarshal([]byte(outs[i]), &envelope); err != nil {
+		if err := decodeData([]byte(outs[i]), &envelope); err != nil {
 			t.Fatalf("run %d: decode JSON: %v", i, err)
 		}
 		if !strings.HasSuffix(envelope.CIDR, "/24") || !strings.HasPrefix(envelope.CIDR, "10.0.") {

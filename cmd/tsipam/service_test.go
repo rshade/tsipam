@@ -22,7 +22,7 @@ import (
 func runService(t *testing.T, registryDir string, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var stdout, stderr bytes.Buffer
@@ -58,7 +58,7 @@ func TestServiceReserveRepeatAndAddressAliases(t *testing.T) {
 		t.Fatalf("repeat reserve stdout/stderr = %q/%q, want parse-clean JSON and empty stderr", stdout, stderr)
 	}
 	var result outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &result); err != nil {
+	if err = decodeData([]byte(stdout), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Command != commandServiceReserve || result.Status != statusNoChanges ||
@@ -91,7 +91,7 @@ func TestServiceReleaseAndAbsentRelease(t *testing.T) {
 		t.Fatalf("absent release stdout/stderr = %q/%q, want parse-clean JSON", stdout, stderr)
 	}
 	var result outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &result); err != nil {
+	if err = decodeData([]byte(stdout), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Command != commandServiceRelease || result.Status != statusNoChanges ||
@@ -133,7 +133,7 @@ func TestServiceListUsesNumericAddressOrderInHumanAndJSON(t *testing.T) {
 		t.Fatalf("JSON list stdout/stderr = %q/%q, want parse-clean JSON", stdout, stderr)
 	}
 	var result outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &result); err != nil {
+	if err = decodeData([]byte(stdout), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Command != commandServiceList || result.ServiceAddresses == nil || len(*result.ServiceAddresses) != 3 {
@@ -166,7 +166,7 @@ func TestServiceReserveMetadataAppearsInList(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	var result outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &result); err != nil {
+	if err = decodeData([]byte(stdout), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.ServiceAddresses == nil || len(*result.ServiceAddresses) != 1 {
@@ -503,7 +503,7 @@ func TestServiceReserveBareSanitizationAndServiceNameAliases(t *testing.T) {
 	}
 
 	var result outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &result); err != nil {
+	if err = decodeData([]byte(stdout), &result); err != nil {
 		t.Fatal(err)
 	}
 
@@ -543,7 +543,7 @@ func reserveWithSanitization(t *testing.T, dir, address, service string) *output
 	}
 
 	var result outputEnvelope
-	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+	if err := decodeData(buf.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
 	}
 	return &result

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,7 +17,7 @@ import (
 func runCalcSplit(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{sanitizeLevel: "off"}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -46,7 +45,7 @@ func runCalcSplitCLI(t *testing.T, args ...string) (int, string, string) {
 func runCalcAggregate(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{sanitizeLevel: "off"}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -70,7 +69,7 @@ func runCalcAggregateCLI(t *testing.T, args ...string) (int, string, string) {
 func runCalcNextFree(t *testing.T, registryDir string, devices []deviceRecord, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{sanitizeLevel: "off"}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 		listDevices: func(context.Context, diagnostics.Logger) ([]deviceRecord, error) {
 			return devices, nil
@@ -416,7 +415,7 @@ func TestCalcSplitJSONOutput(t *testing.T) {
 
 	// Test JSON output format.
 	state := &commandState{sanitizeLevel: "off"}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -429,8 +428,8 @@ func TestCalcSplitJSONOutput(t *testing.T) {
 	}
 
 	var envelope outputEnvelope
-	if err = json.Unmarshal(outBuf.Bytes(), &envelope); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v; output = %q", err, outBuf.String())
+	if err = decodeData(outBuf.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error = %v; output = %q", err, outBuf.String())
 	}
 
 	if envelope.SchemaVersion != outputSchemaVersion {
@@ -496,7 +495,7 @@ func TestCalcSplitNotSanitizedUnderIdentity(t *testing.T) {
 			t.Parallel()
 
 			state := &commandState{sanitizeLevel: "identity"}
-			root := newRootCommandWithDependencies(state, commandDependencies{
+			root := newTestRoot(state, commandDependencies{
 				getenv: func(name string) string {
 					if name == "TAILSCALE_SANITIZE" {
 						return "identity"
@@ -554,7 +553,7 @@ func TestCalcSplit4In6ErrorWrapping(t *testing.T) {
 func runCalcInfo(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{sanitizeLevel: "off"}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -649,7 +648,7 @@ func TestCalcInfoJSONOutput(t *testing.T) {
 	t.Parallel()
 
 	state := &commandState{sanitizeLevel: "off"}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -661,8 +660,8 @@ func TestCalcInfoJSONOutput(t *testing.T) {
 	}
 
 	var envelope outputEnvelope
-	if err := json.Unmarshal(outBuf.Bytes(), &envelope); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v; output = %q", err, outBuf.String())
+	if err := decodeData(outBuf.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error = %v; output = %q", err, outBuf.String())
 	}
 
 	if envelope.Command != commandCalcInfo {
@@ -696,7 +695,7 @@ func TestCalcInfoJSONOutput(t *testing.T) {
 	if envelope.BlockInfo.UsableHosts != "2" {
 		t.Errorf("BlockInfo.UsableHosts = %q, want %q", envelope.BlockInfo.UsableHosts, "2")
 	}
-	if !strings.Contains(outBuf.String(), `"usable_hosts": "2"`) {
+	if !strings.Contains(outBuf.String(), `"usable_hosts":"2"`) {
 		t.Errorf("raw JSON %q missing string-encoded usable_hosts", outBuf.String())
 	}
 }
@@ -705,7 +704,7 @@ func TestCalcInfoJSONOmitsBroadcastKeyForRFC3021(t *testing.T) {
 	t.Parallel()
 
 	state := &commandState{sanitizeLevel: "off"}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -811,7 +810,7 @@ func TestCalcInfoIPv6JSONOmitsBroadcast(t *testing.T) {
 	t.Parallel()
 
 	state := &commandState{sanitizeLevel: "off"}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -824,7 +823,7 @@ func TestCalcInfoIPv6JSONOmitsBroadcast(t *testing.T) {
 	if strings.Contains(outBuf.String(), "broadcast") {
 		t.Errorf("raw JSON %q carries a broadcast key for IPv6; want it omitted", outBuf.String())
 	}
-	if !strings.Contains(outBuf.String(), `"usable_hosts": "18446744073709551616"`) {
+	if !strings.Contains(outBuf.String(), `"usable_hosts":"18446744073709551616"`) {
 		t.Errorf("raw JSON %q missing exact string-encoded IPv6 count", outBuf.String())
 	}
 }
@@ -856,7 +855,7 @@ func TestCalcInfoNotSanitizedUnderIdentity(t *testing.T) {
 			t.Parallel()
 
 			state := &commandState{sanitizeLevel: "identity"}
-			root := newRootCommandWithDependencies(state, commandDependencies{
+			root := newTestRoot(state, commandDependencies{
 				getenv: func(name string) string {
 					if name == "TAILSCALE_SANITIZE" {
 						return "identity"
@@ -973,8 +972,8 @@ func TestCalcAggregateJSONOutput(t *testing.T) {
 				t.Fatalf("runCalcAggregate() error = %v (stderr = %q)", err, errOut)
 			}
 			var envelope outputEnvelope
-			if unmarshalErr := json.Unmarshal([]byte(out), &envelope); unmarshalErr != nil {
-				t.Fatalf("json.Unmarshal() error = %v; output = %q", unmarshalErr, out)
+			if unmarshalErr := decodeData([]byte(out), &envelope); unmarshalErr != nil {
+				t.Fatalf("decode error = %v; output = %q", unmarshalErr, out)
 			}
 			if envelope.Command != commandCalcAggregate {
 				t.Errorf("Command = %q, want %q", envelope.Command, commandCalcAggregate)
@@ -1028,7 +1027,7 @@ func TestCalcAggregateNotSanitizedUnderIdentity(t *testing.T) {
 			t.Parallel()
 
 			state := &commandState{sanitizeLevel: "identity"}
-			root := newRootCommandWithDependencies(state, commandDependencies{
+			root := newTestRoot(state, commandDependencies{
 				getenv: func(name string) string {
 					if name == "TAILSCALE_SANITIZE" {
 						return "identity"

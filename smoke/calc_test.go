@@ -4,6 +4,7 @@ package smoke_test
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -64,6 +65,37 @@ func TestDiscovery(t *testing.T) {
 		expect(t, run(t, nil, "--no-such-flag"), exitInvalid)
 		expect(t, run(t, nil, "frobnicate"), exitInvalid)
 	})
+}
+
+// TestOutputModes is the one case that runs without AGENT_MODE: a pipe selects
+// JSON, and --format or AGENT_MODE=human selects text.
+func TestOutputModes(t *testing.T) {
+	t.Parallel()
+	unset := map[string]string{envAgentMode: ""}
+	piped := run(t, unset, "calc", "split", "10.0.0.0/30", "--prefix", "31")
+	expect(t, piped, exitOK)
+	var subnets []string
+	decodeEnvelope(t, piped.stdout).field(t, "subnets", &subnets)
+	if !slices.Equal(subnets, []string{"10.0.0.0/31", "10.0.0.2/31"}) {
+		t.Errorf("subnets = %v", subnets)
+	}
+
+	const human = "10.0.0.0/31\n10.0.0.2/31\n"
+	for name, res := range map[string]result{
+		"--format human":   run(t, unset, "calc", "split", "10.0.0.0/30", "--prefix", "31", flagFormat, "human"),
+		"AGENT_MODE=human": run(t, nil, "calc", "split", "10.0.0.0/30", "--prefix", "31"),
+	} {
+		expect(t, res, exitOK)
+		if res.stdout != human {
+			t.Errorf("%s: stdout = %q, want %q", name, res.stdout, human)
+		}
+	}
+
+	refused := run(t, nil, "calc", "info", "not-a-cidr")
+	expect(t, refused, exitInvalid)
+	if got := decodeFailure(t, refused.stderr); got.ErrorCode != "validation_error" || refused.stdout != "" {
+		t.Errorf("human failure = %+v, stdout = %q", got, refused.stdout)
+	}
 }
 
 func TestCalcInfo(t *testing.T) {

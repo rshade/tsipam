@@ -1,11 +1,1 @@
-{
-  "schema_version": "1",
-  "tool": "tsipam",
-  "command": "site-id reserve",
-  "status": "ok",
-  "message": "reserved site ID 7 for \"hq-vpc\"",
-  "tailnet": "local",
-  "changed": true,
-  "id": "7",
-  "site": "hq-vpc"
-}
+{"data":{"schema_version":"2","tool":"tsipam","command":"site-id reserve","status":"ok","message":"reserved site ID 7 for \"hq-vpc\"","tailnet":"local","changed":true,"id":"7","site":"hq-vpc"},"meta":{"trace_id":"masked","span_id":"masked","idempotency_key":"masked"}}
