@@ -37,6 +37,24 @@ func (l *Ledger) SetNow(now func() time.Time) {
 	l.now = now
 }
 
+// Rehearsal returns a ledger whose mutating methods decide and report exactly
+// as l's do but commit nothing (Store rule 9). Reads are unchanged.
+func (l *Ledger) Rehearsal() *Ledger {
+	rehearsing := *l
+	rehearsing.store = rehearsalStore{Store: l.store}
+	return &rehearsing
+}
+
+// rehearsalStore sets DryRun on every Update.
+type rehearsalStore struct {
+	Store
+}
+
+func (s rehearsalStore) Update(ctx context.Context, tailnet string, opts TxOptions, fn func(Tx) error) error {
+	opts.DryRun = true
+	return s.Store.Update(ctx, tailnet, opts, fn)
+}
+
 type repairReporter interface {
 	Repaired() bool
 }

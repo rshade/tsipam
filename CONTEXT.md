@@ -44,6 +44,10 @@ Crossing one of these is a bug, not a trade-off.
     authorized by a grant app capability. No matching grant means deny;
     nothing is trusted from HTTP headers.
   - It runs one replica against a SQLite registry and refuses `file://`.
+
+  `tsipam mcp-server` is not a daemon: an MCP client starts it as a child,
+  it speaks only over that client's stdio, opens no listener, and exits when
+  the client closes the stream.
 - **Live state never writes declared intent on its own.** `plan` and `check`
   exist to catch the wire drifting from the registry. Anything that copies
   live state into the registry (adopt-from-live) needs an explicit decision
@@ -61,10 +65,13 @@ Crossing one of these is a bug, not a trade-off.
 - **Output channels are never mixed.** Results go to stdout, as human text or
   the versioned JSON envelope. Logs and diagnostics go to stderr. stdout
   stays parse-clean.
-- **No new personal-repo dependencies.** `github.com/jaxxstorm/tscli` (the
-  Tailscale API client, and through it `viper`) is the one deliberate
-  exception. `goa` is a deliberate framework dependency. Adding another needs
-  the same explicit decision.
+- **No new personal-repo dependencies.** There are two deliberate exceptions.
+  `github.com/jaxxstorm/tscli` is the Tailscale API client (and through it
+  `viper`). `github.com/rshade/ax-go` is the CLI runtime: the root package and
+  `mcp` in `cmd/tsipam` only, and `axtest` in tests only. It brings the
+  OpenTelemetry SDK, the MCP Go SDK, and zerolog, and it has one maintainer.
+  `goa` is a deliberate framework dependency. Adding another needs the same
+  explicit decision.
 - **No real identities in the repo.** Fixtures use `example.com` and
   `example.ts.net`. CI's gitleaks rule rejects any other MagicDNS name.
 
@@ -85,8 +92,10 @@ literal `local`.
 
 - **Inbound:** the `tsipam` CLI. Flags or environment variables supply
   credentials (`TAILSCALE_API_KEY` or an OAuth client) for the live commands;
-  `calc` and the registry commands need none. Planned: HTTPS requests from
-  tailnet callers to `tsipam serve` through `svc:tsipam`.
+  `calc` and the registry commands need none. An MCP client on the same
+  machine reaches the same commands as tools over the stdio of
+  `tsipam mcp-server`. Planned: HTTPS requests from tailnet callers to
+  `tsipam serve` through `svc:tsipam`.
 - **Outbound:** read-only Tailscale API calls; reads and writes of the local
   registry; stdout and stderr per the AX conventions in
   [`docs/reference/ax-conventions.md`](docs/reference/ax-conventions.md).

@@ -75,15 +75,45 @@ func (s *Store) View(
 	return fn(snapshot{doc: doc})
 }
 
-// Update locks the tailnet file, applies fn to a buffered copy, and writes at most once.
+// Update locks the tailnet file, applies fn to a buffered copy, and writes at
+// most once. With DryRun it neither locks nor writes.
 func (s *Store) Update(
 	ctx context.Context, tailnet string, opts registry.TxOptions, fn func(registry.Tx) error,
 ) error {
 	path := Path(s.dir, tailnet)
+	if opts.DryRun {
+		return s.rehearse(path, tailnet, opts, fn)
+	}
 	err := withRegistryLock(path, s.logger, func() error {
 		return s.updateLocked(ctx, path, tailnet, opts, fn)
 	})
 	return s.lockLookupError(tailnet, err)
+}
+
+// rehearse applies fn to a buffered copy and discards it. It reads without the
+// lock, so it also works in a directory the caller cannot write.
+func (s *Store) rehearse(
+	path, tailnet string, opts registry.TxOptions, fn func(registry.Tx) error,
+) error {
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		if !opts.CreateIfMissing {
+			return s.notFound(tailnet, err)
+		}
+		if _, statErr := os.Stat(s.dir); statErr != nil {
+			return s.readError(tailnet, statErr)
+		}
+		raw, err = []byte(emptyDocument), nil
+	}
+	if err != nil {
+		return identityFreePathError(err)
+	}
+	doc, err := loadBytes(raw)
+	if err != nil {
+		return err
+	}
+	_, err = s.applyTx(path, raw, doc, registryLoadedMessage, opts, fn)
+	return err
 }
 
 // lockLookupError adds the directory-versus-file lookup sentence to a lock
@@ -111,21 +141,12 @@ func (s *Store) updateLocked(
 		}
 		return err
 	}
-	if err = requireMaps(doc, opts.Require); err != nil {
-		return err
-	}
 	message := registryLoadedMessage
 	if created {
 		message = registryCreatedMessage
 	}
-	logRegistry(s.logger, message, doc)
-	tx := &bufferTx{
-		doc:      doc,
-		path:     path,
-		original: pending,
-		pending:  pending,
-	}
-	if err = fn(tx); err != nil {
+	tx, err := s.applyTx(path, pending, doc, message, opts, fn)
+	if err != nil {
 		return err
 	}
 	if s.takeFail() {
@@ -144,6 +165,26 @@ func (s *Store) updateLocked(
 	}
 	registry.RunAfterSuccess(ctx)
 	return nil
+}
+
+// applyTx validates the maps opts requires and runs fn on a buffered copy.
+func (s *Store) applyTx(
+	path string,
+	raw []byte,
+	doc *document,
+	message string,
+	opts registry.TxOptions,
+	fn func(registry.Tx) error,
+) (*bufferTx, error) {
+	if err := requireMaps(doc, opts.Require); err != nil {
+		return nil, err
+	}
+	logRegistry(s.logger, message, doc)
+	tx := &bufferTx{doc: doc, path: path, original: raw, pending: raw}
+	if err := fn(tx); err != nil {
+		return nil, err
+	}
+	return tx, nil
 }
 
 func (s *Store) readError(tailnet string, err error) error {

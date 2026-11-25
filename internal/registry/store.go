@@ -25,6 +25,9 @@ type TxOptions struct {
 	// Require lists maps that must validate before fn runs. A map the
 	// operation does not need never blocks it.
 	Require []MapKind
+	// DryRun, for Update only, rehearses without committing (rule 9). View
+	// ignores it.
+	DryRun bool
 }
 
 // Counts is the diagnostic size of each map, including maps that only partly
@@ -70,6 +73,10 @@ type Allocations struct {
 //     error rather than (false, nil).
 //  8. Commit failures. A failure while making mutations durable is returned
 //     as *CommitError.
+//  9. Rehearsal. Update with DryRun validates and runs fn as a real Update
+//     does, then discards every mutation. It persists nothing, creates
+//     nothing (CreateIfMissing supplies an empty in-memory registry), does
+//     not run the WithAfterSuccess hook, and need not serialize.
 //
 // After fn succeeds and the commit is durable, and before the backend
 // releases serialization, Update calls the hook registered with

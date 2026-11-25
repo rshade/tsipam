@@ -191,6 +191,7 @@ func (s *MemStore) View(
 // Update serializes read-decide-write for every tailnet on this store.
 // CreateIfMissing installs an empty registry before fn, and keeps it when fn
 // returns an error. Mutations made by fn are discarded unless fn returns nil.
+// DryRun discards them, and the installed registry, either way.
 func (s *MemStore) Update(
 	ctx context.Context,
 	tailnet string,
@@ -210,7 +211,9 @@ func (s *MemStore) Update(
 			serviceAddresses: map[string]registry.ServiceEntry{},
 			udpPorts:         map[string]map[string]string{},
 		}
-		s.regs[tailnet] = reg
+		if !opts.DryRun {
+			s.regs[tailnet] = reg
+		}
 	}
 	if err := requireMem(opts.Require); err != nil {
 		return err
@@ -219,6 +222,9 @@ func (s *MemStore) Update(
 	tx := &memTx{reg: working}
 	if err := fn(tx); err != nil {
 		return err
+	}
+	if opts.DryRun {
+		return nil
 	}
 	if s.failCommit {
 		s.failCommit = false

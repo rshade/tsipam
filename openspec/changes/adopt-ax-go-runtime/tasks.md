@@ -2,7 +2,7 @@
 
 ## 1. Policy and baseline
 
-- [ ] 1.1 Amend `CONTEXT.md` with the D1 exception, the D9 `mcp-server` text,
+- [x] 1.1 Amend `CONTEXT.md` with the D1 exception, the D9 `mcp-server` text,
       and the inbound MCP path, and update ROADMAP item #4 and its "beyond
       `tscli`" dependency rule; verify `mise run lint-md` passes and the text matches the design
 - [ ] 1.2 Record the stripped linux/amd64 size of `main`; verify the number is
@@ -10,14 +10,14 @@
 
 ## 2. Rehearsal in the registry
 
-- [ ] 2.1 Add `TxOptions.DryRun` and contract rule 9 to `registry.Store`, and
+- [x] 2.1 Add `TxOptions.DryRun` and contract rule 9 to `registry.Store`, and
       conformance cases to `storetest` (no persistence, no creation, no
       after-success hook, collision still refused, read-your-writes inside
       `fn`); verify they pass on the in-memory store
-- [ ] 2.2 Implement rule 9 in `hujsonstore` without the lock; verify the suite
+- [x] 2.2 Implement rule 9 in `hujsonstore` without the lock; verify the suite
       passes, and tests show an unchanged directory listing and bytes for a
       present, absent, and read-only registry and a missing directory error
-- [ ] 2.3 Add `Ledger.Rehearsal()`; verify table tests over all nine mutating
+- [x] 2.3 Add `Ledger.Rehearsal()`; verify table tests over all nine mutating
       methods match the real outcome, including ticket replay, exhaustion, and
       release repair, and emit no "written" or "removed" event
 
