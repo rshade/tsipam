@@ -184,6 +184,12 @@ paths:
                   description: Bare IPv4 host or exact IPv4 /32 prefix to release.
                   required: true
                   type: string
+                - name: dry_run
+                  in: query
+                  description: Report the outcome a real call would have and change nothing.
+                  required: false
+                  type: boolean
+                  default: false
                 - name: tailnet
                   in: path
                   description: Routing/storage key for the registry.
@@ -293,6 +299,12 @@ paths:
             summary: release_site_id ipam
             operationId: ipam#release_site_id
             parameters:
+                - name: dry_run
+                  in: query
+                  description: Report the outcome a real call would have and change nothing.
+                  required: false
+                  type: boolean
+                  default: false
                 - name: tailnet
                   in: path
                   description: Routing/storage key for the registry.
@@ -411,6 +423,12 @@ paths:
                   description: Canonical IPv4 or IPv6 CIDR prefix to release.
                   required: true
                   type: string
+                - name: dry_run
+                  in: query
+                  description: Report the outcome a real call would have and change nothing.
+                  required: false
+                  type: boolean
+                  default: false
                 - name: tailnet
                   in: path
                   description: Routing/storage key for the registry.
@@ -605,6 +623,12 @@ paths:
                   description: Decimal UDP listen port to release, 1024-65535.
                   required: true
                   type: string
+                - name: dry_run
+                  in: query
+                  description: Report the outcome a real call would have and change nothing.
+                  required: false
+                  type: boolean
+                  default: false
                 - name: tailnet
                   in: path
                   description: Routing/storage key for the registry.
@@ -891,6 +915,11 @@ definitions:
                 type: string
                 description: Free-text description of why this address space is reserved.
                 example: Consequatur numquam dolores excepturi ratione.
+            dry_run:
+                type: boolean
+                description: Report the outcome a real call would have and change nothing.
+                default: false
+                example: false
             live_taken:
                 type: array
                 items:
@@ -930,6 +959,7 @@ definitions:
                 example: Sunt cumque.
         example:
             description: Consequatur numquam dolores excepturi ratione.
+            dry_run: false
             live_taken:
                 - Et minus excepturi consectetur vel officiis atque.
                 - Molestiae voluptatem quaerat magni alias.
@@ -1479,6 +1509,11 @@ definitions:
                 type: string
                 description: Free-text description of why this address space is reserved.
                 example: Aperiam quo.
+            dry_run:
+                type: boolean
+                description: Report the outcome a real call would have and change nothing.
+                default: false
+                example: false
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
@@ -1499,6 +1534,7 @@ definitions:
         example:
             address: Distinctio qui sed ipsum ut.
             description: Aperiam quo.
+            dry_run: false
             owner: Quae facere deserunt sit saepe.
             reserved_at: "1980-11-01T05:11:18Z"
             service: Non ut quidem dolores modi.
@@ -1645,6 +1681,11 @@ definitions:
                 type: string
                 description: Free-text description of why this address space is reserved.
                 example: Dolores quia eveniet odit numquam ex.
+            dry_run:
+                type: boolean
+                description: Report the outcome a real call would have and change nothing.
+                default: false
+                example: true
             id:
                 type: string
                 description: 4via6 site ID to reserve.
@@ -1668,6 +1709,7 @@ definitions:
                 example: Est neque velit.
         example:
             description: Dolores quia eveniet odit numquam ex.
+            dry_run: true
             id: Necessitatibus aperiam voluptatem quasi distinctio.
             owner: Eveniet dolor sunt soluta tenetur et.
             reserved_at: "2006-10-21T04:41:45Z"
@@ -1819,6 +1861,11 @@ definitions:
                 type: string
                 description: Free-text description of why this address space is reserved.
                 example: Vel quo et aliquam ducimus quia ut.
+            dry_run:
+                type: boolean
+                description: Report the outcome a real call would have and change nothing.
+                default: false
+                example: false
             owner:
                 type: string
                 description: Operator or team that owns this reservation.
@@ -1839,6 +1886,7 @@ definitions:
         example:
             cidr: Sint et.
             description: Vel quo et aliquam ducimus quia ut.
+            dry_run: false
             owner: Animi nisi totam.
             reserved_at: "2013-06-13T22:28:00Z"
             site: Ab aut sequi soluta expedita accusantium.
@@ -1985,6 +2033,11 @@ definitions:
                 type: string
                 description: Device label to reserve the port for.
                 example: Voluptates aspernatur tenetur et eaque.
+            dry_run:
+                type: boolean
+                description: Report the outcome a real call would have and change nothing.
+                default: false
+                example: true
             port:
                 type: string
                 description: Decimal UDP listen port to reserve, 1024-65535.
@@ -1995,6 +2048,7 @@ definitions:
                 example: Corrupti maiores occaecati incidunt sit.
         example:
             device: Voluptates aspernatur tenetur et eaque.
+            dry_run: true
             port: Ut rerum.
             site: Corrupti maiores occaecati incidunt sit.
         required:

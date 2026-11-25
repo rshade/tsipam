@@ -23,16 +23,16 @@
 
 ## 3. Service contract and spans
 
-- [ ] 3.1 Prove the unchanged design regenerates byte-stable, then add
+- [x] 3.1 Prove the unchanged design regenerates byte-stable, then add
       `dry_run` to nine payloads (body for POST, query for DELETE) and run
       `mise run gen`; verify `mise run gen-check` passes and the diff holds
       only that attribute
-- [ ] 3.2 Use the rehearsing ledger in `ipamsvc` when `dry_run` is set; verify
+- [x] 3.2 Use the rehearsing ledger in `ipamsvc` when `dry_run` is set; verify
       `ipamsvc` tests and tests over the loopback for all nine methods
-- [ ] 3.3 Set goa `timeout`/`temporary` on comparison failures and add typed
+- [x] 3.3 Set goa `timeout`/`temporary` on comparison failures and add typed
       credential and collection errors in `internal/devices`; verify tests for
       timeout, 503, 403, and missing credentials across the loopback
-- [ ] 3.4 Add the OpenTelemetry API module, the endpoint span middleware and
+- [x] 3.4 Add the OpenTelemetry API module, the endpoint span middleware and
       `traceparent` extraction in `internal/ipamhttp`, injection in
       `internal/ipamconn`, and the API read spans of D10; verify with a span
       recorder over both the loopback and `httptest` that parents are right,

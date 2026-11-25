@@ -202,6 +202,16 @@ paths:
                     description: Bare IPv4 host or exact IPv4 /32 prefix to release.
                     example: Saepe et rerum omnis.
                   example: Saepe et rerum omnis.
+                - name: dry_run
+                  in: query
+                  description: Report the outcome a real call would have and change nothing.
+                  allowEmptyValue: true
+                  schema:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: false
+                  example: false
                 - name: tailnet
                   in: path
                   description: Routing/storage key for the registry.
@@ -329,10 +339,11 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ServiceAddressReservation'
+                            $ref: '#/components/schemas/ReserveServiceAddressRequestBody'
                         example:
                             address: Distinctio qui sed ipsum ut.
                             description: Aperiam quo.
+                            dry_run: false
                             owner: Quae facere deserunt sit saepe.
                             reserved_at: "1980-11-01T05:11:18Z"
                             service: Non ut quidem dolores modi.
@@ -450,9 +461,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/SiteIDReservation'
+                            $ref: '#/components/schemas/ReserveSiteIDRequestBody'
                         example:
                             description: Dolores quia eveniet odit numquam ex.
+                            dry_run: true
                             id: Necessitatibus aperiam voluptatem quasi distinctio.
                             owner: Eveniet dolor sunt soluta tenetur et.
                             reserved_at: "2006-10-21T04:41:45Z"
@@ -506,6 +518,16 @@ paths:
             summary: release_site_id ipam
             operationId: ipam#release_site_id
             parameters:
+                - name: dry_run
+                  in: query
+                  description: Report the outcome a real call would have and change nothing.
+                  allowEmptyValue: true
+                  schema:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: true
+                  example: true
                 - name: tailnet
                   in: path
                   description: Routing/storage key for the registry.
@@ -564,6 +586,16 @@ paths:
                     description: Canonical IPv4 or IPv6 CIDR prefix to release.
                     example: Consequuntur est.
                   example: Consequuntur est.
+                - name: dry_run
+                  in: query
+                  description: Report the outcome a real call would have and change nothing.
+                  allowEmptyValue: true
+                  schema:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: false
+                  example: false
                 - name: tailnet
                   in: path
                   description: Routing/storage key for the registry.
@@ -679,10 +711,11 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/SubnetPoolReservation'
+                            $ref: '#/components/schemas/ReserveSubnetPoolRequestBody'
                         example:
                             cidr: Sint et.
                             description: Vel quo et aliquam ducimus quia ut.
+                            dry_run: false
                             owner: Animi nisi totam.
                             reserved_at: "2013-06-13T22:28:00Z"
                             site: Ab aut sequi soluta expedita accusantium.
@@ -754,6 +787,7 @@ paths:
                             $ref: '#/components/schemas/AllocateSubnetPoolRequestBody'
                         example:
                             description: Consequatur numquam dolores excepturi ratione.
+                            dry_run: false
                             live_taken:
                                 - Et minus excepturi consectetur vel officiis atque.
                                 - Molestiae voluptatem quaerat magni alias.
@@ -833,6 +867,16 @@ paths:
                     description: Decimal UDP listen port to release, 1024-65535.
                     example: Ipsam cumque corporis animi quidem est.
                   example: Ipsam cumque corporis animi quidem est.
+                - name: dry_run
+                  in: query
+                  description: Report the outcome a real call would have and change nothing.
+                  allowEmptyValue: true
+                  schema:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: true
+                  example: true
                 - name: tailnet
                   in: path
                   description: Routing/storage key for the registry.
@@ -959,9 +1003,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UDPPortReservation'
+                            $ref: '#/components/schemas/ReserveUDPPortRequestBody'
                         example:
                             device: Voluptates aspernatur tenetur et eaque.
+                            dry_run: true
                             port: Ut rerum.
                             site: Corrupti maiores occaecati incidunt sit.
             responses:
@@ -1011,6 +1056,11 @@ components:
                     type: string
                     description: Free-text description of why this address space is reserved.
                     example: Consequatur numquam dolores excepturi ratione.
+                dry_run:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: false
                 live_taken:
                     type: array
                     items:
@@ -1051,6 +1101,7 @@ components:
             description: Request body for allocate_subnet_pool.
             example:
                 description: Consequatur numquam dolores excepturi ratione.
+                dry_run: false
                 live_taken:
                     - Et minus excepturi consectetur vel officiis atque.
                     - Molestiae voluptatem quaerat magni alias.
@@ -1569,6 +1620,51 @@ components:
                 - site
                 - port
                 - changed
+        ReserveServiceAddressRequestBody:
+            type: object
+            properties:
+                address:
+                    type: string
+                    description: Bare IPv4 host or exact IPv4 /32 prefix to reserve.
+                    example: Distinctio qui sed ipsum ut.
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Aperiam quo.
+                dry_run:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: false
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Quae facere deserunt sit saepe.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "1980-11-01T05:11:18Z"
+                    format: date-time
+                service:
+                    type: string
+                    description: Bare service name or canonical svc:<name> identity.
+                    example: Non ut quidem dolores modi.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Qui pariatur dignissimos.
+            description: Request body for reserve_service_address.
+            example:
+                address: Distinctio qui sed ipsum ut.
+                description: Aperiam quo.
+                dry_run: false
+                owner: Quae facere deserunt sit saepe.
+                reserved_at: "1980-11-01T05:11:18Z"
+                service: Non ut quidem dolores modi.
+                ticket: Qui pariatur dignissimos.
+            required:
+                - address
+                - service
         ReserveServiceAddressResponseBody:
             type: object
             properties:
@@ -1613,6 +1709,51 @@ components:
                 - address
                 - service
                 - changed
+        ReserveSiteIDRequestBody:
+            type: object
+            properties:
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Dolores quia eveniet odit numquam ex.
+                dry_run:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: true
+                id:
+                    type: string
+                    description: 4via6 site ID to reserve.
+                    example: Necessitatibus aperiam voluptatem quasi distinctio.
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Eveniet dolor sunt soluta tenetur et.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "2006-10-21T04:41:45Z"
+                    format: date-time
+                site:
+                    type: string
+                    description: Site name to reserve it for.
+                    example: Similique quia est quos neque rem.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Est neque velit.
+            description: Request body for reserve_site_id.
+            example:
+                description: Dolores quia eveniet odit numquam ex.
+                dry_run: true
+                id: Necessitatibus aperiam voluptatem quasi distinctio.
+                owner: Eveniet dolor sunt soluta tenetur et.
+                reserved_at: "2006-10-21T04:41:45Z"
+                site: Similique quia est quos neque rem.
+                ticket: Est neque velit.
+            required:
+                - id
+                - site
         ReserveSiteIDResponseBody:
             type: object
             properties:
@@ -1657,6 +1798,51 @@ components:
                 - id
                 - site
                 - changed
+        ReserveSubnetPoolRequestBody:
+            type: object
+            properties:
+                cidr:
+                    type: string
+                    description: Canonical IPv4 or IPv6 CIDR prefix to reserve.
+                    example: Sint et.
+                description:
+                    type: string
+                    description: Free-text description of why this address space is reserved.
+                    example: Vel quo et aliquam ducimus quia ut.
+                dry_run:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: false
+                owner:
+                    type: string
+                    description: Operator or team that owns this reservation.
+                    example: Animi nisi totam.
+                reserved_at:
+                    type: string
+                    description: RFC 3339 timestamp this reservation's metadata was recorded.
+                    example: "2013-06-13T22:28:00Z"
+                    format: date-time
+                site:
+                    type: string
+                    description: Site name to reserve it for.
+                    example: Ab aut sequi soluta expedita accusantium.
+                ticket:
+                    type: string
+                    description: Tracking ticket or issue reference for this reservation.
+                    example: Minima accusantium qui ratione quis sunt maiores.
+            description: Request body for reserve_subnet_pool.
+            example:
+                cidr: Sint et.
+                description: Vel quo et aliquam ducimus quia ut.
+                dry_run: false
+                owner: Animi nisi totam.
+                reserved_at: "2013-06-13T22:28:00Z"
+                site: Ab aut sequi soluta expedita accusantium.
+                ticket: Minima accusantium qui ratione quis sunt maiores.
+            required:
+                - cidr
+                - site
         ReserveSubnetPoolResponseBody:
             type: object
             properties:
@@ -1701,6 +1887,36 @@ components:
                 - cidr
                 - site
                 - changed
+        ReserveUDPPortRequestBody:
+            type: object
+            properties:
+                device:
+                    type: string
+                    description: Device label to reserve the port for.
+                    example: Voluptates aspernatur tenetur et eaque.
+                dry_run:
+                    type: boolean
+                    description: Report the outcome a real call would have and change nothing.
+                    default: false
+                    example: true
+                port:
+                    type: string
+                    description: Decimal UDP listen port to reserve, 1024-65535.
+                    example: Ut rerum.
+                site:
+                    type: string
+                    description: Site/firewall-boundary label for the reservation.
+                    example: Corrupti maiores occaecati incidunt sit.
+            description: Request body for reserve_udp_port.
+            example:
+                device: Voluptates aspernatur tenetur et eaque.
+                dry_run: true
+                port: Ut rerum.
+                site: Corrupti maiores occaecati incidunt sit.
+            required:
+                - site
+                - port
+                - device
         ReserveUDPPortResponseBody:
             type: object
             properties:

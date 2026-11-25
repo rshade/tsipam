@@ -5,7 +5,6 @@ package devices
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -20,6 +19,13 @@ import (
 
 // APITimeout bounds every Tailscale API request.
 const APITimeout = 30 * time.Second
+
+const (
+	tailnetEnv           = "TAILSCALE_TAILNET"
+	apiKeyEnv            = "TAILSCALE_API_KEY" //nolint:gosec // a variable name, not a credential
+	oauthClientIDEnv     = "TAILSCALE_OAUTH_CLIENT_ID"
+	oauthClientSecretEnv = "TAILSCALE_OAUTH_CLIENT_SECRET" //nolint:gosec // a variable name, not a credential
+)
 
 // Device is a normalized device record: nil address, route, and tag lists from
 // the API are represented as empty slices so callers never have to special-case
@@ -61,15 +67,14 @@ func List(ctx context.Context, getenv func(string) string, logger diagnostics.Lo
 	if err != nil {
 		return nil, err
 	}
-	// tscli's client builds its own http.Client with no Timeout set, so
-	// the APITimeout bound that an explicit http.Client would have is
-	// reapplied here through the context.
-	listCtx, cancel := context.WithTimeout(ctx, APITimeout)
-	defer cancel()
 	diagnostics.Debug(logger, "collecting devices")
-	list, err := client.Devices().List(listCtx, tsapi.WithFields(tsapi.IncludeFieldsAll))
+	list, err := read(ctx, "list_devices",
+		func(err error) error { return fmt.Errorf("listing devices: %w", err) },
+		func(ctx context.Context) ([]tsapi.Device, error) {
+			return client.Devices().List(ctx, tsapi.WithFields(tsapi.IncludeFieldsAll))
+		})
 	if err != nil {
-		return nil, fmt.Errorf("listing devices: %w", err)
+		return nil, err
 	}
 	devices := make([]Device, len(list))
 	for index, device := range list {
@@ -90,6 +95,19 @@ func List(ctx context.Context, getenv func(string) string, logger diagnostics.Lo
 	return devices, nil
 }
 
+// CheckCredentials reports whether getenv holds what a live read needs. It
+// contacts nothing.
+func CheckCredentials(getenv func(string) string) error {
+	if getenv(tailnetEnv) == "" {
+		return &CredentialsError{message: tailnetEnv + " is required"}
+	}
+	if getenv(apiKeyEnv) == "" && (getenv(oauthClientIDEnv) == "" || getenv(oauthClientSecretEnv) == "") {
+		return &CredentialsError{message: apiKeyEnv + ", or both " + oauthClientIDEnv + " and " +
+			oauthClientSecretEnv + ", are required"}
+	}
+	return nil
+}
+
 // newClient builds the official v2 API client via tscli's constructor
 // (github.com/jaxxstorm/tscli/pkg/tscli.New), which reads its configuration
 // from viper. Populating those keys here -- rather than adopting viper as
@@ -99,25 +117,17 @@ func newClient(getenv func(string) string) (*tsapi.Client, error) {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
-	tailnet := getenv("TAILSCALE_TAILNET")
-	if tailnet == "" {
-		return nil, errors.New("TAILSCALE_TAILNET is required")
-	}
-	apiKey := getenv("TAILSCALE_API_KEY")
-	oauthClientID := getenv("TAILSCALE_OAUTH_CLIENT_ID")
-	oauthClientSecret := getenv("TAILSCALE_OAUTH_CLIENT_SECRET")
-	if apiKey == "" && (oauthClientID == "" || oauthClientSecret == "") {
-		return nil, errors.New(
-			"TAILSCALE_API_KEY, or both TAILSCALE_OAUTH_CLIENT_ID and TAILSCALE_OAUTH_CLIENT_SECRET, are required")
+	if err := CheckCredentials(getenv); err != nil {
+		return nil, err
 	}
 
 	clientMu.Lock()
 	defer clientMu.Unlock()
 
-	viper.Set("tailnet", tailnet)
-	viper.Set("api-key", apiKey)
-	viper.Set("oauth-client-id", oauthClientID)
-	viper.Set("oauth-client-secret", oauthClientSecret)
+	viper.Set("tailnet", getenv(tailnetEnv))
+	viper.Set("api-key", getenv(apiKeyEnv))
+	viper.Set("oauth-client-id", getenv(oauthClientIDEnv))
+	viper.Set("oauth-client-secret", getenv(oauthClientSecretEnv))
 	defer func() {
 		viper.Set("tailnet", "")
 		viper.Set("api-key", "")
@@ -127,8 +137,9 @@ func newClient(getenv func(string) string) (*tsapi.Client, error) {
 
 	client, err := tscli.New()
 	if err != nil {
-		return nil, fmt.Errorf("constructing Tailscale API client via tscli: %w", err)
+		return nil, &CollectionError{Err: fmt.Errorf("constructing Tailscale API client via tscli: %w", err)}
 	}
+	client.HTTP.Transport = statusTransport{base: client.HTTP.Transport}
 	// tscli's internal userAgentTransport unconditionally overwrites User-Agent
 	// headers and ignores the public UserAgent field; the User-Agent leak is a
 	// known unfixable limitation pending a fix upstream.

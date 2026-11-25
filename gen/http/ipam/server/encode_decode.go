@@ -12,6 +12,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	goahttp "goa.design/goa/v3/http"
@@ -303,12 +304,27 @@ func DecodeReleaseSiteIDRequest(mux goahttp.Muxer, decoder func(*http.Request) g
 		var (
 			tailnet string
 			id      string
+			dryRun  bool
+			err     error
 
 			params = mux.Vars(r)
 		)
 		tailnet = params["tailnet"]
 		id = params["id"]
-		payload = NewReleaseSiteIDPayload(tailnet, id)
+		{
+			dryRunRaw := r.URL.Query().Get("dry_run")
+			if dryRunRaw != "" {
+				v, err2 := strconv.ParseBool(dryRunRaw)
+				if err2 != nil {
+					err = goa.MergeErrors(err, goa.InvalidFieldTypeError("dry_run", dryRunRaw, "boolean"))
+				}
+				dryRun = v
+			}
+		}
+		if err != nil {
+			return payload, err
+		}
+		payload = NewReleaseSiteIDPayload(tailnet, id, dryRun)
 
 		return payload, nil
 	}
@@ -574,19 +590,31 @@ func DecodeReleaseSubnetPoolRequest(mux goahttp.Muxer, decoder func(*http.Reques
 		var (
 			tailnet string
 			cidr    string
+			dryRun  bool
 			err     error
 
 			params = mux.Vars(r)
 		)
 		tailnet = params["tailnet"]
-		cidr = r.URL.Query().Get("cidr")
+		qp := r.URL.Query()
+		cidr = qp.Get("cidr")
 		if cidr == "" {
 			err = goa.MergeErrors(err, goa.MissingFieldError("cidr", "query string"))
+		}
+		{
+			dryRunRaw := qp.Get("dry_run")
+			if dryRunRaw != "" {
+				v, err2 := strconv.ParseBool(dryRunRaw)
+				if err2 != nil {
+					err = goa.MergeErrors(err, goa.InvalidFieldTypeError("dry_run", dryRunRaw, "boolean"))
+				}
+				dryRun = v
+			}
 		}
 		if err != nil {
 			return payload, err
 		}
-		payload = NewReleaseSubnetPoolPayload(tailnet, cidr)
+		payload = NewReleaseSubnetPoolPayload(tailnet, cidr, dryRun)
 
 		return payload, nil
 	}
@@ -761,19 +789,31 @@ func DecodeReleaseServiceAddressRequest(mux goahttp.Muxer, decoder func(*http.Re
 		var (
 			tailnet string
 			address string
+			dryRun  bool
 			err     error
 
 			params = mux.Vars(r)
 		)
 		tailnet = params["tailnet"]
-		address = r.URL.Query().Get("address")
+		qp := r.URL.Query()
+		address = qp.Get("address")
 		if address == "" {
 			err = goa.MergeErrors(err, goa.MissingFieldError("address", "query string"))
+		}
+		{
+			dryRunRaw := qp.Get("dry_run")
+			if dryRunRaw != "" {
+				v, err2 := strconv.ParseBool(dryRunRaw)
+				if err2 != nil {
+					err = goa.MergeErrors(err, goa.InvalidFieldTypeError("dry_run", dryRunRaw, "boolean"))
+				}
+				dryRun = v
+			}
 		}
 		if err != nil {
 			return payload, err
 		}
-		payload = NewReleaseServiceAddressPayload(tailnet, address)
+		payload = NewReleaseServiceAddressPayload(tailnet, address, dryRun)
 
 		return payload, nil
 	}
@@ -983,6 +1023,7 @@ func DecodeReleaseUDPPortRequest(mux goahttp.Muxer, decoder func(*http.Request) 
 			tailnet string
 			site    string
 			port    string
+			dryRun  bool
 			err     error
 
 			params = mux.Vars(r)
@@ -997,10 +1038,20 @@ func DecodeReleaseUDPPortRequest(mux goahttp.Muxer, decoder func(*http.Request) 
 		if port == "" {
 			err = goa.MergeErrors(err, goa.MissingFieldError("port", "query string"))
 		}
+		{
+			dryRunRaw := qp.Get("dry_run")
+			if dryRunRaw != "" {
+				v, err2 := strconv.ParseBool(dryRunRaw)
+				if err2 != nil {
+					err = goa.MergeErrors(err, goa.InvalidFieldTypeError("dry_run", dryRunRaw, "boolean"))
+				}
+				dryRun = v
+			}
+		}
 		if err != nil {
 			return payload, err
 		}
-		payload = NewReleaseUDPPortPayload(tailnet, site, port)
+		payload = NewReleaseUDPPortPayload(tailnet, site, port, dryRun)
 
 		return payload, nil
 	}

@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	ipam "github.com/rshade/tsipam/gen/ipam"
 	goahttp "goa.design/goa/v3/http"
@@ -473,6 +474,21 @@ func (c *Client) BuildReleaseSiteIDRequest(ctx context.Context, v any) (*http.Re
 	return req, nil
 }
 
+// EncodeReleaseSiteIDRequest returns an encoder for requests sent to the ipam
+// release_site_id server.
+func EncodeReleaseSiteIDRequest(encoder func(*http.Request) goahttp.Encoder) func(*http.Request, any) error {
+	return func(req *http.Request, v any) error {
+		p, ok := v.(*ipam.ReleaseSiteIDPayload)
+		if !ok {
+			return goahttp.ErrInvalidType("ipam", "release_site_id", "*ipam.ReleaseSiteIDPayload", v)
+		}
+		values := req.URL.Query()
+		values.Add("dry_run", strconv.FormatBool(p.DryRun))
+		req.URL.RawQuery = values.Encode()
+		return nil
+	}
+}
+
 // DecodeReleaseSiteIDResponse returns a decoder for responses returned by the
 // ipam release_site_id endpoint. restoreBody controls whether the response
 // body should be restored after having been read.
@@ -907,6 +923,7 @@ func EncodeReleaseSubnetPoolRequest(encoder func(*http.Request) goahttp.Encoder)
 		}
 		values := req.URL.Query()
 		values.Add("cidr", p.CIDR)
+		values.Add("dry_run", strconv.FormatBool(p.DryRun))
 		req.URL.RawQuery = values.Encode()
 		return nil
 	}
@@ -1224,6 +1241,7 @@ func EncodeReleaseServiceAddressRequest(encoder func(*http.Request) goahttp.Enco
 		}
 		values := req.URL.Query()
 		values.Add("address", p.Address)
+		values.Add("dry_run", strconv.FormatBool(p.DryRun))
 		req.URL.RawQuery = values.Encode()
 		return nil
 	}
@@ -1573,6 +1591,7 @@ func EncodeReleaseUDPPortRequest(encoder func(*http.Request) goahttp.Encoder) fu
 		values := req.URL.Query()
 		values.Add("site", p.Site)
 		values.Add("port", p.Port)
+		values.Add("dry_run", strconv.FormatBool(p.DryRun))
 		req.URL.RawQuery = values.Encode()
 		return nil
 	}
