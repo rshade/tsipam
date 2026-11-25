@@ -47,6 +47,7 @@ space before it is advertised and compares those reservations with live use.
     - [`calc next-free`](#calc-next-free)
     - [`calc info`](#calc-info)
   - [Inputs by position or by flag](#inputs-by-position-or-by-flag)
+  - [Preview, approve, and retry](#preview-approve-and-retry)
   - [Registry format](#registry-format)
   - [Machine-readable and diagnostic output](#machine-readable-and-diagnostic-output)
   - [Not yet implemented](#not-yet-implemented)
@@ -327,11 +328,12 @@ against an already-owned reservation. Reserving the same id for a
 #### `site-id release <id>`
 
 Releases a reserved site ID. Errors if the registry file does not exist.
-Releases a never-reserved ID as a no-op (not an error).
+Releases a never-reserved ID as a no-op (not an error). Every `release` needs
+[approval](#preview-approve-and-retry).
 
 ```bash
-tsipam site-id release 1
-tsipam site-id release 2 --registry-dir /etc/tsipam --tailnet production
+tsipam site-id release 1 --yes
+tsipam site-id release 2 --yes --registry-dir /etc/tsipam --tailnet production
 ```
 
 #### `site-id list`
@@ -418,7 +420,7 @@ Releases an exact subnet-pool reservation. Errors if the registry file does
 not exist; releasing a valid canonical CIDR that is not reserved is a no-op.
 
 ```bash
-tsipam subnet release 10.20.0.0/16
+tsipam subnet release 10.20.0.0/16 --yes
 ```
 
 #### `subnet list`
@@ -467,8 +469,8 @@ Releases the canonical reservation selected by a bare IPv4 address or exact
 an error.
 
 ```bash
-tsipam service release 100.100.100.8
-tsipam service release 100.100.100.9/32 --format json
+tsipam service release 100.100.100.8 --yes
+tsipam service release 100.100.100.9/32 --yes --format json
 ```
 
 #### `service list`
@@ -522,8 +524,8 @@ Releases a reservation from the selected site. Releasing an absent site/port
 pair is a successful no-op; a missing registry file is an error.
 
 ```bash
-tsipam port release 41642 --site branch-office
-tsipam port release 41643 --site branch-office --format json
+tsipam port release 41642 --site branch-office --yes
+tsipam port release 41643 --site branch-office --yes --format json
 ```
 
 #### `port list [--site <site>]`
@@ -780,6 +782,38 @@ tsipam subnet reserve --cidr 10.20.0.0/16 --site hq-vpc
 Give every input by position or every input by flag. Some of each is refused,
 and a missing input is reported with its flag, before anything is read or
 written.
+
+### Preview, approve, and retry
+
+`--dry-run` on any `reserve`, `release`, or `subnet allocate` reports what the
+command would do and changes nothing. It applies the same validation, collision,
+allocation, and ticket rules as a real run, so a collision still exits 1, and it
+creates no file, not even a missing registry:
+
+```bash
+tsipam site-id reserve 1 hq-vpc --dry-run
+# dry run: would reserve site ID 1 for "hq-vpc"
+```
+
+A rehearsal takes no lock and holds nothing. A later real run decides again from
+the registry it reads, so a rehearsed block may be gone by then. In JSON,
+`meta.dry_run` is `true`.
+
+The four `release` commands remove a reservation, so they need approval. Pass
+`--yes`, or answer the question at a terminal. Without either the command exits
+2 with `error_code` `confirmation_required`, and the registry is unchanged:
+
+```bash
+tsipam site-id release 1 --yes
+# released site ID 1
+```
+
+`reserve` and `allocate` never take another holder's key and need no approval.
+
+Repeating a `reserve` or `release` is safe, and `subnet allocate` is when it
+carries a `--ticket`. `--idempotency-key` is different: it is echoed in
+`meta.idempotency_key` so a caller can match a result to its request, and it is
+neither stored nor used to replay anything.
 
 ### Registry format
 

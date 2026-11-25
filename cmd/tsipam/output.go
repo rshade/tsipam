@@ -187,6 +187,9 @@ type outputEnvelope struct {
 	// UnhandledFields reflection guard, since it carries no data of its own.
 	messageBuilder func(*outputEnvelope) string
 
+	// rehearsed is true for a --dry-run result. The document says so in meta.
+	rehearsed bool
+
 	// Registry-derived aggregates contain allocation identities; positional
 	// aggregates are stateless arithmetic. This provenance is not a JSON field.
 	supernetsFromRegistry bool
@@ -595,6 +598,7 @@ func emitOutput(cmd *cobra.Command, result *outputEnvelope, outputSanitizer *san
 	if outputSanitizer != nil && outputSanitizer.Level() != sanitize.Off {
 		result = sanitizeOutput(result, outputSanitizer)
 	}
+	result.rehearsed = ax.DryRunFromContext(cmd.Context())
 	if result.messageBuilder != nil {
 		result.Message = result.messageBuilder(result)
 	}

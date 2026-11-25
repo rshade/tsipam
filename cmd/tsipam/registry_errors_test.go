@@ -35,16 +35,16 @@ func registryCommandCases(t *testing.T, dir string) map[string][]string {
 	return map[string][]string{
 		commandSubnetList:     {commandSubnet, commandList},
 		commandSiteIDList:     {commandSiteID, commandList},
-		commandSiteIDRelease:  {commandSiteID, "release", "1"},
+		commandSiteIDRelease:  {commandSiteID, "release", "1", "--yes"},
 		commandServiceList:    {commandService, commandList},
 		commandPortList:       {commandPort, commandList},
 		"calc aggregate":      {commandCalc, "aggregate", "--from-registry"},
 		commandPlan:           {commandPlan},
 		commandCheck:          {commandCheck},
 		commandCheckPolicy:    {commandCheckPolicy, policy},
-		commandSubnetRelease:  {commandSubnet, "release", "192.0.2.0/24"},
-		commandServiceRelease: {commandService, "release", "100.64.0.1"},
-		commandPortRelease:    {commandPort, "release", "41641", "--site", "hq"},
+		commandSubnetRelease:  {commandSubnet, "release", "192.0.2.0/24", "--yes"},
+		commandServiceRelease: {commandService, "release", "100.64.0.1", "--yes"},
+		commandPortRelease:    {commandPort, "release", "41641", "--site", "hq", "--yes"},
 	}
 }
 

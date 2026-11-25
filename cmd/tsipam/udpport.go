@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rshade/ax-go"
 	"github.com/spf13/cobra"
 
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
@@ -17,17 +18,15 @@ import (
 // the output envelope after sanitization, keeping message and structured fields
 // synchronized.
 func udpPortReserveMessage(output *outputEnvelope) string {
-	if output.Changed != nil && *output.Changed {
-		return fmt.Sprintf("reserved UDP port %s in site %q for %q", output.Port, output.Site, output.Device)
-	}
-	return fmt.Sprintf("UDP port %s in site %q already reserved for %q", output.Port, output.Site, output.Device)
+	return outcomeMessage(output, "reserved", "reserve",
+		fmt.Sprintf("UDP port %s in site %q for %q", output.Port, output.Site, output.Device),
+		fmt.Sprintf("UDP port %s in site %q already reserved for %q", output.Port, output.Site, output.Device))
 }
 
 func udpPortReleaseMessage(output *outputEnvelope) string {
-	if output.Changed != nil && *output.Changed {
-		return fmt.Sprintf("released UDP port %s from site %q", output.Port, output.Site)
-	}
-	return fmt.Sprintf("UDP port %s in site %q was not reserved", output.Port, output.Site)
+	return outcomeMessage(output, "released", "release",
+		fmt.Sprintf("UDP port %s from site %q", output.Port, output.Site),
+		fmt.Sprintf("UDP port %s in site %q was not reserved", output.Port, output.Site))
 }
 
 // newUDPPortCommand groups explicit per-device UDP listen-port reservations.
@@ -60,10 +59,10 @@ func newUDPPortReserveCommand(state *commandState) *cobra.Command {
 			_ bool,
 		) (*outputEnvelope, error) {
 			res, err := client.ReserveUDPPort()(ctx, &ipam.ReserveUDPPortPayload{
-				Tailnet: tailnet,
-				Site:    site,
-				Port:    args[0],
-				Device:  args[1],
+				DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet,
+				Site:   site,
+				Port:   args[0],
+				Device: args[1],
 			})
 			if err != nil {
 				return nil, err
@@ -99,9 +98,9 @@ func newUDPPortReleaseCommand(state *commandState) *cobra.Command {
 			_ bool,
 		) (*outputEnvelope, error) {
 			res, err := client.ReleaseUDPPort()(ctx, &ipam.ReleaseUDPPortPayload{
-				Tailnet: tailnet,
-				Site:    site,
-				Port:    args[0],
+				DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet,
+				Site: site,
+				Port: args[0],
 			})
 			if err != nil {
 				return nil, err
@@ -233,16 +232,13 @@ func newUDPPortLeafCommand(
 					return validateErr
 				}
 			}
-			return state.registryTarget(registryDir).run(
-				cmd.Context(),
-				func(ctx context.Context, client *ipamclient.Client) error {
-					output, callErr := call(ctx, client, args, tailnet, site, siteSet)
-					if callErr != nil {
-						return callErr
-					}
-					return emitOutput(cmd, output, outputSanitizer)
-				},
-			)
+			if err = state.approve(cmd, args, registry.NormalizePort); err != nil {
+				return err
+			}
+			return state.runRegistryCall(cmd, registryDir, outputSanitizer,
+				func(ctx context.Context, client *ipamclient.Client) (*outputEnvelope, error) {
+					return call(ctx, client, args, tailnet, site, siteSet)
+				})
 		},
 	}
 	bound = bindInputs(cmd, specs...)

@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"strings"
 
+	"github.com/rshade/ax-go"
 	"github.com/spf13/cobra"
 
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
@@ -21,24 +22,21 @@ import (
 // closing over the raw API result means a builder invoked after
 // sanitizeOutput sees the already-redacted placeholder.
 func subnetReserveMessage(o *outputEnvelope) string {
-	if o.Changed != nil && *o.Changed {
-		return fmt.Sprintf("reserved subnet CIDR %s for %q", o.CIDR, o.Site)
-	}
-	return fmt.Sprintf("subnet CIDR %s already reserved for %q", o.CIDR, o.Site)
+	return outcomeMessage(o, "reserved", "reserve",
+		fmt.Sprintf("subnet CIDR %s for %q", o.CIDR, o.Site),
+		fmt.Sprintf("subnet CIDR %s already reserved for %q", o.CIDR, o.Site))
 }
 
 func subnetReleaseMessage(o *outputEnvelope) string {
-	if o.Changed != nil && *o.Changed {
-		return fmt.Sprintf("released subnet CIDR %s", o.CIDR)
-	}
-	return fmt.Sprintf("subnet CIDR %s was not reserved", o.CIDR)
+	return outcomeMessage(o, "released", "release",
+		fmt.Sprintf("subnet CIDR %s", o.CIDR),
+		fmt.Sprintf("subnet CIDR %s was not reserved", o.CIDR))
 }
 
 func subnetAllocateMessage(o *outputEnvelope) string {
-	if o.Changed != nil && *o.Changed {
-		return fmt.Sprintf("allocated subnet CIDR %s for %q", o.CIDR, o.Site)
-	}
-	return fmt.Sprintf("subnet CIDR %s already allocated for %q", o.CIDR, o.Site)
+	return outcomeMessage(o, "allocated", "allocate",
+		fmt.Sprintf("subnet CIDR %s for %q", o.CIDR, o.Site),
+		fmt.Sprintf("subnet CIDR %s already allocated for %q", o.CIDR, o.Site))
 }
 
 // newSubnetCommand groups subnet-CIDR registry commands. Like site-id, every
@@ -68,7 +66,7 @@ func newSubnetReserveCommand(state *commandState) *cobra.Command {
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			res, err := client.ReserveSubnetPool()(ctx, &ipam.ReserveSubnetPoolPayload{
-				Tailnet: tailnet, CIDR: args[0], Site: args[1],
+				DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet, CIDR: args[0], Site: args[1],
 				Owner: owner, Description: description, Ticket: ticket, ReservedAt: reservedAt,
 			})
 			if err != nil {
@@ -127,7 +125,7 @@ func newSubnetAllocateCommand(state *commandState, listDevices devicesListFunc) 
 			}
 			owner, description, ticket, reservedAt := metadataFlags.asPointers()
 			res, err := client.AllocateSubnetPool()(ctx, &ipam.AllocateSubnetPoolPayload{
-				Tailnet: tailnet, Pool: pool.String(), Size: size, Site: args[1],
+				DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet, Pool: pool.String(), Size: size, Site: args[1],
 				LiveTaken: liveTakenRoutes(devices),
 				Owner:     owner, Description: description, Ticket: ticket, ReservedAt: reservedAt,
 			})
@@ -166,12 +164,13 @@ func liveTakenRoutes(devices []deviceRecord) []string {
 	return routes
 }
 
+//nolint:dupl // mirrors newSiteIDReleaseCommand (siteid.go) by design; unifying needs a generic beyond this file's scope
 func newSubnetReleaseCommand(state *commandState) *cobra.Command {
 	return newSubnetLeafCommand(
 		state, "release <cidr>", "Release a reserved subnet CIDR pool.", []inputSpec{cidrInput()}, 0, -1, nil,
 		func(ctx context.Context, client *ipamclient.Client, args []string, tailnet string) (*outputEnvelope, error) {
 			res, err := client.ReleaseSubnetPool()(ctx, &ipam.ReleaseSubnetPoolPayload{
-				Tailnet: tailnet, CIDR: args[0],
+				DryRun: ax.DryRunFromContext(ctx), Tailnet: tailnet, CIDR: args[0],
 			})
 			if err != nil {
 				return nil, err
@@ -293,16 +292,13 @@ func newSubnetLeafCommand(
 			if metadataFlags != nil && metadataFlags.owner != "" {
 				registerSweepValue(outputSanitizer, kindOwner, metadataFlags.owner)
 			}
-			return state.registryTarget(registryDir).run(
-				cmd.Context(),
-				func(ctx context.Context, client *ipamclient.Client) error {
-					output, callErr := call(ctx, client, args, tailnet)
-					if callErr != nil {
-						return callErr
-					}
-					return emitOutput(cmd, output, outputSanitizer)
-				},
-			)
+			if err = state.approve(cmd, args, registry.NormalizeSubnetCIDR); err != nil {
+				return err
+			}
+			return state.runRegistryCall(cmd, registryDir, outputSanitizer,
+				func(ctx context.Context, client *ipamclient.Client) (*outputEnvelope, error) {
+					return call(ctx, client, args, tailnet)
+				})
 		},
 	}
 	bound = bindInputs(cmd, specs...)

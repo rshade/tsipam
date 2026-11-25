@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	goa "goa.design/goa/v3/pkg"
 )
 
 // runSiteID drives the site-id command tree through cobra's Execute — the
@@ -150,7 +148,7 @@ func TestSiteIDReserveWithoutMetadataOmitsItFromJSON(t *testing.T) {
 
 // TestSiteIDExitCodeDistinguishesCollisionFromUsageError covers issue 8's
 // fix: a collision reported over the loopback HTTP boundary (a
-// *goa.ServiceError named "collision") must map to exitFailure (1), while a
+// registry_collision error) must map to exitFailure (1), while a
 // bad flag/usage error (here, a missing positional argument) must map to
 // exitUsage (2), so a shell caller can tell a refusal apart from a malformed
 // invocation.
@@ -163,10 +161,9 @@ func TestSiteIDExitCodeDistinguishesCollisionFromUsageError(t *testing.T) {
 	}
 
 	_, _, collisionErr := runSiteID(t, dir, "reserve", "1", "branch-office")
-	var svcErr *goa.ServiceError
-	if !errors.As(collisionErr, &svcErr) || svcErr.Name != serviceErrorCollision {
-		t.Fatalf("reserving an id already held by a different site: error = %v, want a %q *goa.ServiceError",
-			collisionErr, serviceErrorCollision)
+	if collisionErr == nil || failureCode(collisionErr) != codeRegistryCollision {
+		t.Fatalf("reserving an id already held by a different site: error = %v, want %s",
+			collisionErr, codeRegistryCollision)
 	}
 	if got := exitCodeFor(collisionErr); got != exitFailure {
 		t.Errorf("exitCodeFor(collision) = %d, want %d", got, exitFailure)
@@ -176,8 +173,8 @@ func TestSiteIDExitCodeDistinguishesCollisionFromUsageError(t *testing.T) {
 	if usageErr == nil {
 		t.Fatal("reserve with one arg: error = nil, want a usage error")
 	}
-	if errors.As(usageErr, &svcErr) {
-		t.Fatalf("a usage error should not be a *goa.ServiceError, got %v", usageErr)
+	if got := failureCode(usageErr); got != codeValidationError {
+		t.Fatalf("usage error code = %s, want %s: %v", got, codeValidationError, usageErr)
 	}
 	if got := exitCodeFor(usageErr); got != exitUsage {
 		t.Errorf("exitCodeFor(usage error) = %d, want %d", got, exitUsage)

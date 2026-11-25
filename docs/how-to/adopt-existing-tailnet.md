@@ -81,8 +81,8 @@ tsipam plan --registry-dir /etc/tsipam --tailnet production --format json |
 ```
 
 Replace `unlabeled` afterwards: reserving the same key for a different site
-is refused as a collision, so `release` the key and `reserve` it again with
-the real label.
+is refused as a collision, so `release --yes` the key and `reserve` it again
+with the real label.
 
 A `/16` pool covers any live `/24` inside it. If you would rather record one
 broad pool than many routes, reserve the pool and skip the routes it contains.

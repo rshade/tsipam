@@ -107,19 +107,19 @@
 
 ## 7. Dry run, confirmation, and idempotency key
 
-- [ ] 7.1 Wire `PerformWithAudit` with identity-free descriptions into the nine
+- [x] 7.1 Wire `PerformWithAudit` with identity-free descriptions into the nine
       commands and the `dry run: would` messages; verify per-command tests for
       exit code, `changed`, `meta.dry_run`, unchanged directory, and audit
       lines only with `--verbose` and without identities
-- [ ] 7.2 Gate the four releases per D7, and add `--yes` to every smoke
+- [x] 7.2 Gate the four releases per D7, and add `--yes` to every smoke
       `release` call, including `smoke/live_test.go`; verify tests for JSON,
       human with and without a terminal, `y`, `n`, EOF, `--yes`, and
       `--dry-run`, and that `mise run smoke` and `mise run vet` pass
-- [ ] 7.3 Declare each leaf's capability class and test that every class
+- [x] 7.3 Declare each leaf's capability class and test that every class
       other than `read-only` is in the dry-run table; verify the test fails
       when a class is removed, and that `--dry-run` on a read-only leaf leaves
       `.data` unchanged
-- [ ] 7.4 Test the idempotency-key scenarios, and document dry run, approval,
+- [x] 7.4 Test the idempotency-key scenarios, and document dry run, approval,
       and keys in README and a smoke case; verify `mise run smoke lint-md`
       passes
 

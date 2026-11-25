@@ -368,18 +368,6 @@ func TestStrictChangesNothing(t *testing.T) {
 	}
 }
 
-func TestDryRunIsRefusedUntilWritesHonorIt(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	code, stdout, stderr := runWith(t, nil,
-		commandSiteID, "reserve", "1", "hq", "--dry-run", "--registry-dir", dir)
-	entries, err := os.ReadDir(dir)
-	if failure := decodeFailure(t, stderr); code != exitUsage || stdout != "" || err != nil || len(entries) != 0 ||
-		failure.ErrorCode != codeValidationError {
-		t.Errorf("exit = %d, failure = %+v, directory = %v, %v", code, failure, entries, err)
-	}
-}
-
 // TestStrictKeepsTheRootsResult covers the one command that has no parent.
 func TestStrictKeepsTheRootsResult(t *testing.T) {
 	t.Parallel()

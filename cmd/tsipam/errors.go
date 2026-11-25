@@ -131,9 +131,6 @@ func (f failure) exitCode() int {
 	}
 }
 
-// exitCodeFor maps a command error to this tool's exit-code scheme.
-func exitCodeFor(err error) int { return classify(err).exitCode() }
-
 // classify decides what err means, from types and goa error names only. Error
 // text is for people and never decides anything.
 func classify(err error) failure {
