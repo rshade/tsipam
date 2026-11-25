@@ -524,6 +524,19 @@ func TestMCPHidesArgumentsItCannotParse(t *testing.T) {
 	}
 }
 
+// TestMCPUnknownArgumentHidesItsValue pins the accepted gap: the runtime refuses
+// the call itself and repeats the name (rshade/ax-go#354), but not the value.
+func TestMCPUnknownArgumentHidesItsValue(t *testing.T) {
+	t.Parallel()
+	session := startMCP(t, map[string]string{sanitize.LevelEnv: "identity"})
+	failure := session.mustFail("tsipam-calc-info", map[string]any{
+		"cidr": "10.0.0.0/24", "hq-secret": "branch-secret",
+	})
+	if failure.ErrorCode != codeValidationError || strings.Contains(failure.Message, "branch-secret") {
+		t.Errorf("failure = %+v, want %s without the value", failure, codeValidationError)
+	}
+}
+
 func TestMCPPolicyDriftCarriesItsCount(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
