@@ -137,7 +137,7 @@ func TestCalcNextFreeIPv6JSON(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty", errOut)
 	}
 	var result outputEnvelope
-	if decodeErr := json.Unmarshal([]byte(out), &result); decodeErr != nil {
+	if decodeErr := decodeData([]byte(out), &result); decodeErr != nil {
 		t.Fatal(decodeErr)
 	}
 	if result.SchemaVersion != outputSchemaVersion ||

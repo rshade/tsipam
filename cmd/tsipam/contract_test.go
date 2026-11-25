@@ -173,16 +173,16 @@ func assertSchemaCatalog(t *testing.T, document struct {
 func TestSiteIDJSONEnvelopeGolden(t *testing.T) {
 	t.Parallel()
 
-	stdout, stderr, err := runSiteID(
-		t, t.TempDir(), "reserve", "007", "hq-vpc", "--format", formatJSON,
+	code, stdout, stderr := runWith(t, nil,
+		commandSiteID, "reserve", "007", "hq-vpc", "--format", formatJSON, "--registry-dir", t.TempDir(),
 	)
-	if err != nil {
-		t.Fatalf("reserve: %v", err)
+	if code != exitOK {
+		t.Fatalf("reserve exit = %d: %s", code, stderr)
 	}
 	if stderr != "" {
 		t.Errorf("reserve stderr = %q, want empty", stderr)
 	}
-	assertGolden(t, "site_id_reserve.golden.json", []byte(stdout))
+	assertGolden(t, "site_id_reserve.golden.json", []byte(maskRun(t, stdout)))
 }
 
 // TestSiteIDReserveWithMetadataJSONEnvelopeGolden locks the object-shaped
@@ -193,18 +193,18 @@ func TestSiteIDJSONEnvelopeGolden(t *testing.T) {
 func TestSiteIDReserveWithMetadataJSONEnvelopeGolden(t *testing.T) {
 	t.Parallel()
 
-	stdout, stderr, err := runSiteID(
-		t, t.TempDir(), "reserve", "007", "hq-vpc", "--format", formatJSON,
+	code, stdout, stderr := runWith(t, nil,
+		commandSiteID, "reserve", "007", "hq-vpc", "--format", formatJSON, "--registry-dir", t.TempDir(),
 		"--owner", "platform-team", "--ticket", "OPS-1234", "--description", "HQ gateway",
 		"--reserved-at", "2026-01-15T09:00:00Z",
 	)
-	if err != nil {
-		t.Fatalf("reserve: %v", err)
+	if code != exitOK {
+		t.Fatalf("reserve exit = %d: %s", code, stderr)
 	}
 	if stderr != "" {
 		t.Errorf("reserve stderr = %q, want empty", stderr)
 	}
-	assertGolden(t, "site_id_reserve_with_metadata.golden.json", []byte(stdout))
+	assertGolden(t, "site_id_reserve_with_metadata.golden.json", []byte(maskRun(t, stdout)))
 }
 
 func TestSiteIDListAndReleaseJSONEnvelopes(t *testing.T) {
@@ -222,7 +222,7 @@ func TestSiteIDListAndReleaseJSONEnvelopes(t *testing.T) {
 		t.Errorf("list stderr = %q, want empty", stderr)
 	}
 	var listed outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &listed); err != nil {
+	if err = decodeData([]byte(stdout), &listed); err != nil {
 		t.Fatalf("decode list JSON: %v", err)
 	}
 	if listed.SchemaVersion != outputSchemaVersion || listed.Command != commandSiteIDList ||
@@ -239,7 +239,7 @@ func TestSiteIDListAndReleaseJSONEnvelopes(t *testing.T) {
 		t.Errorf("release stderr = %q, want empty", stderr)
 	}
 	var released outputEnvelope
-	if err = json.Unmarshal([]byte(stdout), &released); err != nil {
+	if err = decodeData([]byte(stdout), &released); err != nil {
 		t.Fatalf("decode release JSON: %v", err)
 	}
 	if released.Command != commandSiteIDRelease || released.Status != statusOK ||
@@ -322,7 +322,7 @@ func assertSanitizedDevicesFormat(
 		t.Fatalf("verbose JSON stdout is not parse-clean: %s", stdout.String())
 	}
 	var envelope outputEnvelope
-	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+	if err := decodeData(stdout.Bytes(), &envelope); err != nil {
 		t.Fatal(err)
 	}
 	if envelope.Sanitization == nil || envelope.Sanitization.Level != sanitize.Identity ||
@@ -460,7 +460,7 @@ func TestServiceAddressOutputContract(t *testing.T) {
 	result.ServiceAddresses = &entries
 
 	var human bytes.Buffer
-	if err := renderOutput(&human, formatHuman, result); err != nil {
+	if err := renderHuman(&human, result); err != nil {
 		t.Fatalf("render human: %v", err)
 	}
 	wantHuman := "100.100.100.8\tsvc:dashboard\t" +
@@ -521,7 +521,7 @@ func TestUDPPortOutputContract(t *testing.T) {
 	result.UDPPorts = &entries
 
 	var human bytes.Buffer
-	if err := renderOutput(&human, formatHuman, result); err != nil {
+	if err := renderHuman(&human, result); err != nil {
 		t.Fatalf("render human: %v", err)
 	}
 	wantHuman := "branch\t1024\tbranch-fw01\n" +

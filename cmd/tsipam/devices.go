@@ -61,7 +61,7 @@ func newDevicesListCommand(state *commandState, listDevices devicesListFunc) *co
 				fmt.Sprintf("listed %d device(s)", len(records)), tailnet,
 			)
 			result.Devices = &records
-			return emitOutput(cmd.OutOrStdout(), state.format, result, outputSanitizer)
+			return emitOutput(cmd, result, outputSanitizer)
 		},
 	}
 	command.Flags().StringVar(&tag, "tag", "",

@@ -22,7 +22,12 @@ and no `TAILSCALE_TAILNET` in the environment, the tailnet key is `local`.
 ```bash
 mkdir ipam-tutorial && cd ipam-tutorial
 unset TAILSCALE_TAILNET
+export AGENT_MODE=human
 ```
+
+At a terminal `tsipam` prints text, and in a pipe it prints JSON.
+`AGENT_MODE=human` keeps text in both, so the examples below print what is shown
+even when you pipe them.
 
 ## 1. Reserve a site ID
 
@@ -64,13 +69,15 @@ Try to give a different site a subnet inside the one you just reserved:
 
 ```bash
 tsipam subnet reserve 10.20.0.0/25 lab
-# tsipam: subnet CIDR 10.20.0.0/25 overlaps 10.20.0.0/24 reserved for "hq-vpc", not "lab"
+# stderr: {"error_code":"registry_collision","message":"subnet CIDR 10.20.0.0/25 overlaps ...
 echo $?
 # 1
 ```
 
-Exit code `1` means a well-formed request was refused. The registry was not
-changed. Compare that with exit code `2`, which means the request itself was
+A failure is one JSON error object on stderr. Its `message` says the block
+overlaps `10.20.0.0/24` reserved for `hq-vpc`, and its `actionable_fix` says what
+to do about it. Exit code `1` means a well-formed request was refused. The
+registry was not changed. Compare that with exit code `2`, which means the request itself was
 invalid or the registry could not be read; see
 [Exit codes](../reference/exit-codes.md).
 
@@ -89,28 +96,37 @@ Add `--format json` when another program will read the result:
 tsipam subnet list --format json
 ```
 
+The result is one line. Spread out, it reads:
+
 ```json
 {
-  "schema_version": "1",
-  "tool": "tsipam",
-  "command": "subnet list",
-  "status": "ok",
-  "message": "listed 1 subnet-pool reservation(s)",
-  "tailnet": "local",
-  "subnet_pools": [
-    {
-      "owner": "platform-team",
-      "ticket": "OPS-1",
-      "reserved_at": "2026-09-10T21:23:48Z",
-      "cidr": "10.20.0.0/24",
-      "site": "hq-vpc"
-    }
-  ]
+  "data": {
+    "schema_version": "2",
+    "tool": "tsipam",
+    "command": "subnet list",
+    "status": "ok",
+    "message": "listed 1 subnet-pool reservation(s)",
+    "tailnet": "local",
+    "subnet_pools": [
+      {
+        "owner": "platform-team",
+        "ticket": "OPS-1",
+        "reserved_at": "2026-09-10T21:23:48Z",
+        "cidr": "10.20.0.0/24",
+        "site": "hq-vpc"
+      }
+    ]
+  },
+  "meta": {
+    "trace_id": "0af7651916cd43dd8448eb211c80319c",
+    "span_id": "b7ad6b7169203331",
+    "idempotency_key": "00000000-0000-4000-8000-000000000000"
+  }
 }
 ```
 
-The first six fields appear on every JSON result. The command-specific
-payload (`subnet_pools` here) is documented in
+`meta` identifies the run. The first six fields of `data` appear on every JSON
+result. The command-specific payload (`subnet_pools` here) is documented in
 [JSON envelope](../reference/json-envelope.md).
 
 ## 5. Look at the registry file
@@ -161,7 +177,7 @@ tsipam check-policy policy.hujson
 # authored    authored_but_unreserved    "172.16.0.0/12"  ipset="ipset:lab"  pools=[]
 # reserved    matched                    "10.20.0.0/24"   site="hq-vpc"      ipsets=["ipset:hq"]
 # drift_count=1
-# tsipam: authored ipsets differ from reserved subnet pools
+# stderr: {"error_code":"policy_drift_detected", ... "context":{"drift_count":1}}
 echo $?
 # 1
 ```

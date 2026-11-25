@@ -654,7 +654,7 @@ func assertReserveMessageSanitized(t *testing.T, dir string, command []string, s
 	}
 
 	var envelope outputEnvelope
-	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+	if err := decodeData(stdout.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode reserve JSON: %v", err)
 	}
 

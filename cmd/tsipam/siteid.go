@@ -242,7 +242,7 @@ func newSiteIDLeafCommand(
 					if callErr != nil {
 						return callErr
 					}
-					return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
+					return emitOutput(cmd, output, outputSanitizer)
 				},
 			)
 		},

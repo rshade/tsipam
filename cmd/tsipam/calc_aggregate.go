@@ -58,7 +58,7 @@ func newCalcAggregateCommand(state *commandState) *cobra.Command {
 				return err
 			}
 			output.supernetsFromRegistry = fromRegistry
-			return emitOutput(cmd.OutOrStdout(), state.format, output, outputSanitizer)
+			return emitOutput(cmd, output, outputSanitizer)
 		},
 	}
 	cmd.Flags().BoolVar(&fromRegistry, "from-registry", false,

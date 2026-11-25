@@ -197,7 +197,7 @@ func devicesEnv(values map[string]string) func(string) string {
 func executeDevicesList(getenv func(string) string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
 	code := runCLI(
-		context.Background(), []string{commandDevices, commandList}, getenv,
+		context.Background(), []string{commandDevices, commandList}, humanByDefault(getenv),
 		&stdout, &stderr, nil,
 	)
 	return code, stdout.String(), stderr.String()
@@ -408,7 +408,7 @@ func testDevicesAPIErrorIsSanitized(t *testing.T) {
 func executeDevicesListArgs(getenv func(string) string, args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
 	code := runCLI(
-		context.Background(), append([]string{commandDevices, commandList}, args...), getenv,
+		context.Background(), append([]string{commandDevices, commandList}, args...), humanByDefault(getenv),
 		&stdout, &stderr, nil,
 	)
 	return code, stdout.String(), stderr.String()
@@ -428,7 +428,7 @@ func testDevicesInventoryJSON(t *testing.T) {
 		var envelope struct {
 			Devices []map[string]json.RawMessage `json:"devices"`
 		}
-		if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		if err := decodeData([]byte(stdout), &envelope); err != nil {
 			t.Fatalf("decode devices list: %v", err)
 		}
 		if len(envelope.Devices) != 2 {

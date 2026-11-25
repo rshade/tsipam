@@ -1,11 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/netip"
 	"strings"
+
+	"github.com/rshade/ax-go"
+	"github.com/spf13/cobra"
 
 	"github.com/rshade/tsacl/pkg/policycore/sanitize"
 )
@@ -201,12 +203,7 @@ func newOutput(command, status, message, tailnet string) *outputEnvelope {
 	}
 }
 
-func renderOutput(writer io.Writer, format string, result *outputEnvelope) error {
-	if format == formatJSON {
-		encoder := json.NewEncoder(writer)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(result)
-	}
+func renderHuman(writer io.Writer, result *outputEnvelope) error {
 	if result.SiteIDs != nil {
 		return renderSiteIDs(writer, *result.SiteIDs)
 	}
@@ -592,17 +589,17 @@ func networkKind(value string) string {
 	return "address"
 }
 
-func emitOutput(
-	writer io.Writer,
-	format string,
-	result *outputEnvelope,
-	outputSanitizer *sanitize.Sanitizer,
-) error {
+// emitOutput writes result to cmd's stdout in the run's output mode. JSON is
+// one enveloped line: the result under data and the run's metadata under meta.
+func emitOutput(cmd *cobra.Command, result *outputEnvelope, outputSanitizer *sanitize.Sanitizer) error {
 	if outputSanitizer != nil && outputSanitizer.Level() != sanitize.Off {
 		result = sanitizeOutput(result, outputSanitizer)
 	}
 	if result.messageBuilder != nil {
 		result.Message = result.messageBuilder(result)
 	}
-	return renderOutput(writer, format, result)
+	if mode, _ := ax.ModeFromContext(cmd.Context()); mode == ax.ModeJSON {
+		return ax.WriteJSON(cmd.OutOrStdout(), ax.NewEnvelope(cmd.Context(), *result))
+	}
+	return renderHuman(cmd.OutOrStdout(), result)
 }

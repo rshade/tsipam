@@ -84,7 +84,7 @@ func executePlanning(
 		return err
 	}
 	result := comparisonEnvelope(cmd.Name(), tailnet, report)
-	if err = emitOutput(cmd.OutOrStdout(), state.format, result, outputSanitizer); err != nil {
+	if err = emitOutput(cmd, result, outputSanitizer); err != nil {
 		return err
 	}
 	if cmd.Name() == commandCheck && report.DriftCount > 0 {

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -22,7 +21,7 @@ import (
 func runSiteID(t *testing.T, registryDir string, args ...string) (string, string, error) {
 	t.Helper()
 	state := &commandState{}
-	root := newRootCommandWithDependencies(state, commandDependencies{
+	root := newTestRoot(state, commandDependencies{
 		getenv: func(string) string { return "" },
 	})
 	var outBuf, errBuf bytes.Buffer
@@ -123,7 +122,7 @@ func TestSiteIDReserveWithMetadataFlagsThenList(t *testing.T) {
 		t.Fatalf("list --format json: %v", err)
 	}
 	var listed outputEnvelope
-	if err = json.Unmarshal([]byte(out), &listed); err != nil {
+	if err = decodeData([]byte(out), &listed); err != nil {
 		t.Fatalf("decode list JSON: %v", err)
 	}
 	if listed.SiteIDs == nil || len(*listed.SiteIDs) != 1 {

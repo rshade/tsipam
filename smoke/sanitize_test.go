@@ -3,6 +3,9 @@
 package smoke_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"maps"
 	"testing"
 )
 
@@ -55,7 +58,8 @@ func TestSanitize(t *testing.T) {
 		second := run(t, env, reg.args("site-id", "list", flagFormat, formatJSON)...)
 		expect(t, first, exitOK)
 		expect(t, second, exitOK)
-		if first.stdout != second.stdout {
+		same := func(a, b json.RawMessage) bool { return bytes.Equal(a, b) }
+		if !maps.EqualFunc(decodeEnvelope(t, first.stdout).raw, decodeEnvelope(t, second.stdout).raw, same) {
 			t.Errorf("placeholders changed between runs with a fixed key:\n%s\n%s", first.stdout, second.stdout)
 		}
 	})

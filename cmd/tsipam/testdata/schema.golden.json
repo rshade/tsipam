@@ -12,8 +12,8 @@
     },
     {
       "name": "format",
-      "usage": "output format: human|json",
-      "default": "human"
+      "usage": "output format: human|json (default: AGENT_MODE, else human on a terminal and json otherwise)",
+      "default": ""
     },
     {
       "name": "idempotency-key",

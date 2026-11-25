@@ -44,6 +44,11 @@ func flagSchemaFor(flags *pflag.FlagSet) []schemaFlag {
 	return catalog
 }
 
+// commandName is cmd's path without the tool name, such as "site-id reserve".
+func commandName(cmd *cobra.Command) string {
+	return strings.TrimPrefix(cmd.CommandPath(), cmd.Root().Name()+" ")
+}
+
 // commandSchema walks the live Cobra tree so adding a command or local flag
 // automatically reaches the agent-facing contract. Commands are flattened to
 // full paths ("site-id reserve") like tail-acl's schema catalog.
@@ -55,7 +60,7 @@ func commandSchema(root *cobra.Command) []schemaCommand {
 			if !child.IsAvailableCommand() || child.Name() == cobraCompletionCommand {
 				continue
 			}
-			name := strings.TrimPrefix(child.CommandPath(), root.Name()+" ")
+			name := commandName(child)
 			commands = append(commands, schemaCommand{
 				Name: name, Summary: child.Short, Usage: name + strings.TrimPrefix(child.Use, child.Name()),
 				Flags: flagSchemaFor(child.LocalNonPersistentFlags()),

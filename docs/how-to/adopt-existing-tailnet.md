@@ -69,7 +69,7 @@ identity is the label:
 
 ```bash
 tsipam plan --registry-dir /etc/tsipam --tailnet production --format json |
-  jq -r '.comparison.entries[] | select(.state == "unreserved_but_live") |
+  jq -r '.data.comparison.entries[] | select(.state == "unreserved_but_live") |
          [.kind, .key, (.observed[0] // "")] | @tsv' |
   while IFS=$'\t' read -r kind key first; do
     case "$kind" in
@@ -98,7 +98,9 @@ echo $?
 `check` prints the same report as `plan` and exits `1` while any row is not
 `matched`. Exit `2` means the comparison could not be completed: bad
 credentials, an API failure, or an unreadable registry. There is no partial
-report in that case.
+report in that case. The error object on stderr says which: its `error_code` is
+`drift_detected` for drift, and `retryable` is `true` when a read timed out or
+the API answered with a server error.
 
 ## 5. Commit and keep it honest
 

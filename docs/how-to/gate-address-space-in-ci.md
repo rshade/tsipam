@@ -36,6 +36,11 @@ site ID, or service has no reservation. Exit `2` means the comparison did not
 complete (credentials, API, or registry), with no report on stdout. Each API
 request has a 30-second timeout.
 
+A failure is one JSON error object on stderr. Branch on its `error_code`:
+`drift_detected` is the verdict, `credentials_missing` and `comparison_failed`
+are not. `retryable` is `true` when a read timed out or the API answered with a
+server error, so a second attempt may work.
+
 Whether `1` should fail the job depends on how you use the registry:
 
 - Registry as intent: a `reserved_but_unadvertised` row is expected while a
@@ -47,16 +52,18 @@ advertising address space nobody recorded.
 
 ## Keep evidence
 
-Add `--format json` and capture stdout on its own; stderr carries diagnostics
-and must not be mixed into the document:
+A CI job has no terminal, so results are JSON already; `--format json` says so
+explicitly. Capture stdout on its own; stderr carries diagnostics and the error
+object, and must not be mixed into the document:
 
 ```bash
 tsipam check --registry-dir . --tailnet production --format json \
   > check.json 2> check.log
 ```
 
-`comparison.entries` lists every row with its state and evidence, and
-`comparison.drift_count` is the number of non-matching rows. The field names
+`data.comparison.entries` lists every row with its state and evidence, and
+`data.comparison.drift_count` is the number of non-matching rows. The error
+object repeats the count as `context.drift_count`. The field names
 are a compatibility surface; see
 [JSON envelope](../reference/json-envelope.md).
 

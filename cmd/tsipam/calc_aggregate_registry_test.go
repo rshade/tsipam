@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,7 +18,7 @@ func runAggregateWithEnvironment(t *testing.T, env map[string]string, args ...st
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	code := runCLI(context.Background(), append([]string{"calc", "aggregate"}, args...),
-		func(name string) string { return env[name] }, &stdout, &stderr,
+		humanByDefault(devicesEnv(env)), &stdout, &stderr,
 		func(context.Context, diagnostics.Logger) ([]deviceRecord, error) {
 			t.Error("aggregate must not collect live devices")
 			return nil, nil
@@ -117,10 +116,10 @@ func assertAggregateSourcesEquivalent(t *testing.T, format, out, positional stri
 		return
 	}
 	var result, supplied outputEnvelope
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	if err := decodeData([]byte(out), &result); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal([]byte(positional), &supplied); err != nil {
+	if err := decodeData([]byte(positional), &supplied); err != nil {
 		t.Fatal(err)
 	}
 	if result.Supernets == nil || supplied.Supernets == nil || !slices.Equal(*result.Supernets, *supplied.Supernets) {
@@ -162,7 +161,7 @@ func TestCalcAggregateFromRegistryEmptyResults(t *testing.T) {
 				return
 			}
 			var result outputEnvelope
-			if err := json.Unmarshal([]byte(out), &result); err != nil {
+			if err := decodeData([]byte(out), &result); err != nil {
 				t.Fatal(err)
 			}
 			if result.Supernets == nil || *result.Supernets == nil || len(*result.Supernets) != 0 ||
@@ -292,7 +291,7 @@ func TestCalcAggregateFromRegistrySanitization(t *testing.T) {
 				}
 				assertRegistryAggregateSanitized(t, format, dir, out, errOut)
 				repeatedCode, repeated, repeatedErr := runAggregateWithEnvironment(t, env, args...)
-				if repeatedCode != exitOK || repeated != out {
+				if repeatedCode != exitOK || maskRun(t, repeated) != maskRun(t, out) {
 					t.Errorf("keyed output changed: first=%s, second=%s, exit=%d, stderr=%s",
 						out, repeated, repeatedCode, repeatedErr)
 				}
@@ -315,7 +314,7 @@ func assertRegistryAggregateSanitized(t *testing.T, format, dir, out, errOut str
 		return
 	}
 	var result outputEnvelope
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	if err := decodeData([]byte(out), &result); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(result.Tailnet, "tailnet-") || result.Sanitization == nil ||
@@ -404,7 +403,7 @@ func TestCalcAggregatePositionalErrorSkipsRegistryInventory(t *testing.T) {
 	const site = "private-registry-site"
 	writeAggregateRegistry(t, dir, "local", `{"subnetPools":{"10.0.0.0/24":"`+site+`"}}`)
 	state := &commandState{}
-	root := newRootCommandWithDependencies(state, commandDependencies{getenv: emptyEnvironment})
+	root := newTestRoot(state, commandDependencies{getenv: emptyEnvironment})
 	cmd, _, err := root.Find([]string{"calc", "aggregate"})
 	if err != nil {
 		t.Fatal(err)
@@ -436,7 +435,7 @@ func TestCalcAggregateExplicitFalseRetainsPositionalExemption(t *testing.T) {
 		t.Fatalf("positional aggregate exit=%d, stderr=%q", code, errOut)
 	}
 	var result outputEnvelope
-	if err := json.Unmarshal([]byte(out), &result); err != nil {
+	if err := decodeData([]byte(out), &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Tailnet != "" || result.Supernets == nil || !slices.Equal(*result.Supernets, []string{"10.0.0.0/24"}) {

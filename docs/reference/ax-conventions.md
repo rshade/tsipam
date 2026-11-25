@@ -12,9 +12,11 @@ result without mixing it with operational commentary.
 
 ## Human and machine output
 
-Human-readable output is the default. Tools that return structured results
-also provide a JSON format with an explicit schema marker. Streaming commands
-may use newline-delimited JSON so each record can be consumed independently.
+A tool writes human-readable text to a terminal and JSON everywhere else. An
+explicit `--format` decides first, then `AGENT_MODE`, then where stdout goes. A
+JSON result is one line: the result under `data`, with an explicit schema
+marker, and the run's metadata under `meta`. Streaming commands may use
+newline-delimited JSON so each record can be consumed independently.
 
 Consumers should branch on documented fields rather than prose intended for a
 person. Additive fields can appear within a schema version; removing, renaming,
@@ -31,6 +33,8 @@ The common exit-code vocabulary is:
 | `2` | The invocation, input, collection, or output operation failed. |
 | `10` | The tool could not prove a definitive verdict, when supported. |
 
+A failure is one JSON error object on standard error, in both output modes. Its
+`error_code` is stable and decides the exit code; its `message` is for people.
 Each command documents its exact interpretation. In particular, warnings may
 be non-fatal, report-writing modes may alter whether findings gate a process,
 and not every tool needs an indeterminate state.
@@ -38,8 +42,10 @@ and not every tool needs an indeterminate state.
 ## Discoverability
 
 Every binary provides rich command-line help, version information with build
-provenance, and a machine-readable `-schema` surface. Cobra-based tools also
-provide shell completion.
+provenance, and a machine-readable `-schema` surface. `__schema` describes the
+same commands in the form shared across tools: each flag's type, default, and
+allowed values, each command's side-effect class, and the fields that vary
+between identical runs. Cobra-based tools also provide shell completion.
 
 Both single-dash long flags such as `-format` and conventional double-dash
 forms such as `--format` are accepted for compatibility unless a command's
@@ -54,7 +60,14 @@ become a healthy result.
 
 Read-only tools do not mutate the systems they inspect. Tools that intentionally
 write state identify that boundary and provide safeguards such as validation,
-planning, or optimistic concurrency.
+planning, or optimistic concurrency. A command that writes can be rehearsed with
+`--dry-run`, and a command that removes something needs approval.
+
+## Correlation
+
+A tool continues the trace in `TRACEPARENT` and reports its ID in results, error
+objects, and logs. Spans and logs carry no identities, and no telemetry leaves
+the machine.
 
 ## Safety and sensitive data
 
