@@ -40,7 +40,7 @@ root, a command group, `__schema`, `mcp-server`, `help`, or `completion`.
 #### Scenario: The tool set is pinned
 
 - **WHEN** a client sends `tools/list`
-- **THEN** the result is exactly 20 tools, including `tsipam-site-id-release`,
+- **THEN** the result is exactly 21 tools, including `tsipam-site-id-release`,
   `tsipam-calc-split`, `tsipam-plan`, and `tsipam-check-policy`, and not
   `tsipam-check` or `tsipam`
 
