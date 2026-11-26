@@ -69,9 +69,14 @@ SQLite schema to the report format.
 
 ### One comparison function for `plan` and the scheduler
 
-The body of `ipamsvc.Plan` moves into an unexported `compare(ctx, alias)`
-that both the goa method and `drift.Scheduler` call. The scheduler calls it
-in-process, not over HTTP, so it never needs a capability of its own. Each
+The body of `ipamsvc.Plan` moves into an exported
+`Service.Compare(ctx, alias, liveTailnet)`, which returns the report and the
+live snapshot it used, so the `Holder` can keep that run's taken prefixes.
+`Plan` calls it, and so does `drift.Scheduler`, in-process and not over HTTP,
+so it never needs a capability of its own. The scheduler takes the comparison
+as a `func(ctx, alias)` parameter: `cmd/tsipam/serve.go` passes one that calls
+`Compare` with the server's tailnet. `internal/drift` does not import
+`ipamsvc`, because `latest_drift` makes `ipamsvc` read `drift.Holder`. Each
 target has a goroutine on a `time.Ticker`. A tick is skipped when that
 target's run is still in progress (a `TryLock`). Each run's context is
 bounded by `min(interval, 5m)` and cancelled at server shutdown.
@@ -196,8 +201,9 @@ ever needed, it can be added as progressive enhancement.
 
 Headers on every page:
 
-- `Content-Security-Policy: default-src 'none'; style-src 'self'; img-src
-  'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`
+- `Content-Security-Policy: default-src 'none'; script-src 'none'; style-src
+  'self'; img-src 'self'; base-uri 'none'; form-action 'self';
+  frame-ancestors 'none'`
 - `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: no-referrer`
 
@@ -237,9 +243,9 @@ service scopes using the same scope evaluation the API uses (from
   writes, and the registry is small.
 - [Risk] The license allowlist rejects a transitive module of
   `client_golang`, for example `klauspost/compress` with its mixed
-  licenses. → Mitigation: task 2.1 runs `mise run license-check` before any
-  code depends on it. The fallback is a hand-written text-format encoder
-  for these ten families.
+  licenses. → Mitigation: task 2.1 imports the module and runs
+  `mise run license-check` before the collector depends on it. The fallback
+  is a hand-written text-format encoder for these ten families.
 - [Trade-off] In-memory reports mean no drift data until the first run after
   a restart. This is accepted, and is visible as `drift_unavailable` and
   through the absent drift-row series.

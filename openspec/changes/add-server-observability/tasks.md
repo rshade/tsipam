@@ -24,31 +24,39 @@
 
 ## 2. Dependency gate
 
-- [ ] 2.1 Add `github.com/prometheus/client_golang` and run
-      `mise run license-check` and `mise run govulncheck`; verify both pass,
-      or record the fallback (a hand-written text-format encoder) in
-      design.md before continuing
+- [ ] 2.1 Add `github.com/prometheus/client_golang` and create
+      `internal/metrics`, with the server role in the boundary test, holding
+      the private `prometheus.Registry`, its Go and process collectors, and
+      its HTTP handler. The checks see only imported, non-test code, so this
+      import is what makes them cover the module. Verify the boundary tests
+      and `mise run license-check ::: govulncheck` pass, or record the
+      fallback (a hand-written text-format encoder) in design.md before
+      continuing
 
 ## 3. Scheduled drift
 
-- [ ] 3.1 Extract the body of `ipamsvc.Plan` into an unexported
-      `compare(ctx, alias)` used by `Plan`; verify
+- [ ] 3.1 Extract the body of `ipamsvc.Plan` into an exported
+      `Service.Compare(ctx, alias, liveTailnet)` that returns the report and
+      the live snapshot, and call it from `Plan`; verify
       `go test ./internal/ipamsvc/ ./cmd/...` passes and
       `allocations.report.golden.json` is unchanged
 - [ ] 3.2 Implement `internal/drift`, with the server role in the boundary
       test (`Holder` with per-alias latest complete report, live taken set,
-      and run status; `Scheduler` with a startup run, a per-target ticker,
-      skip-if-running, a `min(interval, 5m)` timeout, and cancellation on
-      shutdown); verify the boundary tests pass and `go test -race
+      and run status; `Scheduler` with the comparison function as a
+      parameter, a startup run, a per-target ticker, skip-if-running, a
+      `min(interval, 5m)` timeout, and cancellation on shutdown), without
+      importing `ipamsvc`; verify the boundary tests pass and `go test -race
       ./internal/drift/` covers a failed run keeping the previous report, a
       skipped overlapping tick, and identical
-      `entries`/`drift_count`/`excluded` versus a direct `Plan` call
+      `entries`/`drift_count`/`excluded` versus a direct `Plan` call. That
+      last test imports `ipamsvc`, so it goes in `package drift_test`
 - [ ] 3.3 Add `--drift-tailnet` (repeatable) and `--drift-interval` (default
       `15m`) to `serve`, refusing an interval below `1m` and targets without
-      live credentials with exit 2 before listening. Here and in groups 4 and
-      5, add each new server package that `serve.go` imports to its entry in
-      `commandExceptions`. Verify the boundary tests pass, and `cmd` tests for
-      each refusal and for no targets meaning no live calls
+      live credentials with exit 2 before listening, and start the scheduler
+      with `Service.Compare`. Here and in groups 4 and 5, add each new server
+      package that `serve.go` imports to its entry in `commandExceptions`.
+      Verify the boundary tests pass, and `cmd` tests for each refusal and for
+      no targets meaning no live calls
 - [ ] 3.4 Add `latest_drift` (`GET /tailnet/{tailnet}/ipam/drift`), the
       `DriftRun` type, and the `drift_unavailable` (503) error to `design/`,
       run `mise run gen`, and implement it in `ipamsvc` behind `read` on the
@@ -76,10 +84,10 @@
       the `add-serve-tsnet` middleware into a callable function if it is not
       one yet); verify tests for granted, ungranted, and scoped callers (403
       with no samples)
-- [ ] 4.2 Implement the scrape-time collector in `internal/metrics`, with the
-      server role in the boundary test, for the ten families in design.md,
-      with server-side sanitization of identity labels and per-pool series
-      dropped (one startup warning) when sanitization is on without a key;
+- [ ] 4.2 Implement the scrape-time collector in `internal/metrics` for the
+      ten families in design.md, with server-side sanitization of identity
+      labels and per-pool series dropped (one startup warning) when
+      sanitization is on without a key;
       verify the boundary tests pass, and with
       `client_golang/prometheus/testutil` comparisons against a fixture
       registry for off, keyed identity, and keyless identity, including stable
@@ -126,8 +134,8 @@
       with one drift target and a fake live collector, then fetch
       `tsipam drift`, `/metrics`, and `/ui/<alias>/drift`; verify all three
       show the same drift count
-- [ ] 6.2 Run `mise run test lint cross` and `mise run smoke`, and verify
-      all pass
+- [ ] 6.2 Run `mise run test ::: lint ::: cross ::: smoke`, and verify all
+      pass
 
 ## Workflow follow-up
 
