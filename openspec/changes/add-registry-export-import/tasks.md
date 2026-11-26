@@ -119,7 +119,7 @@
 
 ## 6. Integration verification
 
-- [ ] 6.1 Run `mise run test lint cross smoke` and verify all pass
+- [ ] 6.1 Run `mise run test ::: lint ::: cross ::: smoke` and verify all pass
 - [ ] 6.2 Verify that no existing golden fixture other than the three schema
       goldens changed (`git diff --stat main -- '*testdata*'`)
 
